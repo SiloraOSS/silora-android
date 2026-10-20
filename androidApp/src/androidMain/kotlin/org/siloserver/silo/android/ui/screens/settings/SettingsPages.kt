@@ -206,6 +206,12 @@ fun SettingsPlaybackScreen(viewModel: SettingsViewModel, onBackClick: () -> Unit
                 onUseProfileSetting = viewModel::useProfileSetting,
             )
         }
+        item(key = "decoder") {
+            PlaybackDecoderSection(
+                ignoreHevcLevelLimits = state.ignoreHevcLevelLimits,
+                onIgnoreHevcLevelLimitsChanged = viewModel::setIgnoreHevcLevelLimits,
+            )
+        }
         if (state.episodeSpoilers.isSupported) {
             item(key = "spoilers") {
                 EpisodeSpoilerSettings(
