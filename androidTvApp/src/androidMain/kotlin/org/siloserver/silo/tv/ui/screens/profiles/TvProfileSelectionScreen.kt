@@ -404,7 +404,7 @@ fun TvProfileSelectionScreen(
     if (rememberOffer != null) {
         TvDialog(
             title = "Open ${rememberOffer.name} automatically?",
-            message = "Silo can skip Who's Watching and open this profile when it starts on this TV. " +
+            message = "Silune can skip Who's Watching and open this profile when it starts on this TV. " +
                 "You can change this later in Settings > General > Profile Selection.",
             onDismissRequest = { viewModel.answerRememberOffer(remember = false) },
             actions = listOf(

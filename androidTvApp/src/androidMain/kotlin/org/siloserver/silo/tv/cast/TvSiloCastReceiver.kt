@@ -739,7 +739,7 @@ class TvSiloCastReceiver(
                 SiloCastMessage.Error(
                     SiloCastError(
                         code = "version_unsupported",
-                        message = "Update Silo on both devices to continue.",
+                        message = "Update the app on both devices to continue.",
                     ),
                 ),
             )
@@ -795,7 +795,7 @@ class TvSiloCastReceiver(
                 session,
                 offer.requestId,
                 SiloCastHandoffCancelReason.VersionUnsupported,
-                "Update Silo on both devices to continue.",
+                "Update the app on both devices to continue.",
             )
             return
         }
