@@ -127,6 +127,7 @@ val playerInfraModule = module {
             libassBridge = get(),
             playbackAnalytics = get(),
             throughputMeter = get(),
+            audioNormalization = get(),
         )
     }
     // Video starts send the bandwidth probe's estimate, and plan summaries the

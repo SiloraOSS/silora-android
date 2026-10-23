@@ -394,6 +394,7 @@ fun TvPlayerScreen(
     val sleepTimerState by viewModel.sleepTimerState.collectAsState()
     val introSkipMode by viewModel.introSkipMode.collectAsState()
     val autoPlayNextEnabled by viewModel.autoPlayNextEnabled.collectAsState()
+    val audioNormalizationEnabled by viewModel.audioNormalizationEnabled.collectAsState()
     val audioDelayMs by viewModel.audioDelayMs.collectAsState()
     val subtitleDelayMs by viewModel.subtitleDelayMs.collectAsState()
     val hdrEnabled by viewModel.hdrEnabled.collectAsState()
@@ -2485,8 +2486,10 @@ fun TvPlayerScreen(
                             onIntroSkipModeChanged = viewModel::onSetIntroSkipMode,
                             autoPlayNext = autoPlayNextEnabled,
                             onAutoPlayNextChanged = viewModel::onSetAutoPlayNext,
+                            audioNormalizationEnabled = audioNormalizationEnabled,
+                            onAudioNormalizationChanged = viewModel::setAudioNormalizationEnabled,
                             audioDelayMs = audioDelayMs,
-                            audioDelayEnabled = state.playbackPlan?.claims?.audio?.passthrough != true,
+                            audioDelayEnabled = audioNormalizationEnabled || state.playbackPlan?.claims?.audio?.passthrough != true,
                             onAudioDelayChanged = viewModel::onAudioDelayChanged,
                             subtitleDelayMs = subtitleDelayMs,
                             subtitleDelayEnabled =
