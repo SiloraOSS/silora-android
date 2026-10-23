@@ -95,6 +95,7 @@ class SiloPlayerFactory(
      * slow to send its first cue.
      */
     sidecarSubtitleHttpDataSourceFactory: HttpDataSource.Factory = httpDataSourceFactory,
+    private val audioNormalization: org.siloserver.silo.common.player.audio.AudioNormalizationController,
 ) {
     val isTv: Boolean = TvModeDetector.isTv(context)
 
@@ -250,8 +251,9 @@ class SiloPlayerFactory(
                 )
                 .build(),
             forceDecode = { format ->
-                preferFfmpegAudio &&
-                    HdmiSinkDtsSupport.shouldDecodeWithFfmpeg(context, format.sampleMimeType)
+                audioNormalization.requiresPcm(format) ||
+                    (preferFfmpegAudio &&
+                        HdmiSinkDtsSupport.shouldDecodeWithFfmpeg(context, format.sampleMimeType))
             },
         )
 
@@ -433,11 +435,15 @@ class SiloPlayerFactory(
             C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS,
         )
 
-        return builder.build().also(libassBridge::initialize)
+        return builder.build().also { player ->
+            libassBridge.initialize(player)
+            audioNormalization.bind(player)
+        }
     }
 
     /** Releases the player and the libass handler/font graph adopted for it. */
     fun releasePlayer(player: Player) {
+        audioNormalization.unbind(player)
         (player as? ExoPlayer)?.let(libassBridge::releasePlayer)
         player.release()
     }
@@ -507,7 +513,7 @@ class SiloPlayerFactory(
                 preferredTextLanguage = preferredTextLanguage,
             )
         }
-        player.trackSelectionParameters = next
+        player.trackSelectionParameters = audioNormalization.outputParameters(next)
         return true
     }
 

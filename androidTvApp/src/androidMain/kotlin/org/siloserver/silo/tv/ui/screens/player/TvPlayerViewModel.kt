@@ -1927,6 +1927,12 @@ class TvPlayerViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     /** The AudioTrack's real output path, for the HUD's Mode row and delay gating. */
     val audioOutputPath: StateFlow<AudioOutputPath?> get() = playbackAnalytics.audioOutputPath
+    val audioNormalizationEnabled: StateFlow<Boolean> = playerSettingsStore.audioNormalizationEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun setAudioNormalizationEnabled(value: Boolean) {
+        viewModelScope.launch { playerSettingsStore.setAudioNormalizationEnabled(value) }
+    }
 
     /**
      * Per-profile audio delay in ms, ±500 clamp. Sourced from

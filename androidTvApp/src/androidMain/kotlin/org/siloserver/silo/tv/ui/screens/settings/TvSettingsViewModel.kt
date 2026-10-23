@@ -160,6 +160,7 @@ class TvSettingsViewModel(
         val dvProfile7HDR10Fallback: Boolean = false,
         val forceHdrPassthrough: Boolean = false,
         val ignoreHevcLevelLimits: Boolean = PlayerSettingsStore.DEFAULT_IGNORE_HEVC_LEVEL_LIMITS,
+        val audioNormalizationEnabled: Boolean = false,
         val trueBlackBars: Boolean = false,
         val autoSkipCredits: Boolean = false,
         // Seconds to skip back on resume (0 = off); consecutive auto-advances
@@ -492,6 +493,11 @@ class TvSettingsViewModel(
             }
         }
         viewModelScope.launch {
+            playerSettingsStore.audioNormalizationEnabledFlow.collect { value ->
+                _uiState.update { it.copy(audioNormalizationEnabled = value) }
+            }
+        }
+        viewModelScope.launch {
             playerSettingsStore.trueBlackBarsFlow.collect { value ->
                 _uiState.update { it.copy(trueBlackBars = value) }
             }
@@ -810,6 +816,10 @@ class TvSettingsViewModel(
 
     fun onIgnoreHevcLevelLimitsChanged(value: Boolean) {
         viewModelScope.launch { playerSettingsStore.setIgnoreHevcLevelLimits(value) }
+    }
+
+    fun onAudioNormalizationEnabledChanged(value: Boolean) {
+        viewModelScope.launch { playerSettingsStore.setAudioNormalizationEnabled(value) }
     }
 
     fun onTrueBlackBarsChanged(value: Boolean) {
