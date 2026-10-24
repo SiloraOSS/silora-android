@@ -1,8 +1,8 @@
-# Silune daily releases
+# Silora daily releases
 
-**Silune — your media, after dark.**
+**Silora — your media, after dark.**
 
-Silune is an unofficial fork of the Silo Android phone and TV clients. Its
+Silora is an unofficial fork of the Silo Android phone and TV clients. Its
 fork changes are an OLED-focused visual identity and an HEVC compatibility
 patch for NVIDIA Shield setups. The rest of the client feature set comes
 from Silo.
@@ -16,25 +16,25 @@ hardware decoder's actual capabilities. Existing saved numeric levels become
 On; a saved Off stays Off.
 
 The release workflow publishes optimized, signed phone and TV APKs on
-[GitHub Releases](https://github.com/SiluneOSS/silune-android/releases).
+[GitHub Releases](https://github.com/SiloraOSS/silora-android/releases).
 
 ## Schedule and manual builds
 
-The **Silune Daily** workflow runs every day at 15:37 UTC:
+The **Silora Daily** workflow runs every day at 15:37 UTC:
 08:37 Pacific during daylight saving time and 07:37 during standard time.
 GitHub can delay scheduled jobs. The workflow must stay on the default branch,
-`main`. It can also be started from Actions → Silune Daily →
+`main`. It can also be started from Actions → Silora Daily →
 Run workflow, selecting `main`. Leave **Force build** unchecked to use the same
 change check, or check it to compile and publish even when nothing changed.
 
 Each run uses GitHub's branch-merge API to merge the exact current
-`Silo-Server/silo-android` `main` commit into `SiluneOSS/silune-android` `main`.
+`Silo-Server/silo-android` `main` commit into `SiloraOSS/silora-android` `main`.
 The repository is a direct fork of official Silo Android. This API merge requires
 both repositories to share a GitHub fork network. The merge preserves the fork's
 commits and fails on conflicts, without resetting
 or force-pushing the branch. After syncing, it compares the merged source's Git
 tree (all tracked file contents) with the source tag of the most recently
-published complete Silune release. Matching contents skip compilation
+published complete Silora release. Matching contents skip compilation
 and publishing, even if commit history changed. The daily sync still completes,
 and the run summary explains the decision. Drafts, prereleases and releases
 missing either APK or the verification files do not advance this baseline.
@@ -52,8 +52,8 @@ The fork workflow never invokes Play publishing or Discord posting.
 
 Each dated release includes:
 
-- `silune-phone.apk`: universal phone/tablet build.
-- `silune-tv.apk`: universal Android TV / Google TV build.
+- `silora-phone.apk`: universal phone/tablet build.
+- `silora-tv.apk`: universal Android TV / Google TV build.
 - `build-info.json`: exact source SHA, checked upstream SHA, timestamp, version
   code base, and workflow run counter.
 - `SHA256SUMS`: checksums covering both APKs and the provenance file.
@@ -61,8 +61,8 @@ Each dated release includes:
 Each successful daily build is published as a regular GitHub release and
 explicitly marked **Latest**. These permanent links follow that release:
 
-- [Latest phone APK](https://github.com/SiluneOSS/silune-android/releases/latest/download/silune-phone.apk)
-- [Latest TV APK](https://github.com/SiluneOSS/silune-android/releases/latest/download/silune-tv.apk)
+- [Latest phone APK](https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-phone.apk)
+- [Latest TV APK](https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-tv.apk)
 
 The APKs are optimized release builds. Nothing is published until signature checks pass and downloaded
 release assets match the locally calculated checksums. A failed run leaves the
@@ -79,8 +79,9 @@ Repository Actions secrets:
 - `SILO_RELEASE_KEY_ALIAS`: signing alias.
 - `SILO_RELEASE_KEY_PASSWORD`: optional separate key password; defaults to the
   keystore password.
-- `SILO_GOOGLE_SERVICES_JSON_B64`: optional Firebase configuration. Without it,
-  phone push notifications are unavailable; the rest of the app still builds.
+- `SILO_GOOGLE_SERVICES_JSON_B64`: optional Firebase configuration for
+  `org.silora.app`. Without it, phone push notifications are unavailable; the
+  rest of the app still builds.
 
 The first three secrets are required before compilation starts. Daily upstream
 synchronization and the change check do not depend on signing secrets.
@@ -89,13 +90,14 @@ private backup of the key and passwords outside Git. Signing material is decoded
 only on the temporary build runner and removed after the build. The public
 certificate fingerprint can be checked with `apksigner verify --print-certs`.
 
-Both apps use the Silune application ID `org.silune.app`, so they install
-separately from Silo and earlier forks with different application IDs. Later
-Silune builds signed with the same persistent release key update in place.
+Both apps use the application ID `org.silora.app`, so they install separately
+from Silo and previous Silune builds. Existing Silune settings, sign-ins, and
+downloads do not transfer automatically; set up Silora as a new app. Later
+Silora builds signed with the same persistent release key update in place.
 
 The APK version, in-app version label, and GitHub release title preserve Silo's
-version and build number, then append the Silune build date:
-`1.0.0 (26) (silune:10212026)`. The date is **MMDDYYYY in Pacific time** and is
+version and build number, then append the Silora build date:
+`1.0.0 (26) (silora:10212026)`. The date is **MMDDYYYY in Pacific time** and is
 fixed when the workflow reserves its tag, even if compilation crosses midnight.
 Multiple builds on the same day share this visible date.
 
@@ -117,33 +119,34 @@ previously published releases are unchanged.
 
 ## Branding sources
 
-The app, accessibility descriptions, and HTTP client-name headers use **Silune**
-(**Silune TV** for TV client headers). The mark uses two angular purple forms
+The app, accessibility descriptions, and HTTP client-name headers use **Silora**
+(**Silora TV** for TV client headers). The mark uses two angular purple forms
 separated by a diagonal cut, with three facets on the upper form. Violet
 (`#5736B4`), lavender (`#B59AF4`), and muted purple (`#6856A3`) sit on a
 charcoal (`#25252D`) launcher background. The wordmark pairs the mark with
 white lettering; the brand line is "Your media, after dark."
 
-The editable sources are `branding/silune-mark.svg` and
-`branding/silune-wordmark.svg`. Regenerate the checked-in PNGs and startup videos
-with `python3 scripts/generate-silune-branding.py` (requires `rsvg-convert`,
+The editable sources are `branding/silora-mark.svg` and
+`branding/silora-wordmark.svg`. Regenerate the checked-in PNGs and startup videos
+with `python3 scripts/generate-silora-branding.py` (requires `rsvg-convert`,
 Pillow, and FFmpeg with `libx264`).
 The DejaVu Sans Bold lettering is outlined for consistent rendering.
 The in-app wordmark has a transparent background.
 Android's adaptive launcher insets the transparent split-prism mark; the 320×180 TV
 banner centers a 170-pixel-wide wordmark inside Fire TV's square crop.
-Phone and TV share a 1.6-second Silune wordmark fade on pure black at cold launch.
+Phone and TV share a 1.6-second Silora wordmark fade on pure black at cold launch.
 The videos retain the 720p30 AVC 3.1 and 1080p60 AVC 4.2 decoder tiers.
 Resource IDs and Kotlin symbol names remain stable to reduce merge conflicts.
-The Silune artwork is licensed under AGPL-3.0-or-later.
+The Silora artwork is licensed under AGPL-3.0-or-later.
 
-New releases use `silune-phone.apk` and `silune-tv.apk`. Permanent download URLs
-use those filenames once a Silune release is published. Previously published
-releases retain their original asset names; existing links using `prism-*`
-or earlier filenames will not follow new Silune releases. The repository is now
-`SiluneOSS/silune-android`; the persistent signing key is retained. Builds with
-the same application ID and signing key update in place with the matching phone
-or TV build.
+New releases use `silora-phone.apk` and `silora-tv.apk`. Permanent download URLs
+use those filenames once a Silora release is published. Previously published
+releases retain their original asset names; links using `silune-*`, `prism-*`,
+or earlier filenames will not follow new Silora releases. The build decision
+recognizes complete releases with either Silora or Silune APK names.
+The release repository is `SiloraOSS/silora-android`. Use the same persistent
+signing key for future Silora releases. Builds with the same application ID and
+signing key update in place with the matching phone or TV build.
 
 The local `unbranded` branch restores the original Silo name, artwork, notices,
 and logo sizing while retaining the fork's playback and release tooling.

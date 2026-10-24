@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Render the Silune artwork. Requires rsvg-convert, Pillow, and FFmpeg/libx264.
+"""Render the Silora artwork. Requires rsvg-convert, Pillow, and FFmpeg/libx264.
 
 The wordmark contains outlined DejaVu Sans Bold lettering; no font install is needed.
-Run from any directory with: python3 scripts/generate-silune-branding.py
+Run from any directory with: python3 scripts/generate-silora-branding.py
 """
 
 from io import BytesIO
@@ -28,14 +28,14 @@ def generate_splash():
     # Keep the existing decoder tiers: 720p30 AVC 3.1 for weaker TV boxes,
     # and 1080p60 AVC 4.2 for devices that advertise support for it.
     raw = ROOT / "android-shared/src/androidMain/res/raw"
-    with TemporaryDirectory(prefix="silune-splash-") as directory:
+    with TemporaryDirectory(prefix="silora-splash-") as directory:
         wordmark_path = Path(directory) / "wordmark.png"
         for name, width, height, frame_rate, level in (
             ("startup_splash", 1280, 720, 30, "3.1"),
             ("startup_splash_hd", 1920, 1080, 60, "4.2"),
         ):
             wordmark_width = width * 9 // 10
-            wordmark = render("silune-wordmark.svg", wordmark_width, wordmark_width // 3)
+            wordmark = render("silora-wordmark.svg", wordmark_width, wordmark_width // 3)
             # Composite transparency before encoding so the video and app
             # background share the same pure black.
             frame = Image.new("RGB", (width, height), "black")
@@ -49,18 +49,18 @@ def generate_splash():
                 "-t", SPLASH_DURATION, "-an", "-c:v", "libx264",
                 "-profile:v", "high", "-level:v", level, "-crf", "18",
                 "-preset", "medium", "-threads", "2", "-movflags", "+faststart",
-                "-map_metadata", "-1", "-metadata", "title=Silune startup splash",
+                "-map_metadata", "-1", "-metadata", "title=Silora startup splash",
                 str(raw / f"{name}.mp4"),
             ], check=True)
 
 
 def generate():
-    foreground = render("silune-mark.svg", 512, 512)
+    foreground = render("silora-mark.svg", 512, 512)
     icon = Image.new("RGB", (512, 512), BACKGROUND)
     icon.paste(foreground, (0, 0), foreground)
     icon.save(ROOT / "assets/icon.png", optimize=True)
-    wordmark = render("silune-wordmark.svg", 1200, 400)
-    banner_wordmark = render("silune-wordmark.svg", 170, 57)
+    wordmark = render("silora-wordmark.svg", 1200, 400)
+    banner_wordmark = render("silora-wordmark.svg", 170, 57)
     banner = Image.new("RGB", (320, 180), BACKGROUND)
     banner.paste(banner_wordmark, (75, 61), banner_wordmark)
     for module in ("androidApp", "androidTvApp"):

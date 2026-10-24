@@ -1,8 +1,8 @@
-# Silune documentation
+# Silora documentation
 
 **Your media, after dark.**
 
-Silune is an unofficial Silo Android fork with OLED-focused branding and an
+Silora is an unofficial Silo Android fork with OLED-focused branding and an
 HEVC compatibility patch for NVIDIA Shield setups. Start with the root
 [README](../README.md) for the project overview, APK downloads, and build
 instructions. [FEATURES](../FEATURES.md) inventories the client features
@@ -36,7 +36,7 @@ inherited from Silo and the fork's HEVC setting.
 
 ## Releasing
 
-- Silune APKs, daily upstream sync, signing, and verification: [`fork-releases.md`](fork-releases.md)
+- Silora APKs, daily upstream sync, signing, and verification: [`fork-releases.md`](fork-releases.md)
 - Inherited upstream tester/store release tooling: [`releasing.md`](releasing.md)
 
 ## API v2
