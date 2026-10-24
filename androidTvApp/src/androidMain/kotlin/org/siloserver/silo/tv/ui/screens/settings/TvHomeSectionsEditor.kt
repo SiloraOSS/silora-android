@@ -253,7 +253,7 @@ internal fun TvHomeSectionsEditor(
                     }
                     arrangedSections.isEmpty() && homeState.error != null -> {
                         HomeSectionsMessage(
-                            "Silune couldn’t refresh the Home rows. Try again when the server is reachable.",
+                            "Silora couldn’t refresh the Home rows. Try again when the server is reachable.",
                         )
                     }
                     arrangedSections.isEmpty() -> {

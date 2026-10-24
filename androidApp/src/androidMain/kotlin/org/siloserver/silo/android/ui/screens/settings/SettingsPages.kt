@@ -398,7 +398,7 @@ fun SettingsNotificationsScreen(viewModel: SettingsViewModel, onBackClick: () ->
         item(key = "in-app") {
             SettingsSection(
                 title = null,
-                footer = "Show alerts inside Silune as new releases arrive.",
+                footer = "Show alerts inside Silora as new releases arrive.",
             ) {
                 SettingsSwitchRow(
                     label = "In-App Notifications",
@@ -458,7 +458,7 @@ fun SettingsProfileSelectionScreen(onBackClick: () -> Unit) {
         item(key = "profile-selection") {
             SettingsSection(
                 title = null,
-                footer = "Choose when Silune asks who's watching. This applies only to this device.",
+                footer = "Choose when Silora asks who's watching. This applies only to this device.",
             ) {
                 ProfileLaunchBehavior.entries.forEach { behavior ->
                     SettingsChoiceRow(
