@@ -48,12 +48,12 @@ class AndroidDeviceMetadataProvider(
         )
     }
 
-    // Keep HTTP client-name headers consistent with the displayed Silune name.
+    // Keep HTTP client-name headers consistent with the displayed Silora name.
     private fun clientNameFor(platform: String): String =
         when (platform) {
-            "android-tv" -> "Silune TV"
-            "android" -> "Silune"
-            else -> "Silune"
+            "android-tv" -> "Silora TV"
+            "android" -> "Silora"
+            else -> "Silora"
         }
 
     /**

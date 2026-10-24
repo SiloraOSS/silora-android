@@ -84,9 +84,9 @@ object TvSkyline {
     val barTrailingSpacing = 11.dp
 
     /**
-     * Rendered height of the Silune brand lockup at the bar's leading edge.
+     * Rendered height of the Silora brand lockup at the bar's leading edge.
      *
-     * `scripts/generate-silune-branding.py` renders the 1200x400 transparent
+     * `scripts/generate-silora-branding.py` renders the 1200x400 transparent
      * wordmark into `res/drawable/silo_wordmark.png`. Keep the lockup inside
      * the 32.dp [barHeight] row with space above and below; width follows the
      * drawable's intrinsic ratio.

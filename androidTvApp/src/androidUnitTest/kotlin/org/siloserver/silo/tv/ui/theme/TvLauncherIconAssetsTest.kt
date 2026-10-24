@@ -31,11 +31,11 @@ class TvLauncherIconAssetsTest {
         assertEquals(0, foreground.alphaAt(foreground.width - 1, foreground.height / 2), "Right edge should be transparent.")
         val adaptiveIcon = File("src/androidMain/res/mipmap-anydpi-v26/ic_launcher.xml").readText()
         assertTrue(adaptiveIcon.contains("android:inset=\"18dp\""),
-            "The Silune mark must be inset into the adaptive icon safe zone.")
+            "The Silora mark must be inset into the adaptive icon safe zone.")
         val bounds = foreground.opaqueBounds()
         assertTrue(bounds.minX > 0 && bounds.maxX < foreground.width - 1)
         assertTrue(bounds.minY > 0 && bounds.maxY < foreground.height - 1)
-        assertTrue(bounds.width > 100 && bounds.height > 100, "Silune mark must be visible: $bounds")
+        assertTrue(bounds.width > 100 && bounds.height > 100, "Silora mark must be visible: $bounds")
 
     }
 
@@ -103,7 +103,7 @@ class TvLauncherIconAssetsTest {
                 }
             }
         }
-        assertTrue(wordmarkPixels.size > 500, "TV banner must retain the white Silune wordmark.")
+        assertTrue(wordmarkPixels.size > 500, "TV banner must retain the white Silora wordmark.")
         val wordmarkBounds = wordmarkPixels.pixelBounds()
         assertTrue(
             wordmarkBounds.minX >= 70 && wordmarkBounds.maxX <= 249,

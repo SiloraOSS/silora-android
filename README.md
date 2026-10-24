@@ -1,25 +1,25 @@
 <p align="center">
-  <img src="androidApp/src/androidMain/res/drawable/silo_wordmark.png" alt="Silune" width="420">
+  <img src="androidApp/src/androidMain/res/drawable/silo_wordmark.png" alt="Silora" width="420">
 </p>
 
-# Silune
+# Silora
 
 **Your media, after dark.**
 
-Silune is an unofficial fork of the [Silo Android clients](https://github.com/Silo-Server/silo-android)
+Silora is an unofficial fork of the [Silo Android clients](https://github.com/Silo-Server/silo-android)
 for Android phones and Android TV, with an OLED-focused visual identity and an
 HEVC compatibility patch for NVIDIA Shield setups.
 
 Stream your movies, shows, music, and audiobooks from your existing Silo server.
-The phone app also supports downloads and ebooks. Silune builds on Silo's
+The phone app also supports downloads and ebooks. Silora builds on Silo's
 playback, browsing, profiles, and other client features; you need a running
 [Silo server](https://github.com/Silo-Server/silo-server) to use it.
 
-## Silune changes
+## Silora changes
 
 | Focus | What this fork changes |
 | --- | --- |
-| OLED-focused branding | A purple split-prism icon on charcoal, with matching phone and TV launcher artwork, in-app wordmarks, a short Silune startup animation, and a TV banner. |
+| OLED-focused branding | A purple split-prism icon on charcoal, with matching phone and TV launcher artwork, in-app wordmarks, a short Silora startup animation, and a TV banner. |
 | Shield HEVC compatibility | **Ignore HEVC Level Limits**, a simple On/Off setting enabled by default on phone and TV. It lets playback be attempted when a file exceeds the decoder's advertised HEVC level. |
 
 The HEVC patch changes the level information reported to the server. Other
@@ -27,15 +27,15 @@ compatibility checks still apply, and it cannot increase the decoder's actual
 capabilities. Turn **Ignore HEVC Level Limits** off in playback settings to use
 the decoder's reported levels again.
 
-The visual identity and HEVC patch are Silune's fork changes. The broader app
-features described below are inherited from Silo. Silune is independently
+The visual identity and HEVC patch are Silora's fork changes. The broader app
+features described below are inherited from Silo. Silora is independently
 maintained and is not an official Silo release.
 
 ---
 
 ## Table of contents
 
-- [Silune changes](#silune-changes)
+- [Silora changes](#silora-changes)
 - [What's inside](#whats-inside)
 - [Install APKs](#install-apks)
 - [Feature overview](#feature-overview)
@@ -55,7 +55,7 @@ maintained and is not an official Silo release.
 | | |
 |---|---|
 | **Apps** | Android phone · Android TV |
-| **Application ID** | `org.silune.app` (shared by phone and TV) |
+| **Application ID** | `org.silora.app` (shared by phone and TV) |
 | **Language / UI** | Kotlin 2.1.20 · Jetpack Compose (Material 3) · Compose for TV (`androidx.tv`) |
 | **Playback** | AndroidX **Media3 / ExoPlayer** 1.11.0 with a pinned FFmpeg audio fallback extension |
 | **Networking** | **Ktor** 3.1.2 client · kotlinx.serialization · WebSockets for realtime |
@@ -73,25 +73,27 @@ Android 7.0 and 7.1 (API 24/25) are supported on both phone and Android TV. Vide
 
 ## Install APKs
 
-Get Silune builds from this fork's [GitHub Releases](https://github.com/SiluneOSS/silune-android/releases).
+Get Silora builds from this fork's [GitHub Releases](https://github.com/SiloraOSS/silora-android/releases).
 Choose the APK for your device:
 
 | Device | File | Latest download |
 | --- | --- | --- |
-| Android phone or tablet | `silune-phone.apk` | [Phone APK](https://github.com/SiluneOSS/silune-android/releases/latest/download/silune-phone.apk) |
-| NVIDIA Shield, Android TV, or Google TV | `silune-tv.apk` | [TV APK](https://github.com/SiluneOSS/silune-android/releases/latest/download/silune-tv.apk) |
+| Android phone or tablet | `silora-phone.apk` | [Phone APK](https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-phone.apk) |
+| NVIDIA Shield, Android TV, or Google TV | `silora-tv.apk` | [TV APK](https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-tv.apk) |
 
-These download links require a published Silune release marked **Latest**.
+These download links require a published Silora release marked **Latest**.
 Earlier releases keep their original names and assets. The old upstream
-Downloader codes install official Silo builds, so use this fork's APKs for Silune.
+Downloader codes install official Silo builds, so use this fork's APKs for Silora.
 
-Sideload the matching APK, open Silune, enter your Silo server address, and sign
+Sideload the matching APK, open Silora, enter your Silo server address, and sign
 in. Set up a new Silo server through its web interface before connecting a client.
 
-Silune retains the upstream application ID. Switching from an official Silo
-build or a locally debug-signed build to a SigmaStreams-signed release requires
-uninstalling the previous app, which clears its local data. Later Silune releases
-with the same signing key update in place.
+Silora uses the application ID `org.silora.app`, so it installs separately from
+official Silo and previous Silune builds. Existing Silune settings, sign-ins,
+and downloads do not transfer automatically; set up Silora as a new app.
+Later Silora releases signed with the same key update in place. Switching from
+a locally debug-signed build to a release signed with a different key requires
+uninstalling that Silora install, which clears its local data.
 
 The daily workflow syncs upstream and builds optimized, signed APKs when tracked
 source files change. See [fork releases and signing](docs/fork-releases.md) for
@@ -266,7 +268,7 @@ On first launch, point the app at your Silo server URL, sign in, and pick a prof
 
 ## Contributing
 
-For Silune-specific branding, build, or HEVC compatibility issues, use this
+For Silora-specific branding, build, or HEVC compatibility issues, use this
 repository's issue tracker. Include your device model, app version, Silo server
 version, and steps to reproduce the problem.
 
@@ -290,15 +292,15 @@ Known gaps the docs track: TV has no reader/ebooks and no downloads management b
 
 ## Notes
 
-- The phone and TV apps share the application ID `org.silune.app`; their
-  manifests distinguish touchscreen and leanback devices. Silune builds are
+- The phone and TV apps share the application ID `org.silora.app`; their
+  manifests distinguish touchscreen and leanback devices. Silora builds are
   distributed through this fork's GitHub Releases.
 - The Android modules target Java 21.
 - The server repo lives at [`Silo-Server/silo-server`](https://github.com/Silo-Server/silo-server).
 
 ## License & Trademarks
 
-Silune is based on [Silo Android](https://github.com/Silo-Server/silo-android)
+Silora is based on [Silo Android](https://github.com/Silo-Server/silo-android)
 and is licensed under `AGPL-3.0-or-later`. The Silo contributors provide the
 underlying clients and playback implementation. See [LICENSE](LICENSE).
 

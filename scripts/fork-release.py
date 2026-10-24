@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stamp and package Silune without the upstream Play workflow."""
+"""Stamp and package Silora without the upstream Play workflow."""
 import datetime as dt
 import hashlib
 import importlib.util
@@ -24,14 +24,18 @@ def build_decision(source_sha, releases, tree_for, force=False):
         raise ValueError("source commit must be a full Git SHA")
     if force:
         return True, "Manual force build requested."
-    required = {"silune-phone.apk", "silune-tv.apk",
-                "build-info.json", "SHA256SUMS"}
+    # Releases published before the rename still provide a valid source baseline.
+    required_asset_sets = [
+        {f"{brand}-phone.apk", f"{brand}-tv.apk", "build-info.json", "SHA256SUMS"}
+        for brand in ("silora", "silune")
+    ]
     published = [
         release for release in releases
         if release.get("draft") is False and release.get("prerelease") is False
         and release.get("published_at")
         and re.fullmatch(r"daily-\d{4}-\d{2}-\d{2}\.\d+", release.get("tag_name", ""))
-        and required <= {asset["name"] for asset in release.get("assets", []) if asset.get("size", 0) > 0}
+        and any(required <= {asset["name"] for asset in release.get("assets", []) if asset.get("size", 0) > 0}
+                for required in required_asset_sets)
     ]
     if not published:
         return True, "No complete published fork release exists yet."
@@ -111,17 +115,17 @@ def metadata(now, run_number, source_sha, upstream_sha, reserved_tag=None, *, up
     base = 400_000_000 + int((now - dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)).total_seconds())
     if not 0 < base <= 1_049_999_999:
         raise ValueError("version code is outside the Android build's allowed range")
-    silune_date = dt.date.fromisoformat(day).strftime("%m%d%Y")
-    version_name = f"{upstream['version']} ({upstream['build']}) (silune:{silune_date})"
+    silora_date = dt.date.fromisoformat(day).strftime("%m%d%Y")
+    version_name = f"{upstream['version']} ({upstream['build']}) (silora:{silora_date})"
     return {
         "tag": f"daily-{day}.{run_number}",
-        "title": f"Silune {version_name}",
+        "title": f"Silora {version_name}",
         "version_name": version_name,
         "version_code_base": base,
         "build_number": upstream["build"],
         "upstream_version": upstream["version"],
         "upstream_version_tag": upstream["tag"],
-        "silune_date": silune_date,
+        "silora_date": silora_date,
         "run_number": run_number,
         "source_sha": source_sha,
         "upstream_checked_sha": upstream_sha,
@@ -150,8 +154,8 @@ def prepare():
 
 def package(root, info, out):
     sources = {
-        "silune-phone.apk": root / "androidApp/build/outputs/apk/release/androidApp-universal-release.apk",
-        "silune-tv.apk": root / "androidTvApp/build/outputs/apk/release/androidTvApp-universal-release.apk",
+        "silora-phone.apk": root / "androidApp/build/outputs/apk/release/androidApp-universal-release.apk",
+        "silora-tv.apk": root / "androidTvApp/build/outputs/apk/release/androidTvApp-universal-release.apk",
     }
     # Fail before creating a partial distribution if either app is missing.
     for path in sources.values():
@@ -166,20 +170,20 @@ def package(root, info, out):
         f"{hashlib.sha256((out / name).read_bytes()).hexdigest()}  {name}\n" for name in names))
     (out / "RELEASE_NOTES.md").write_text(
         f"{info['title']}\n\n"
-        "Unofficial, optimized release builds of Silune, a fork of the Silo Android clients. "
+        "Unofficial, optimized release builds of Silora, a fork of the Silo Android clients. "
         "Includes the fork's HEVC level override, defaulting to 6.2.\n\n"
         f"Version: **{info['version_name']}**. Based on Silo `{info['upstream_version_tag']}` "
         "plus the upstream changes included in the source snapshot below. "
-        "The Silune date uses Pacific time (MMDDYYYY).\n\n"
-        "- `silune-phone.apk`: Android phones and tablets.\n"
-        "- `silune-tv.apk`: Android TV / Google TV.\n"
+        "The Silora date uses Pacific time (MMDDYYYY).\n\n"
+        "- `silora-phone.apk`: Android phones and tablets.\n"
+        "- `silora-tv.apk`: Android TV / Google TV.\n"
         "- Both APKs are universal and signed with the persistent release key.\n"
         "- These are optimized release APKs, published as regular GitHub releases.\n"
-        "- Latest phone APK: https://github.com/SiluneOSS/silune-android/releases/latest/download/silune-phone.apk\n"
-        "- Latest TV APK: https://github.com/SiluneOSS/silune-android/releases/latest/download/silune-tv.apk\n\n"
-        "Silune uses its own application ID and installs separately from Silo. "
-        "Later Silune builds signed with the same release key can update in place.\n\n"
-        f"Source: https://github.com/SiluneOSS/silune-android/tree/{info['source_sha']}\n\n"
+        "- Latest phone APK: https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-phone.apk\n"
+        "- Latest TV APK: https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-tv.apk\n\n"
+        "Silora uses its own application ID and installs separately from Silo. "
+        "Later Silora builds signed with the same release key can update in place.\n\n"
+        f"Source: https://github.com/SiloraOSS/silora-android/tree/{info['source_sha']}\n\n"
         f"Upstream checked: https://github.com/Silo-Server/silo-android/commit/{info['upstream_checked_sha']}\n\n"
         "Verify downloads with `sha256sum --check SHA256SUMS`. "
         "Source code is available under AGPL-3.0-or-later; third-party notices remain in the repository.\n")
