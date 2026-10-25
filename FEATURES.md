@@ -36,7 +36,8 @@ File pointers are repository-relative.
 | Audio passthrough (E-AC3 JOC/Atmos, TrueHD, DTS-HD) | ✅ | ✅ | TV prioritizes passthrough; `AudioCapabilityManager` |
 | FFmpeg audio extension (lossless fallback) | ✅ | ✅ | Media3 1.11.0-aligned, build-flag gated; `FfmpegAudioSupport` |
 | Staged playback buffer | ✅ | ✅ | `PlaybackBufferPolicy` currently defaults to Smooth Playback |
-| Refresh-rate matching | ✅ | ➖ | Phone display mode; TV defers to HDMI sink |
+| Refresh-rate matching | ✅ | ✅ | TV preserves the starting resolution unless resolution matching is also on. `RefreshRateMatcher` / `HdrDisplayController` |
+| Resolution matching | ➖ | ✅ | Independent TV playback toggle, off by default; preserves the starting refresh rate when enabled alone. `HdrDisplayController` |
 | HDMI EDID-driven display mode | ➖ | ✅ | `HdrDisplayController` |
 | Subtitle selection + styling (font/bg/position) | ✅ | ✅ | Media3 `SubtitleManager`; server plans render, convert, or burn-in fidelity |
 | Subtitle sync offset (±10s) / audio sync (±5s) | ✅ | ✅ | Per-profile |

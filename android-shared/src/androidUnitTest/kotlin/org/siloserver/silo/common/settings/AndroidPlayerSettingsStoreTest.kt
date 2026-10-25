@@ -322,6 +322,36 @@ class AndroidPlayerSettingsStoreTest {
     }
 
     @Test
+    fun `resolution matching defaults off persists locally and resets within its scope`() = runTest {
+        var profile = "profile-a"
+        var server = "https://one.example"
+        val stores = mutableMapOf<String, DataStore<Preferences>>()
+        fun newStore() = AndroidPlayerSettingsStore(
+            context = mockContextStub(), legacyCache = fakeLegacyCache,
+            getActiveProfileId = { profile }, getServerUrl = { server },
+            getDeviceId = { "device" }, serverSettingsFlusher = fakeFlusher,
+            dataStoreFactory = { id -> stores.getOrPut(id) {
+                PreferenceDataStoreFactory.create(produceFile = { File(tempFolder.root, "resolution_$id.preferences_pb") })
+            } },
+        )
+        val store = newStore()
+        assertFalse(store.matchContentResolutionFlow.first())
+        store.setMatchContentResolution(true)
+        assertTrue(newStore().matchContentResolutionFlow.first())
+        assertFalse(store.matchContentFrameRateFlow.first())
+        profile = "profile-b"
+        assertFalse(store.matchContentResolutionFlow.first())
+        profile = "profile-a"
+        server = "https://two.example"
+        assertFalse(store.matchContentResolutionFlow.first())
+        server = "https://one.example"
+        assertTrue(store.matchContentResolutionFlow.first())
+        assertTrue(fakeFlusher.calls.isEmpty())
+        store.resetAllDeviceSettings()
+        assertFalse(store.matchContentResolutionFlow.first())
+    }
+
+    @Test
     fun `night mode defaults off stays local and resets within its profile and server`() = runTest {
         var profile = "profile-a"
         var server = "https://one.example"
