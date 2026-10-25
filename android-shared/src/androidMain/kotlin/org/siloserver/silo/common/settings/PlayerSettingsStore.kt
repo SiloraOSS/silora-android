@@ -86,7 +86,11 @@ interface PlayerSettingsStore {
     val hdrEnabledFlow: Flow<Boolean>
     val dvProfile7HDR10FallbackFlow: Flow<Boolean>
     val dolbyVisionEnabledFlow: Flow<Boolean>
+    /** Match refresh rate independently of TV resolution matching. */
     val matchContentFrameRateFlow: Flow<Boolean>
+    /** Device-local, per-profile TV resolution matching; off by default. */
+    val matchContentResolutionFlow: Flow<Boolean>
+        get() = flowOf(false)
     val pictureInPictureEnabledFlow: Flow<Boolean>
 
     /** See [org.siloserver.silo.model.settings.PlaybackSettingsKeys.ForceHdrPassthrough]. */
@@ -220,6 +224,7 @@ interface PlayerSettingsStore {
     suspend fun setDvProfile7HDR10Fallback(value: Boolean)
     suspend fun setDolbyVisionEnabled(value: Boolean)
     suspend fun setMatchContentFrameRate(value: Boolean)
+    suspend fun setMatchContentResolution(value: Boolean) = Unit
     suspend fun setPictureInPictureEnabled(value: Boolean)
     suspend fun setForceHdrPassthrough(value: Boolean)
 

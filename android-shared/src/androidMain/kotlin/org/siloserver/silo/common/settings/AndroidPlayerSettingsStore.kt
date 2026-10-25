@@ -320,6 +320,9 @@ class AndroidPlayerSettingsStore(
     override val matchContentFrameRateFlow: Flow<Boolean> =
         profileScopedFlow(false) { p, s -> p.boolFor(s, PlaybackSettingsKeys.MatchContentFrameRate, false) }
 
+    override val matchContentResolutionFlow: Flow<Boolean> =
+        profileScopedFlow(false) { p, s -> p.boolFor(s, MATCH_CONTENT_RESOLUTION, false) }
+
     override val pictureInPictureEnabledFlow: Flow<Boolean> =
         profileScopedFlow(true) { p, s -> p.boolFor(s, PlaybackSettingsKeys.PictureInPictureEnabled, true) }
 
@@ -557,6 +560,9 @@ class AndroidPlayerSettingsStore(
 
     override suspend fun setMatchContentFrameRate(value: Boolean) =
         writeBool(PlaybackSettingsKeys.MatchContentFrameRate, value)
+
+    override suspend fun setMatchContentResolution(value: Boolean) =
+        writeBoolLocal(MATCH_CONTENT_RESOLUTION, value)
 
     override suspend fun setPictureInPictureEnabled(value: Boolean) =
         writeBoolLocal(PlaybackSettingsKeys.PictureInPictureEnabled, value)
@@ -993,6 +999,7 @@ class AndroidPlayerSettingsStore(
                 // it declares. Without this, the action would leave exactly the
                 // settings the user most associates with this device untouched.
                 it.remove(booleanPreferencesKey(scope.keyPrefix + AUDIO_NORMALIZATION_ENABLED))
+                it.remove(booleanPreferencesKey(scope.keyPrefix + MATCH_CONTENT_RESOLUTION))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.PictureInPictureEnabled))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.ForceHdrPassthrough))
                 it.remove(intPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.HevcLevelOverride))
@@ -1355,6 +1362,7 @@ class AndroidPlayerSettingsStore(
     }
 
     private companion object {
+        const val MATCH_CONTENT_RESOLUTION = "match_content_resolution"
         const val AUDIO_NORMALIZATION_ENABLED = "audio_normalization_enabled"
         const val SAVED_CUSTOM_SUBTITLE_APPEARANCE = "subtitle_appearance.saved_custom"
         /**

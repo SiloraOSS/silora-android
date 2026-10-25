@@ -408,6 +408,8 @@ fun TvPlayerScreen(
     val latestOnExit by rememberUpdatedState(onExit)
     val context = LocalContext.current
     val hdrDisplayController = remember { HdrDisplayController() }
+    val matchContentFrameRate by viewModel.matchContentFrameRate.collectAsState()
+    val matchContentResolution by viewModel.matchContentResolution.collectAsState()
     // Bind the playback display before anything plans: the ViewModel's
     // initializer starts loading as soon as it exists, so the binding has to
     // happen during composition, not in a later effect.
@@ -1510,9 +1512,8 @@ fun TvPlayerScreen(
         }
     }
 
-    // HDR display-mode switching: attach the controller to the activity window
-    // so we can drive `preferredDisplayModeId` when video size / frame rate
-    // becomes known. Released on composition dispose.
+    // Capture the starting output mode before any content matching. Both
+    // independent options restore this mode when playback closes.
     DisposableEffect(context) {
         (context as? Activity)?.let { hdrDisplayController.attach(it) }
         onDispose { hdrDisplayController.restore() }
@@ -1665,12 +1666,34 @@ fun TvPlayerScreen(
     DisposableEffect(
         mediaController,
         state.effectiveFrameRate,
+        matchContentFrameRate,
+        matchContentResolution,
         playWhenReadyReconciliationGate,
     ) {
         val controller = mediaController
         if (controller == null) {
             onDispose { }
         } else {
+            fun applyDisplayMode(videoSize: VideoSize = controller.videoSize) {
+                val mediaFrameRate = controller.currentTracks.groups
+                    .firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+                    ?.let { group ->
+                        (0 until group.mediaTrackGroup.length)
+                            .firstOrNull { group.isTrackSelected(it) }
+                            ?.let { group.mediaTrackGroup.getFormat(it).frameRate }
+                    }
+                val frameRate = mediaFrameRate?.takeIf { it.isFinite() && it > 0f }
+                    ?: state.effectiveFrameRate
+                    ?: 0f
+                hdrDisplayController.applyForMedia(
+                    videoWidth = videoSize.width,
+                    videoHeight = videoSize.height,
+                    frameRateHz = frameRate,
+                    matchFrameRate = matchContentFrameRate,
+                    matchResolution = matchContentResolution,
+                )
+            }
+
             val listener = object : Player.Listener {
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                     val provenance = playWhenReadyReconciliationGate
@@ -1778,39 +1801,20 @@ fun TvPlayerScreen(
                     if (controller.currentTracks.groups.any { it.type == C.TRACK_TYPE_TEXT && it.isSelected }) {
                         viewModel.onMountedSubtitleSelected()
                     }
+                    applyDisplayMode()
                 }
                 override fun onVideoSizeChanged(videoSize: VideoSize) {
-                    // MediaController doesn't expose ExoPlayer's `videoFormat`
-                    // accessor, so read the frame rate off the currently
-                    // selected video track in `currentTracks`. That's the
-                    // same signal — `Format.frameRate` flows through both.
-                    val mediaFrameRate = controller.currentTracks.groups
-                        .firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
-                        ?.let { g ->
-                            val mg = g.mediaTrackGroup
-                            if (mg.length > 0) mg.getFormat(0).frameRate else 0f
-                        } ?: 0f
-                    val frameRate = mediaFrameRate
-                        .takeIf { it.isFinite() && it > 0f }
-                        ?: state.effectiveFrameRate
-                        ?: 0f
                     if (videoSize.width > 0 && videoSize.height > 0) {
                         pictureInPictureVideoWidth = videoSize.width
                         pictureInPictureVideoHeight = videoSize.height
-                        // Gated like Apple TV's "Match Content" (default off):
-                        // the HDMI mode switch black-screens briefly, so it is
-                        // the viewer's choice (QA 2026-07-08).
-                        if (viewModel.matchContentFrameRate.value) {
-                            hdrDisplayController.applyForMedia(
-                                videoWidth = videoSize.width,
-                                videoHeight = videoSize.height,
-                                frameRateHz = frameRate,
-                            )
-                        }
                     }
+                    applyDisplayMode(videoSize)
                 }
             }
             controller.addListener(listener)
+            // Also handle settings arriving after the first video-size event,
+            // or a controller reconnecting to an already mounted video.
+            applyDisplayMode()
             onDispose { controller.removeListener(listener) }
         }
     }

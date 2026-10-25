@@ -28,6 +28,7 @@ internal class FakePlayerSettingsStore : PlayerSettingsStore {
     override val dvProfile7HDR10FallbackFlow = MutableStateFlow(false)
     override val dolbyVisionEnabledFlow = MutableStateFlow(true)
     override val matchContentFrameRateFlow = MutableStateFlow(false)
+    override val matchContentResolutionFlow = MutableStateFlow(false)
     override val subtitleMatchesDeviceFlow = MutableStateFlow(false)
     override val showAudiobooksFlow = MutableStateFlow(false)
     override val effectiveSubtitleAppearanceFlow =
@@ -83,6 +84,10 @@ internal class FakePlayerSettingsStore : PlayerSettingsStore {
 
     override suspend fun setMatchContentFrameRate(value: Boolean) {
         setterCalls += "setMatchContentFrameRate"; matchContentFrameRateFlow.value = value
+    }
+
+    override suspend fun setMatchContentResolution(value: Boolean) {
+        setterCalls += "setMatchContentResolution"; matchContentResolutionFlow.value = value
     }
 
     override suspend fun setSubtitleMatchesDevice(enabled: Boolean) {

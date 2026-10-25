@@ -6,10 +6,8 @@ import kotlin.math.roundToInt
 
 /**
  * Picks the best display mode for a given target refresh rate. Shared between
- * [HdrDisplayController] (TV — uses it as one input to an
- * HDMI-resolution-first selection) and [RefreshRateMatcher] (phone — uses it
- * as the *only* selection criterion, since the phone panel resolution is
- * fixed and changing it would downgrade the panel pipeline).
+ * [HdrDisplayController] (TV, with independent resolution matching) and
+ * [RefreshRateMatcher] (phone, restricted to the current resolution).
  */
 internal object RefreshRateSelector {
 
@@ -19,7 +17,7 @@ internal object RefreshRateSelector {
         frameRateHz: Float,
     ): Display.Mode? {
         if (candidates.isEmpty() || frameRateHz <= 0f) return null
-        return candidates.minByOrNull { scoreMode(it, frameRateHz) }
+        return candidates.minByOrNull { scoreRefreshRate(it.refreshRate, frameRateHz) }
     }
 
     /**
@@ -29,9 +27,9 @@ internal object RefreshRateSelector {
      * — otherwise 60Hz (delta 36) wrongly beats 120Hz (delta 96) for 24fps content.
      * Among integer multiples, the closest refresh wins (24 over 48 over 120).
      */
-    private fun scoreMode(mode: Display.Mode, frameRateHz: Float): Float {
-        val rateDelta = abs(mode.refreshRate - frameRateHz)
-        val ratio = mode.refreshRate / frameRateHz
+    fun scoreRefreshRate(refreshRate: Float, frameRateHz: Float): Float {
+        val rateDelta = abs(refreshRate - frameRateHz)
+        val ratio = refreshRate / frameRateHz
         val integerMultiple = ratio >= 0.99f && abs(ratio - ratio.roundToInt()) < 0.05f
         return if (integerMultiple) rateDelta else rateDelta + 10_000f
     }

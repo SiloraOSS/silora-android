@@ -314,6 +314,7 @@ fun TvSettingsScreen(
         onHideUnwatchedEpisodeImagesChanged = viewModel::setHideUnwatchedEpisodeImages,
         onHideUnwatchedEpisodeOverviewsChanged = viewModel::setHideUnwatchedEpisodeOverviews,
         onMatchContentFrameRateChanged = viewModel::onMatchContentFrameRateChanged,
+        onMatchContentResolutionChanged = viewModel::onMatchContentResolutionChanged,
         onDolbyVisionEnabledChanged = viewModel::onDolbyVisionEnabledChanged,
         onDvProfile7HDR10FallbackChanged = viewModel::onDvProfile7HDR10FallbackChanged,
         onForceHdrPassthroughChanged = viewModel::onForceHdrPassthroughChanged,
@@ -474,6 +475,7 @@ private fun SettingsSplitLayout(
     onHideUnwatchedEpisodeImagesChanged: (Boolean) -> Unit,
     onHideUnwatchedEpisodeOverviewsChanged: (Boolean) -> Unit,
     onMatchContentFrameRateChanged: (Boolean) -> Unit,
+    onMatchContentResolutionChanged: (Boolean) -> Unit,
     onDolbyVisionEnabledChanged: (Boolean) -> Unit,
     onDvProfile7HDR10FallbackChanged: (Boolean) -> Unit,
     onForceHdrPassthroughChanged: (Boolean) -> Unit,
@@ -564,6 +566,7 @@ private fun SettingsSplitLayout(
             onHideUnwatchedEpisodeImagesChanged = onHideUnwatchedEpisodeImagesChanged,
             onHideUnwatchedEpisodeOverviewsChanged = onHideUnwatchedEpisodeOverviewsChanged,
             onMatchContentFrameRateChanged = onMatchContentFrameRateChanged,
+            onMatchContentResolutionChanged = onMatchContentResolutionChanged,
             onDolbyVisionEnabledChanged = onDolbyVisionEnabledChanged,
             onDvProfile7HDR10FallbackChanged = onDvProfile7HDR10FallbackChanged,
             onForceHdrPassthroughChanged = onForceHdrPassthroughChanged,
@@ -857,6 +860,7 @@ private fun SettingsDetailPane(
     onHideUnwatchedEpisodeImagesChanged: (Boolean) -> Unit,
     onHideUnwatchedEpisodeOverviewsChanged: (Boolean) -> Unit,
     onMatchContentFrameRateChanged: (Boolean) -> Unit,
+    onMatchContentResolutionChanged: (Boolean) -> Unit,
     onDolbyVisionEnabledChanged: (Boolean) -> Unit,
     onDvProfile7HDR10FallbackChanged: (Boolean) -> Unit,
     onForceHdrPassthroughChanged: (Boolean) -> Unit,
@@ -922,6 +926,7 @@ private fun SettingsDetailPane(
                 onHideUnwatchedEpisodeImagesChanged = onHideUnwatchedEpisodeImagesChanged,
                 onHideUnwatchedEpisodeOverviewsChanged = onHideUnwatchedEpisodeOverviewsChanged,
             onMatchContentFrameRateChanged = onMatchContentFrameRateChanged,
+            onMatchContentResolutionChanged = onMatchContentResolutionChanged,
             onDolbyVisionEnabledChanged = onDolbyVisionEnabledChanged,
             onDvProfile7HDR10FallbackChanged = onDvProfile7HDR10FallbackChanged,
             onForceHdrPassthroughChanged = onForceHdrPassthroughChanged,
@@ -1258,6 +1263,7 @@ private fun TvPlaybackSettingsPane(
     onHideUnwatchedEpisodeImagesChanged: (Boolean) -> Unit,
     onHideUnwatchedEpisodeOverviewsChanged: (Boolean) -> Unit,
     onMatchContentFrameRateChanged: (Boolean) -> Unit,
+    onMatchContentResolutionChanged: (Boolean) -> Unit,
     onDolbyVisionEnabledChanged: (Boolean) -> Unit,
     onDvProfile7HDR10FallbackChanged: (Boolean) -> Unit,
     onForceHdrPassthroughChanged: (Boolean) -> Unit,
@@ -1380,6 +1386,17 @@ private fun TvPlaybackSettingsPane(
                     label = "Match Content Frame Rate",
                     checked = state.matchContentFrameRate,
                     onCheckedChange = onMatchContentFrameRateChanged,
+                )
+                SettingsFooterText(
+                    text = "Match the video's frame rate. Resolution stays unchanged unless Match Content Resolution is on.",
+                )
+                SettingsToggleRow(
+                    label = "Match Content Resolution",
+                    checked = state.matchContentResolution,
+                    onCheckedChange = onMatchContentResolutionChanged,
+                )
+                SettingsFooterText(
+                    text = "Match the video's resolution. Refresh rate stays unchanged unless Match Content Frame Rate is on.",
                 )
                 SettingsToggleRow(
                     label = "Force HDR Passthrough",
