@@ -145,6 +145,8 @@ import org.siloserver.silo.tv.ui.theme.FocusedContainer
 import org.siloserver.silo.tv.ui.theme.FocusedContent
 import org.siloserver.silo.tv.ui.theme.Spacing
 import org.koin.compose.koinInject
+import org.siloserver.silo.common.player.audio.NightModeControl
+import org.siloserver.silo.common.player.audio.NightModeParameters
 import org.koin.compose.viewmodel.koinViewModel
 import org.siloserver.silo.common.watchparty.WatchPartyExperiment
 import org.siloserver.silo.viewmodel.HomeViewModel
@@ -1450,9 +1452,11 @@ private fun TvPlaybackSettingsPane(
                     checked = state.audioNormalizationEnabled,
                     onCheckedChange = onAudioNormalizationEnabledChanged,
                 )
+                TvNightModeSettingsRows(store = koinInject())
                 SettingsFooterText(
                     text = "Softens loud scenes and raises quiet dialogue. Uses decoded audio instead of " +
-                        "passthrough. Saved for this profile on this device.",
+                        "passthrough. Night Mode Settings tunes its compressor and limiter, and changes " +
+                        "apply while you listen. Saved for this profile on this device.",
                 )
             }
         }
@@ -3217,6 +3221,81 @@ private fun TvThemeMusicSettingsGroup(store: PlayerSettingsStore) {
         SettingsFooterText(
             text = "Play a title's theme music while its page is open, when the server has one. " +
                 "Loop repeats it until you leave the page.",
+        )
+    }
+}
+
+/**
+ * Night Mode Settings: a row that opens the compressor and limiter values in
+ * place, since the detail pane has no sub-pages. Each value opens a picker
+ * of its choices; Restore Defaults asks first.
+ */
+@Composable
+private fun TvNightModeSettingsRows(store: PlayerSettingsStore) {
+    val params by store.nightModeParametersFlow.collectAsState(initial = NightModeParameters.DEFAULT)
+    val scope = rememberCoroutineScope()
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var activeControl by remember { mutableStateOf<NightModeControl?>(null) }
+    var confirmingReset by remember { mutableStateOf(false) }
+    // Restore Defaults disables itself once used, so focus goes back up.
+    val settingsRowFocus = remember { FocusRequester() }
+    fun title(control: NightModeControl) = "${control.section.title} ${control.label}"
+
+    SettingsValueRow(
+        label = "Night Mode Settings",
+        value = if (params.isDefault) "Default" else "Custom",
+        onClick = { expanded = !expanded },
+        focusRequester = settingsRowFocus,
+    )
+    if (expanded) {
+        SettingsNestedGroup(enabled = true) {
+            NightModeControl.entries.forEach { control ->
+                SettingsValueRow(
+                    label = title(control),
+                    value = control.format(control.get(params)),
+                    onClick = { activeControl = control },
+                )
+            }
+            SettingsActionRow(
+                label = "Restore Defaults",
+                onClick = { confirmingReset = true },
+                destructive = true,
+                enabled = !params.isDefault,
+            )
+        }
+    }
+
+    activeControl?.let { control ->
+        val default = control.indexOf(control.get(NightModeParameters.DEFAULT))
+        TvSettingsPickerSheet(
+            title = title(control),
+            options = control.choices.mapIndexed { index, value ->
+                PickerOption(
+                    id = index.toString(),
+                    label = control.format(value),
+                    detail = if (index == default) "Default" else null,
+                )
+            },
+            selectedId = control.indexOf(control.get(params)).toString(),
+            onSelect = { id ->
+                activeControl = null
+                val value = control.choices[id.toInt()]
+                scope.launch { store.setNightModeParameters(control.set(params, value)) }
+            },
+            onDismiss = { activeControl = null },
+        )
+    }
+    if (confirmingReset) {
+        TvSettingsConfirmDialog(
+            title = "Restore Defaults?",
+            message = "Night mode's compressor and limiter go back to their default values.",
+            confirmLabel = "Restore",
+            onConfirm = {
+                confirmingReset = false
+                settingsRowFocus.requestFocus()
+                scope.launch { store.resetNightModeParameters() }
+            },
+            onDismiss = { confirmingReset = false },
         )
     }
 }

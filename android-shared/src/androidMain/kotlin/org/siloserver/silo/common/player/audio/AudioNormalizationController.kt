@@ -100,6 +100,11 @@ class AudioNormalizationController : AnalyticsListener {
         }
     }
 
+    /** Takes effect immediately on an attached effect; no audio restart is needed. */
+    fun setParameters(parameters: NightModeParameters) {
+        effect.setParameters(parameters)
+    }
+
     override fun onTracksChanged(eventTime: AnalyticsListener.EventTime, tracks: Tracks) {
         if (!restoringAudio || tracks.isTypeSelected(C.TRACK_TYPE_AUDIO)) return
         restoreAudio()
