@@ -151,6 +151,18 @@ The script verifies the APK signatures, application ID, version, and
 non-debuggable flag before copying the universal APKs and checksums to
 `dist/local-YYYY-MM-DD.HHMMSS/`. It does not publish a GitHub release.
 
+Use `--release` to choose which APKs to build. Both apps are selected by default:
+
+```sh
+./build.sh --release=tv     # Build only Android TV / Google TV
+./build.sh --release=phone  # Build only phones and tablets
+./build.sh --release=both   # Build both (same as ./build.sh)
+```
+
+Only the selected APKs are verified and packaged. Full lint follows the same
+selection; `--tests` still runs the project-wide unit tests. Options can be
+combined, for example `./build.sh --release=tv --lint`.
+
 Tests and full release lint are optional for local builds:
 
 ```sh
