@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report daily workflow status without affecting synchronization or releases."""
+"""Report daily and manual workflow status without affecting releases."""
 import json
 import os
 from pathlib import Path
@@ -28,26 +28,30 @@ def user_ids(raw):
 
 def notification(event, jobs, recipients):
     run = event['workflow_run']
+    manual = run.get('name') == 'Silora Manual Release'
+    workflow = 'Silora Manual Release' if manual else 'Silora Daily'
     conclusion = run.get('conclusion')
     ping = False
     if event['action'] == 'in_progress':
-        title, color = '🔄 Silora Daily started', 0x5865F2
-        description = 'Checking upstream changes and whether a new build is needed.'
+        title, color = f'🔄 {workflow} started', 0x5865F2
+        description = ('Building the selected source and publishing phone and TV APKs; upstream synchronization is disabled.'
+                       if manual else 'Checking upstream changes and whether a new build is needed.')
     elif conclusion == 'success':
         results = {job['name']: job.get('conclusion') for job in jobs}
-        if results.get('sync') == 'success' and results.get('build') == 'skipped' and results.get('publish') == 'skipped':
+        if not manual and results.get('sync') == 'success' and results.get('build') == 'skipped' and results.get('publish') == 'skipped':
             title, color = '✅ Silora Daily — no changes', 0x2ECC71
             description = 'Upstream sync completed. Source files match the latest release; no build was needed.'
         else:
-            title, color = '✅ Silora Daily succeeded', 0x2ECC71
+            title, color = f'✅ {workflow} succeeded', 0x2ECC71
             description = 'Workflow completed successfully.'
-            if all(results.get(name) == 'success' for name in ('sync', 'build', 'publish')):
-                description = 'Upstream sync, build, and publication succeeded. Phone and TV APKs are available on GitHub Releases.'
+            if all(results.get(name) == 'success' for name in ('prepare' if manual else 'sync', 'build', 'publish')):
+                description = ('Build and publication succeeded.' if manual else 'Upstream sync, build, and publication succeeded.')
+                description += ' Phone and TV APKs are available on GitHub Releases.'
     elif conclusion in ('cancelled', 'skipped', 'neutral'):
-        title, color = f'⚪ Silora Daily {conclusion}', 0x95A5A6
+        title, color = f'⚪ {workflow} {conclusion}', 0x95A5A6
         description = 'Check the workflow run for details.'
     else:
-        title, color, ping = '🚨 Silora Daily failed', 0xE74C3C, True
+        title, color, ping = f'🚨 {workflow} failed', 0xE74C3C, True
         description = f'Workflow result: {conclusion or "unknown"}. Check the run logs.'
         failed = next((job for job in jobs if job.get('conclusion') in ('failure', 'timed_out', 'action_required')), None)
         if failed:
@@ -127,9 +131,10 @@ def main():
     event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
     run = event['workflow_run']
     if (event.get('action') not in ('in_progress', 'completed')
-            or run.get('name') != 'Silora Daily' or run.get('head_branch') != 'main'
+            or run.get('name') not in ('Silora Daily', 'Silora Manual Release') or run.get('head_branch') != 'main'
             or run.get('head_repository', {}).get('full_name') != 'SiloraOSS/silora-android'
-            or run.get('event') not in ('schedule', 'workflow_dispatch')):
+            or run.get('event') not in ('schedule', 'workflow_dispatch')
+            or (run.get('name') == 'Silora Manual Release' and run.get('event') != 'workflow_dispatch')):
         raise NotificationError('Unexpected workflow event; nothing was sent.')
     recipients = user_ids(os.environ.get('DISCORD_FAILURE_USER_IDS', ''))
     jobs = []
