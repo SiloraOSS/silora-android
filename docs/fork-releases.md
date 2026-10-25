@@ -145,11 +145,25 @@ Check changes with `python3 scripts/test-notify-fork-daily.py`,
 ### Local builds
 
 Run `./build.sh` to build phone and TV APKs using the same release settings,
-signing identity, version-name format, timestamp-based version codes, tests,
-lint, and dependency checks as **Silora Daily** and **Silora Manual Release**.
+signing identity, version-name format, timestamp-based version codes, and
+dependency checks as **Silora Daily** and **Silora Manual Release**.
 The script verifies the APK signatures, application ID, version, and
 non-debuggable flag before copying the universal APKs and checksums to
 `dist/local-YYYY-MM-DD.HHMMSS/`. It does not publish a GitHub release.
+
+Tests and full release lint are optional for local builds:
+
+```sh
+./build.sh                 # Build both release APKs
+./build.sh --tests         # Include release-script tests and Gradle unit tests
+./build.sh --lint          # Include full phone and TV release lint
+./build.sh --tests --lint  # Include both
+```
+
+Android's release-critical lint checks still run as part of APK assembly.
+Local builds enable Gradle project parallelism and use the default Gradle and
+R8 worker counts. GitHub release workflows still request tests and full lint
+and retain their own worker limits.
 
 Keep local signing files in `../silora-signing/`, beside this repository:
 
