@@ -142,6 +142,46 @@ Check changes with `python3 scripts/test-notify-fork-daily.py`,
 
 ## Persistent signing
 
+### Local builds
+
+Run `./build.sh` to build phone and TV APKs using the same release settings,
+signing identity, version-name format, timestamp-based version codes, tests,
+lint, and dependency checks as **Silora Daily** and **Silora Manual Release**.
+The script verifies the APK signatures, application ID, version, and
+non-debuggable flag before copying the universal APKs and checksums to
+`dist/local-YYYY-MM-DD.HHMMSS/`. It does not publish a GitHub release.
+
+Keep local signing files in `../silora-signing/`, beside this repository:
+
+```text
+source/
+├── silo-android/
+└── silora-signing/
+    ├── release.jks
+    └── signing.json
+```
+
+`signing.json` contains `password` and `alias` strings, plus `key_password`
+only when the key password differs from the keystore password. Restrict the
+directory to mode `700` and both files to mode `600`. These private files stay
+outside the repository. To use a different folder, set `SILORA_SIGNING_DIR` or
+pass `./build.sh --signing-dir /private/path`.
+
+Use `./build.sh --check` to validate the saved signing certificate and calculate
+the version without compiling. Both modes fetch official version tags and the
+upstream main reference into private Git refs; neither merges upstream nor
+changes your branch or working files. Uncommitted local changes are included
+in a build and flagged in its `build-info.json`.
+
+Newer local and GitHub builds can update each other on the same device type
+when they use this signing key. Android still blocks a normal installation of
+an older version code over a newer one. Version codes are assigned when each
+build starts, so use their codes to compare overlapping builds. A release-key
+build cannot update an existing installation signed with a different debug key;
+that installation needs a one-time uninstall first.
+
+### GitHub Actions secrets
+
 Repository Actions secrets:
 
 - `SILO_RELEASE_KEYSTORE_B64`: base64-encoded private signing keystore.

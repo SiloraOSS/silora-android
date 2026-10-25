@@ -1,11 +1,11 @@
-cd ~/Workspace/SigmaStreams/Silo/source/silo-android
+#!/usr/bin/env bash
+set -euo pipefail
 
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-export ANDROID_HOME="$HOME/Android"
-export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/Sdk/platform-tools:$PATH"
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+cd "$REPO_ROOT"
 
-# Phone
-./gradlew :androidApp:assembleRelease -PallowDebugReleaseSigning=true
+export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk-amd64}"
+export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android}}"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
 
-# TV
-./gradlew :androidTvApp:assembleRelease -PallowDebugReleaseSigning=true
+exec python3 scripts/build-local-release.py "$@"
