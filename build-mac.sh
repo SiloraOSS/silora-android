@@ -2,7 +2,7 @@
 # Build signed Silora release APKs locally, with the same key and version code
 # base as the fork's GitHub releases, so they install over each other in place.
 #
-# Usage: silora-release-apk [phone|tv|both] [--install] [--version-code N]
+# Usage: silora-release-apk [phone|tv|both] [--tests] [--lint] [--install] [--version-code N]
 # Run with --help for details.
 
 set -euo pipefail
@@ -17,7 +17,7 @@ usage() {
 silora-release-apk — build signed Silora release APKs on this Mac
 
 Usage:
-  silora-release-apk [phone|tv|both] [--install] [--version-code N]
+  silora-release-apk [phone|tv|both] [--tests] [--lint] [--install] [--version-code N]
 
 Targets (default: both):
   phone   build androidApp only
@@ -25,12 +25,17 @@ Targets (default: both):
   both    build both apps
 
 Options:
+  --tests            run project-wide Gradle unit tests before building.
+  --lint             run full release lint for the selected apps before building.
   --install          after building, install onto the connected device with adb.
                      Picks the TV APK for an Android TV device and the phone APK
                      otherwise. With several devices, set ANDROID_SERIAL first.
   --version-code N   use N as the version code base instead of the one from the
                      latest GitHub release (phone = N*2, TV = N*2+1).
   -h, --help         show this help.
+
+Tests and full lint are skipped unless their flags are supplied. Android's
+release-critical lint checks still run as part of APK assembly.
 
 It builds whatever is checked out in the repo (default ~/silora-android, or the
 silora-android checkout you run it from; override with SILORA_REPO=path).
@@ -51,11 +56,15 @@ EOF
 die() { echo "error: $*" >&2; exit 1; }
 
 target="both"
+run_tests=false
+run_lint=false
 install=false
 version_code=""
 while (($#)); do
   case "$1" in
     phone|tv|both) target="$1" ;;
+    --tests) run_tests=true ;;
+    --lint) run_lint=true ;;
     --install) install=true ;;
     --version-code)
       shift
@@ -112,6 +121,10 @@ case "$target" in
   tv) modules=(androidTvApp) ;;
   both) modules=(androidApp androidTvApp) ;;
 esac
+if $run_tests; then tasks+=(test); fi
+if $run_lint; then
+  for module in "${modules[@]}"; do tasks+=(":$module:lintRelease"); done
+fi
 for module in "${modules[@]}"; do tasks+=(":$module:assembleRelease"); done
 
 dirty=""
