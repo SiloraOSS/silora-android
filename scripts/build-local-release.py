@@ -111,6 +111,10 @@ def main():
                         help="directory containing release.jks and signing.json (default: ../silora-signing)")
     parser.add_argument("--check", action="store_true",
                         help="check signing credentials and calculate the version without compiling")
+    parser.add_argument("--tests", action="store_true",
+                        help="run release-script tests and Gradle unit tests before building")
+    parser.add_argument("--lint", action="store_true",
+                        help="run full release lint for phone and TV before building")
     args = parser.parse_args()
     env, fingerprint = signing_environment(args.signing_dir)
     info = build_metadata()
@@ -127,14 +131,18 @@ def main():
     if args.check:
         print("Signing and version checks passed; no APKs built.", flush=True)
         return
-    for test in ("test-fork-release.py", "test-build-local-release.py"):
-        subprocess.run([sys.executable, str(ROOT / "scripts" / test)], cwd=ROOT, env=env, check=True)
+    tasks = []
+    if args.tests:
+        for test in ("test-fork-release.py", "test-build-local-release.py"):
+            subprocess.run([sys.executable, str(ROOT / "scripts" / test)], cwd=ROOT, env=env, check=True)
+        tasks.append("test")
+    if args.lint:
+        tasks.extend([":androidApp:lintRelease", ":androidTvApp:lintRelease"])
+    tasks.extend([":androidApp:assembleRelease", ":androidTvApp:assembleRelease"])
     subprocess.run([str(ROOT / "scripts/check-build-supply-chain.sh")], cwd=ROOT, env=env, check=True)
     subprocess.run([
-        str(ROOT / "gradlew"), "test", ":androidApp:lintRelease", ":androidTvApp:lintRelease",
-        ":androidApp:assembleRelease", ":androidTvApp:assembleRelease",
-        "-PallowDebugReleaseSigning=false", "-Pandroid.r8.maxWorkers=1",
-        "--max-workers=2", "--no-parallel", "--console=plain",
+        str(ROOT / "gradlew"), *tasks,
+        "-PallowDebugReleaseSigning=false", "--parallel", "--console=plain",
     ], cwd=ROOT, env=env, check=True)
     verify_apks(env, info, fingerprint)
     output = ROOT / "dist" / info["tag"]
