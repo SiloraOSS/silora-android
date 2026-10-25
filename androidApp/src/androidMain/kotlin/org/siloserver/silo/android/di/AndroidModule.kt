@@ -26,7 +26,7 @@ import org.siloserver.silo.common.pairing.CompanionPairingServerStore
 import org.siloserver.silo.common.pairing.CompanionPairingTransportFactory
 import org.siloserver.silo.common.pairing.RegistryCompanionPairingServerStore
 import org.siloserver.silo.common.pairing.RepositoryCompanionDeviceLoginApprover
-import org.siloserver.silo.common.pairing.TlsPskPairingClientTransport
+import org.siloserver.silo.common.pairing.CompanionPairingTransports
 import org.siloserver.silo.common.player.AudioCapabilityManager
 import org.siloserver.silo.common.player.AudioTrackManager
 import org.siloserver.silo.common.player.AndroidSubtitlePresentation
@@ -93,6 +93,7 @@ import org.siloserver.silo.android.ui.screens.player.PlayerViewModel
 import org.siloserver.silo.android.ui.screens.search.SearchViewModel
 import org.siloserver.silo.android.ui.screens.settings.SettingsViewModel
 import org.siloserver.silo.android.ui.screens.settings.diagnostics.DiagnosticsViewModel
+import org.siloserver.silo.android.cast.EncryptedPrefsSiloCastRokuStore
 import org.siloserver.silo.android.cast.SharedPrefsSiloCastLastTargetStore
 import org.siloserver.silo.android.cast.SiloCastController
 import org.siloserver.silo.android.cast.SiloCastLastTargetStore
@@ -275,11 +276,8 @@ val androidModule = module {
         // The nearby approval card names the account approving signs the TV in as.
         RepositoryCompanionDeviceLoginApprover(get(), get(), accountNameOf = { scope -> accountNameOn(authRepository, scope) })
     }
-    single<CompanionPairingTransportFactory> {
-        CompanionPairingTransportFactory { target ->
-            TlsPskPairingClientTransport.connect(target.host, target.port)
-        }
-    }
+    // TLS-PSK to Apple TV and Android TV, plain TCP to a Roku.
+    single<CompanionPairingTransportFactory> { CompanionPairingTransports }
     single {
         CompanionPairingCoordinator(
             serverStore = get(),
@@ -312,6 +310,8 @@ val androidModule = module {
                 activeProfiles.activeProfile.value?.takeIf { it.id == profileId }?.name
             },
             serverIdentities = get(),
+            // Roku pairing keys live in the encrypted preferences.
+            rokuStore = EncryptedPrefsSiloCastRokuStore(get()),
         )
     }
     single<AndroidPushTokenProvider> { FirebaseAndroidPushTokenProvider(androidContext()) }
@@ -389,6 +389,7 @@ val androidModule = module {
             reachabilityMonitor = get(),
             userItemStatePort = get(),
             networkEvidenceProvider = get(),
+            seriesTrackChoiceWriter = get(),
         )
     }
     factory {
@@ -493,6 +494,7 @@ val androidModule = module {
             shuffleFeatureStore = get(),
             networkEvidenceProvider = get(),
             throughputMeter = get(),
+            seriesTrackChoiceWriter = get(),
         )
     }
     viewModel { HomeViewModel(get(), get(), get(), get(), getOrNull(), get(), get(), catalogLanguage = get()) }
@@ -532,6 +534,7 @@ val androidModule = module {
         ItemDetailViewModel(
             get(), get(), get(), get(), get(), get(), get(), params.get(),
             getOrNull<org.siloserver.silo.repository.port.UserItemStatePort>() ?: org.siloserver.silo.repository.port.NoOpUserItemStatePort,
+            seriesTrackChoiceWriter = get(),
         )
     }
     viewModel { params -> PersonDetailViewModel(get(), params.get(), get()) }

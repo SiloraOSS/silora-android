@@ -832,6 +832,7 @@ fun PlayerOverlay(
                 state.playbackPlan?.claims?.audio?.passthrough != true,
             onSetAudioDelay = viewModel::onSetAudioDelay,
             subtitleDelayMs = viewModel.subtitleDelayMs.collectAsState().value,
+            subtitleDelaySavedToProfile = viewModel.subtitleDelaySavedToProfile.collectAsState().value,
             onSetSubtitleDelay = viewModel::onSetSubtitleDelay,
             sleepTimerState = sleepTimerState,
             tabletopPaneHeight = tabletopPaneHeight,
