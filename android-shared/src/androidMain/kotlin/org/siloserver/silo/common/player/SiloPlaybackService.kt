@@ -209,6 +209,11 @@ class SiloPlaybackService : MediaSessionService() {
                 .distinctUntilChanged()
                 .collect(audioNormalization::setEnabled)
         }
+        scope.launch {
+            playerSettingsStore.nightModeParametersFlow
+                .distinctUntilChanged()
+                .collect(audioNormalization::setParameters)
+        }
 
         // Mirror the per-profile AudioSyncMs preference into the active
         // DelayAudioProcessor. The processor only acts on its pending

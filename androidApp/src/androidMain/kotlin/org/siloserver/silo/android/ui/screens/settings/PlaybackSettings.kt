@@ -239,11 +239,17 @@ fun PlaybackStreamingSection(
     }
 }
 
-/** Playback → Audio: the same device-local preference used by the player. */
+/**
+ * Playback → Audio: the same device-local preference used by the player, and
+ * the page that tunes it.
+ */
 @Composable
 fun PlaybackAudioSection(
     audioNormalizationEnabled: Boolean,
+    /** "Default" or "Custom", for the Night Mode Settings row. */
+    nightModeParametersLabel: String,
     onAudioNormalizationEnabledChanged: (Boolean) -> Unit,
+    onOpenNightModeSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     SettingsSection(
@@ -256,6 +262,11 @@ fun PlaybackAudioSection(
             description = "Softens loud scenes and raises quiet dialogue.",
             checked = audioNormalizationEnabled,
             onCheckedChange = onAudioNormalizationEnabledChanged,
+        )
+        SettingsNavigationRow(
+            label = "Night Mode Settings",
+            value = nightModeParametersLabel,
+            onClick = onOpenNightModeSettings,
         )
     }
 }
