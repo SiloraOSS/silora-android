@@ -53,6 +53,16 @@ class ForkReleaseTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.metadata(now, 7, "a" * 40, "b" * 40, "daily-2026-10-22.8", upstream=UPSTREAM)
 
+    def test_manual_tag_keeps_the_same_version_scheme_without_daily_tag_collisions(self):
+        now = dt.datetime(2026, 10, 23, 8, tzinfo=dt.timezone.utc)
+        daily = release.metadata(now, 7, "a" * 40, "b" * 40, "daily-2026-10-22.7", upstream=UPSTREAM)
+        manual = release.metadata(now, 7, "a" * 40, "b" * 40, "manual-2026-10-22.7", upstream=UPSTREAM)
+        self.assertEqual(manual["tag"], "manual-2026-10-22.7")
+        for key in ("version_name", "version_code_base", "build_number", "title", "silora_date"):
+            self.assertEqual(manual[key], daily[key])
+        with self.assertRaises(ValueError):
+            release.metadata(now, 7, "a" * 40, "b" * 40, "manual-2026-10-22.8", upstream=UPSTREAM)
+
     def test_official_tag_selection_is_bound_to_the_upstream_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -178,6 +188,12 @@ class BuildDecisionTest(unittest.TestCase):
         self.assertFalse(release.build_decision(self.source, [self.published(), previous], tree)[0])
         self.assertEqual(tree.call_args_list[-1], mock.call(self.tag))
 
+    def test_manual_release_advances_the_daily_source_baseline(self):
+        manual = self.published(tag_name="manual-2026-10-22.1", published_at="2026-10-22T23:00:00Z")
+        tree = mock.Mock(return_value="b" * 40)
+        self.assertFalse(release.build_decision(self.source, [self.published(), manual], tree)[0])
+        self.assertEqual(tree.call_args_list[-1], mock.call(manual["tag_name"]))
+
     def test_force_build_does_not_need_release_or_tree_queries(self):
         tree = mock.Mock(side_effect=AssertionError("force must not compare trees"))
         self.assertTrue(release.build_decision(self.source, [self.published()], tree, force=True)[0])
@@ -210,8 +226,10 @@ class BuildDecisionTest(unittest.TestCase):
 
 
 class PublishRecoveryTest(unittest.TestCase):
+    workflow_name = "fork-daily-release.yml"
+
     def run_publish(self, state):
-        workflow = Path(__file__).resolve().parents[1] / ".github/workflows/fork-daily-release.yml"
+        workflow = Path(__file__).resolve().parents[1] / ".github/workflows" / self.workflow_name
         publish = workflow.read_text().split("      - name: Publish the GitHub release\n", 1)[1]
         script = textwrap.dedent(publish.split("        run: |\n", 1)[1])
         with tempfile.TemporaryDirectory() as tmp:
@@ -294,6 +312,10 @@ elif args[:2] == ['release', 'download']:
         code, calls, _ = self.run_publish("corrupt")
         self.assertNotEqual(code, 0)
         self.assertNotIn("release edit", calls)
+
+
+class ManualPublishRecoveryTest(PublishRecoveryTest):
+    workflow_name = "fork-manual-release.yml"
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ name: Silora Daily Notifications
 
 on:
   workflow_run:
-    workflows: [Silora Daily]
+    workflows: [Silora Daily, Silora Manual Release]
     branches: [main]
     types: [in_progress, completed]
 

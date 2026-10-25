@@ -69,6 +69,40 @@ class NotificationTest(unittest.TestCase):
             notify.main()
         self.assertEqual(send.call_args.args[2]['allowed_mentions']['users'], RECIPIENTS)
 
+    def test_manual_notifications_report_builds_and_failures_without_claiming_a_sync(self):
+        for action, conclusion in (('in_progress', None), ('completed', 'success'),
+                                   ('completed', 'failure'), ('completed', 'cancelled')):
+            trigger = event(action, conclusion)
+            trigger['workflow_run']['name'] = 'Silora Manual Release'
+            results = [{'name': name, 'conclusion': 'success'} for name in ('prepare', 'build', 'publish')]
+            with self.subTest(action=action, conclusion=conclusion):
+                payload = notify.notification(trigger, results, RECIPIENTS)
+                embed = payload['embeds'][0]
+                self.assertIn('Silora Manual Release', embed['title'])
+                self.assertNotIn('Upstream sync,', embed['description'])
+                self.assertEqual(payload['allowed_mentions']['users'], RECIPIENTS if conclusion == 'failure' else [])
+                if conclusion == 'success':
+                    self.assertIn('Build and publication succeeded.', embed['description'])
+
+    def test_manual_dispatch_is_accepted_but_automated_manual_events_are_rejected(self):
+        for source_event in ('workflow_dispatch', 'schedule'):
+            trigger = event()
+            trigger['workflow_run'].update(name='Silora Manual Release', head_branch='main', event=source_event,
+                                           head_repository={'full_name': 'SiloraOSS/silora-android'})
+            with self.subTest(source_event=source_event), \
+                    mock.patch.object(notify.Path, 'read_text', return_value=notify.json.dumps(trigger)), \
+                    mock.patch.dict(notify.os.environ, {'GITHUB_EVENT_PATH': 'event.json',
+                                                       'DISCORD_FAILURE_USER_IDS': ','.join(RECIPIENTS)}), \
+                    mock.patch.object(notify, 'workflow_jobs', return_value=[]), \
+                    mock.patch.object(notify, 'deliver', return_value='555555555555555555') as send:
+                if source_event == 'workflow_dispatch':
+                    notify.main()
+                    send.assert_called_once()
+                else:
+                    with self.assertRaises(notify.NotificationError):
+                        notify.main()
+                    send.assert_not_called()
+
     def test_untrusted_or_unrelated_runs_never_use_webhook(self):
         for changes in ({'head_branch': 'other'}, {'event': 'pull_request'},
                         {'head_repository': {'full_name': 'someone/fork'}}, {'name': 'Other Workflow'}):

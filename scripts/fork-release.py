@@ -33,7 +33,7 @@ def build_decision(source_sha, releases, tree_for, force=False):
         release for release in releases
         if release.get("draft") is False and release.get("prerelease") is False
         and release.get("published_at")
-        and re.fullmatch(r"daily-\d{4}-\d{2}-\d{2}\.\d+", release.get("tag_name", ""))
+        and re.fullmatch(r"(?:daily|manual)-\d{4}-\d{2}-\d{2}\.\d+", release.get("tag_name", ""))
         and any(required <= {asset["name"] for asset in release.get("assets", []) if asset.get("size", 0) > 0}
                 for required in required_asset_sets)
     ]
@@ -106,7 +106,7 @@ def metadata(now, run_number, source_sha, upstream_sha, reserved_tag=None, *, up
             raise ValueError("source commits must be full Git SHAs")
     day = now.astimezone(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d")
     if reserved_tag:
-        match = re.fullmatch(rf"daily-(\d{{4}}-\d{{2}}-\d{{2}})\.{run_number}", reserved_tag)
+        match = re.fullmatch(rf"(?:daily|manual)-(\d{{4}}-\d{{2}}-\d{{2}})\.{run_number}", reserved_tag)
         if not match:
             raise ValueError("reserved tag must match this workflow run")
         day = dt.date.fromisoformat(match[1]).isoformat()
@@ -118,7 +118,7 @@ def metadata(now, run_number, source_sha, upstream_sha, reserved_tag=None, *, up
     silora_date = dt.date.fromisoformat(day).strftime("%m%d%Y")
     version_name = f"{upstream['version']} ({upstream['build']}) (silora:{silora_date})"
     return {
-        "tag": f"daily-{day}.{run_number}",
+        "tag": reserved_tag or f"daily-{day}.{run_number}",
         "title": f"Silora {version_name}",
         "version_name": version_name,
         "version_code_base": base,
