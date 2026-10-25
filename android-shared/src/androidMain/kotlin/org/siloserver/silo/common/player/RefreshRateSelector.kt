@@ -6,10 +6,8 @@ import kotlin.math.roundToInt
 
 /**
  * Picks the best display mode for a given target refresh rate. Shared between
- * [HdrDisplayController] (TV — uses it as one input to an
- * HDMI-resolution-first selection) and [RefreshRateMatcher] (phone — uses it
- * as the *only* selection criterion, since the phone panel resolution is
- * fixed and changing it would downgrade the panel pipeline).
+ * [HdrDisplayController] (TV, with independent resolution matching) and
+ * [RefreshRateMatcher] (phone, restricted to the current resolution).
  */
 internal object RefreshRateSelector {
 
@@ -19,7 +17,7 @@ internal object RefreshRateSelector {
         frameRateHz: Float,
     ): Display.Mode? {
         if (candidates.isEmpty() || frameRateHz <= 0f) return null
-        return candidates.minByOrNull { scoreMode(it, frameRateHz) }
+        return candidates.minByOrNull { scoreRefreshRate(it.refreshRate, frameRateHz) }
     }
 
     /**
@@ -32,17 +30,25 @@ internal object RefreshRateSelector {
         candidates: List<Display.Mode>,
         frameRateHz: Float,
         tieBreak: Comparator<Display.Mode>,
-    ): Display.Mode? {
+    ): Display.Mode? = pickByRefreshRateAmong(candidates, frameRateHz, { it.refreshRate }, tieBreak)
+
+    /** Shared with TV's platform-independent display-mode selector. */
+    fun <T> pickByRefreshRateAmong(
+        candidates: List<T>,
+        frameRateHz: Float,
+        refreshRate: (T) -> Float,
+        tieBreak: Comparator<T>,
+    ): T? {
         if (candidates.isEmpty() || frameRateHz <= 0f) return null
-        val best = candidates.minBy { scoreMode(it, frameRateHz) }
-        val bestIsIntegerMultiple = isIntegerMultiple(best, frameRateHz)
-        val bestDelta = abs(best.refreshRate - frameRateHz)
+        val best = candidates.minBy { scoreRefreshRate(refreshRate(it), frameRateHz) }
+        val bestIsIntegerMultiple = isIntegerMultiple(refreshRate(best), frameRateHz)
+        val bestDelta = abs(refreshRate(best) - frameRateHz)
         // Compare the penalty class and the raw delta apart: near the 10_000
         // penalty a Float score is too coarse to resolve the tolerance.
         return candidates
             .filter {
-                isIntegerMultiple(it, frameRateHz) == bestIsIntegerMultiple &&
-                    abs(it.refreshRate - frameRateHz) - bestDelta <= TIE_TOLERANCE_HZ
+                isIntegerMultiple(refreshRate(it), frameRateHz) == bestIsIntegerMultiple &&
+                    abs(refreshRate(it) - frameRateHz) - bestDelta <= TIE_TOLERANCE_HZ
             }
             .minWithOrNull(tieBreak)
     }
@@ -56,13 +62,13 @@ internal object RefreshRateSelector {
      * — otherwise 60Hz (delta 36) wrongly beats 120Hz (delta 96) for 24fps content.
      * Among integer multiples, the closest refresh wins (24 over 48 over 120).
      */
-    private fun scoreMode(mode: Display.Mode, frameRateHz: Float): Float {
-        val rateDelta = abs(mode.refreshRate - frameRateHz)
-        return if (isIntegerMultiple(mode, frameRateHz)) rateDelta else rateDelta + 10_000f
+    fun scoreRefreshRate(refreshRate: Float, frameRateHz: Float): Float {
+        val rateDelta = abs(refreshRate - frameRateHz)
+        return if (isIntegerMultiple(refreshRate, frameRateHz)) rateDelta else rateDelta + 10_000f
     }
 
-    private fun isIntegerMultiple(mode: Display.Mode, frameRateHz: Float): Boolean {
-        val ratio = mode.refreshRate / frameRateHz
+    private fun isIntegerMultiple(refreshRate: Float, frameRateHz: Float): Boolean {
+        val ratio = refreshRate / frameRateHz
         return ratio >= 0.99f && abs(ratio - ratio.roundToInt()) < 0.05f
     }
 }

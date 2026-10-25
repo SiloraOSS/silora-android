@@ -35,41 +35,39 @@ class HdrDisplayControllerTest {
     }
 
     @Test
-    fun smallerVideoKeepsTheLargestModeAtTheSameRefreshRate() {
-        assertEquals(3, appliedModeFor(tvModes, 1920, 800, 23.976f))
-        assertEquals(3, appliedModeFor(tvModes.reversed(), 1920, 800, 23.976f))
-        assertEquals(4, appliedModeFor(tvModes, 720, 404, 59.94f))
+    fun resolutionMatchingUsesTheSmallestModeContainingTheVideo() {
+        assertEquals(1, appliedModeFor(tvModes, 1920, 800, 23.976f))
+        assertEquals(1, appliedModeFor(tvModes.reversed(), 1920, 800, 23.976f))
+        assertEquals(5, appliedModeFor(tvModes, 720, 404, 59.94f))
     }
 
     @Test
-    fun judderFreeRefreshOutranksResolution() {
+    fun frameRateMatchingKeepsTheOriginalResolution() {
         val modes = listOf(
             mode(1, 1920, 1080, 23.976f),
             mode(2, 3840, 2160, 59.94f),
             mode(0, 3840, 2160, 60f),
         )
-        assertEquals(1, appliedModeFor(modes, 1920, 800, 23.976f))
+        assertEquals(2, appliedModeFor(modes, 1920, 800, 23.976f, matchResolution = false))
     }
 
     @Test
-    fun refreshRateNoiseDoesNotDecideTheResolution() {
+    fun refreshRateNoiseKeepsTheOriginalModeAtTheSameResolution() {
         val modes = listOf(
-            mode(1, 1920, 1080, 23.97601f),
-            mode(2, 3840, 2160, 23.97603f),
-            mode(0, 3840, 2160, 60f),
+            mode(1, 3840, 2160, 23.97601f),
+            mode(0, 3840, 2160, 23.97603f),
         )
-        assertEquals(2, appliedModeFor(modes, 1920, 800, 23.976f))
+        assertEquals(0, appliedModeFor(modes, 3840, 2160, 23.976f))
     }
 
     @Test
-    fun refreshRateNoiseDoesNotDecideAmongJudderingModes() {
+    fun refreshRateNoiseKeepsTheOriginalModeAmongJudderingModes() {
         // No mode is a multiple of 23.976, so both carry the judder penalty.
         val modes = listOf(
-            mode(1, 1920, 1080, 59.94031f),
-            mode(2, 3840, 2160, 59.94529f),
-            mode(0, 3840, 2160, 60f),
+            mode(1, 3840, 2160, 59.94031f),
+            mode(0, 3840, 2160, 59.94529f),
         )
-        assertEquals(2, appliedModeFor(modes, 1920, 800, 23.976f))
+        assertEquals(0, appliedModeFor(modes, 3840, 2160, 23.976f))
     }
 
     @Test
@@ -84,8 +82,8 @@ class HdrDisplayControllerTest {
     }
 
     @Test
-    fun unknownFrameRateLeavesTheModeAlone() {
-        assertEquals(4, appliedModeFor(tvModes, 3840, 1600, 0f, preferredBefore = 4))
+    fun unknownFrameRateKeepsTheOriginalRefreshRate() {
+        assertEquals(0, appliedModeFor(tvModes, 3840, 1600, 0f))
     }
 
     private fun appliedModeFor(
@@ -93,16 +91,13 @@ class HdrDisplayControllerTest {
         width: Int,
         height: Int,
         frameRate: Float,
-        preferredBefore: Int = 0,
+        matchResolution: Boolean = true,
     ): Int {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
         ShadowDisplayManager.setSupportedModes(Display.DEFAULT_DISPLAY, *modes.toTypedArray())
-        activity.window.attributes = activity.window.attributes.apply {
-            preferredDisplayModeId = preferredBefore
-        }
         val controller = HdrDisplayController()
         controller.attach(activity)
-        controller.applyForMedia(width, height, frameRate)
+        controller.applyForMedia(width, height, frameRate, matchFrameRate = true, matchResolution = matchResolution)
         return activity.window.attributes.preferredDisplayModeId
     }
 

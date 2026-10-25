@@ -157,6 +157,7 @@ class TvSettingsViewModel(
         /** True after a reset the server did not confirm, until the next attempt. */
         val learnedLimitResetFailed: Boolean = false,
         val matchContentFrameRate: Boolean = false,
+        val matchContentResolution: Boolean = false,
         val dolbyVisionEnabled: Boolean = true,
         val showAudiobooksTab: Boolean = false,
         // Profile Selection (tvOS General → PROFILE AT LAUNCH), device-wide.
@@ -472,6 +473,11 @@ class TvSettingsViewModel(
             }
         }
         viewModelScope.launch {
+            playerSettingsStore.matchContentResolutionFlow.collect { value ->
+                _uiState.update { it.copy(matchContentResolution = value) }
+            }
+        }
+        viewModelScope.launch {
             playerSettingsStore.dolbyVisionEnabledFlow.collect { value ->
                 _uiState.update { it.copy(dolbyVisionEnabled = value) }
             }
@@ -768,6 +774,10 @@ class TvSettingsViewModel(
 
     fun onMatchContentFrameRateChanged(value: Boolean) {
         viewModelScope.launch { playerSettingsStore.setMatchContentFrameRate(value) }
+    }
+
+    fun onMatchContentResolutionChanged(value: Boolean) {
+        viewModelScope.launch { playerSettingsStore.setMatchContentResolution(value) }
     }
 
     /** tvOS navPrefs.showAudiobooks parity — opt-in Audiobooks top-menu tab. */

@@ -109,7 +109,7 @@ phone/TV coverage, and source pointers, see **[FEATURES.md](FEATURES.md)**.
 ### 📺 Playback (phone + TV)
 - **Adaptive delivery** — the server picks **Direct Play**, **Remux**, or **Transcode** from the device's real capabilities; the client can also fall back to transcode at runtime if a track turns out to be undecodable (e.g. an AV receiver is unplugged mid-stream).
 - **Deep capability detection** — enumerates hardware decoders (H.264, HEVC, AV1, VP9, **Dolby Vision** profiles 5/7/8), panel HDR (HDR10, HDR10+, HLG, DV), and audio-sink passthrough (**E-AC3 JOC/Atmos, TrueHD, DTS-HD**); an optional bundled **FFmpeg** audio decoder fills gaps for lossless codecs.
-- **Quality-of-life** — staged playback buffering, per-content **refresh-rate matching** (phone), HDR toggle, intro auto-skip, chapters, sleep timer, playback speed, configurable video gravity (fit/fill/stretch).
+- **Quality-of-life** — staged playback buffering, per-content **refresh-rate matching** (phone + TV), independent **resolution matching** (TV), HDR toggle, intro auto-skip, chapters, sleep timer, playback speed, configurable video gravity (fit/fill/stretch).
 - **Tracks & subtitles** — audio-track switching (incl. mid-stream), subtitle selection with **styling, position, and sync offset**, plus a subtitle suite: provider **search & download** and **AI transcription/translation** with quota tracking.
 - **System integration** — single Media3 `MediaSession` powers lock-screen / notification / headset / Assistant controls; TV adds D-pad transport, an info HUD, a chapter scrubber, and HDMI EDID-driven display-mode selection.
 

@@ -1861,6 +1861,8 @@ class TvPlayerViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val matchContentFrameRate: StateFlow<Boolean> = playerSettingsStore.matchContentFrameRateFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val matchContentResolution: StateFlow<Boolean> = playerSettingsStore.matchContentResolutionFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     // Effective = custom appearance unless "Match Device Settings" is on
     // (then the OS captioning style, tvOS parity).
     val subtitleAppearance: StateFlow<SubtitleAppearance> = playerSettingsStore.effectiveSubtitleAppearanceFlow
