@@ -266,6 +266,7 @@ fun PlaybackAudioSection(
         SettingsNavigationRow(
             label = "Night Mode Settings",
             value = nightModeParametersLabel,
+            enabled = audioNormalizationEnabled,
             onClick = onOpenNightModeSettings,
         )
     }

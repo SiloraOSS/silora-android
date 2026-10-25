@@ -1396,7 +1396,10 @@ private fun TvPlaybackSettingsPane(
                     checked = state.audioNormalizationEnabled,
                     onCheckedChange = onAudioNormalizationEnabledChanged,
                 )
-                TvNightModeSettingsRows(store = koinInject())
+                TvNightModeSettingsRows(
+                    store = koinInject(),
+                    enabled = state.audioNormalizationEnabled,
+                )
                 SettingsFooterText(
                     text = "Softens loud scenes and raises quiet dialogue. Uses decoded audio instead of " +
                         "passthrough. Night Mode Settings tunes its compressor and limiter, and changes " +
@@ -3166,7 +3169,7 @@ private fun TvThemeMusicSettingsGroup(store: PlayerSettingsStore) {
  * of its choices; Restore Defaults asks first.
  */
 @Composable
-private fun TvNightModeSettingsRows(store: PlayerSettingsStore) {
+private fun TvNightModeSettingsRows(store: PlayerSettingsStore, enabled: Boolean) {
     val params by store.nightModeParametersFlow.collectAsState(initial = NightModeParameters.DEFAULT)
     val scope = rememberCoroutineScope()
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -3176,26 +3179,36 @@ private fun TvNightModeSettingsRows(store: PlayerSettingsStore) {
     val settingsRowFocus = remember { FocusRequester() }
     fun title(control: NightModeControl) = "${control.section.title} ${control.label}"
 
+    LaunchedEffect(enabled) {
+        if (!enabled) {
+            activeControl = null
+            confirmingReset = false
+        }
+    }
+
     SettingsValueRow(
         label = "Night Mode Settings",
         value = if (params.isDefault) "Default" else "Custom",
         onClick = { expanded = !expanded },
         focusRequester = settingsRowFocus,
+        enabled = enabled,
+        modifier = Modifier.alpha(if (enabled) 1f else 0.42f),
     )
     if (expanded) {
-        SettingsNestedGroup(enabled = true) {
+        SettingsNestedGroup(enabled = enabled) {
             NightModeControl.entries.forEach { control ->
                 SettingsValueRow(
                     label = title(control),
                     value = control.format(control.get(params)),
                     onClick = { activeControl = control },
+                    enabled = enabled,
                 )
             }
             SettingsActionRow(
                 label = "Restore Defaults",
                 onClick = { confirmingReset = true },
                 destructive = true,
-                enabled = !params.isDefault,
+                enabled = enabled && !params.isDefault,
             )
         }
     }
