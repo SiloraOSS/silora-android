@@ -1,5 +1,6 @@
 package org.siloserver.silo.common.settings
 
+import org.siloserver.silo.common.player.audio.NightModeParameters
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
 import org.siloserver.silo.model.settings.CellularQuality
@@ -131,6 +132,13 @@ interface PlayerSettingsStore {
     val audioNormalizationEnabledFlow: Flow<Boolean>
         get() = flowOf(false)
     suspend fun setAudioNormalizationEnabled(value: Boolean) = Unit
+
+    /** Night mode's compressor and limiter tuning. Device-local and per-profile, like the toggle. */
+    val nightModeParametersFlow: Flow<NightModeParameters>
+        get() = flowOf(NightModeParameters.DEFAULT)
+    suspend fun setNightModeParameters(value: NightModeParameters) = Unit
+    /** Back to the shipped tuning: drops the stored value rather than writing the defaults. */
+    suspend fun resetNightModeParameters() = Unit
 
     // Ints
     val audioSyncMsFlow: Flow<Int>

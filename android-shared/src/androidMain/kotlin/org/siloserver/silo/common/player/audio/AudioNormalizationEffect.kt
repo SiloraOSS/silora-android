@@ -23,28 +23,23 @@ import androidx.annotation.RequiresApi
  * tunneling while enabled. DynamicsProcessing parameters are per-channel, so
  * the effect is re-created when the output channel count changes (dialogue
  * lives in the center channel of 5.1 PCM).
+ *
+ * The compressor and limiter values come from [NightModeParameters]; the
+ * LoudnessEnhancer fallback has no such controls and ignores them.
  */
 class AudioNormalizationEffect(private val log: (String, String, String) -> Unit) {
 
     private companion object {
         const val EFFECT_PRIORITY = 0
 
-        // DynamicsProcessing — tuned for movie mixes whose dialogue sits around
-        // -27 LUFS: compress above threshold, make up toward I=-14, limit at TP=-3.
+        // DynamicsProcessing. The tunable compressor and limiter values live in
+        // NightModeParameters; its defaults suit movie mixes with dialogue
+        // around -27 LUFS: compress above threshold, make up toward I=-14,
+        // limit at TP=-3.
         const val FRAME_DURATION_MS = 10f
         const val MBC_CUTOFF_HZ = 20_000f
-        const val MBC_ATTACK_MS = 30f
-        const val MBC_RELEASE_MS = 300f
-        const val MBC_RATIO = 4f
-        const val MBC_THRESHOLD_DB = -34f
-        const val MBC_KNEE_DB = 6f
         const val MBC_NOISE_GATE_DB = -90f // effectively disabled
         const val MBC_EXPANDER_RATIO = 1f // no downward expansion
-        const val MBC_POST_GAIN_DB = 15f
-        const val LIMITER_ATTACK_MS = 1f
-        const val LIMITER_RELEASE_MS = 60f
-        const val LIMITER_RATIO = 10f
-        const val LIMITER_THRESHOLD_DB = -3f
         const val DEFAULT_CHANNEL_COUNT = 2
         const val MAX_CHANNEL_COUNT = 8
 
@@ -56,6 +51,7 @@ class AudioNormalizationEffect(private val log: (String, String, String) -> Unit
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var attachedSessionId = 0
     private var attachedChannelCount = 0
+    private var parameters = NightModeParameters.DEFAULT
 
     val isActive: Boolean get() = dynamicsProcessing != null || loudnessEnhancer != null
 
@@ -66,6 +62,33 @@ class AudioNormalizationEffect(private val log: (String, String, String) -> Unit
             loudnessEnhancer != null -> "LoudnessEnhancer"
             else -> "off"
         }
+
+    /**
+     * Retunes the compressor and limiter. An attached DynamicsProcessing takes
+     * the new values in place, so playback is not interrupted; one that
+     * refuses them is re-created.
+     */
+    fun setParameters(value: NightModeParameters) {
+        if (value == parameters) return
+        parameters = value
+        val effect = dynamicsProcessing ?: return
+        if (Build.VERSION.SDK_INT >= 28 && retune(effect, value)) return
+        val sessionId = attachedSessionId
+        val channels = attachedChannelCount
+        release()
+        attach(sessionId, channels)
+    }
+
+    @RequiresApi(28)
+    private fun retune(effect: DynamicsProcessing, value: NightModeParameters): Boolean = try {
+        effect.setMbcBandAllChannelsTo(0, mbcBand(value))
+        effect.setLimiterAllChannelsTo(limiter(value))
+        log("info", "audio-normalization", "DynamicsProcessing retuned ($value)")
+        true
+    } catch (e: Exception) {
+        log("warn", "audio-normalization", "DynamicsProcessing retune failed (${e.message}); re-creating")
+        false
+    }
 
     /** Attach to [sessionId]; idempotent for an unchanged (session, channels) pair. */
     fun attach(sessionId: Int, channelCount: Int?) {
@@ -95,22 +118,41 @@ class AudioNormalizationEffect(private val log: (String, String, String) -> Unit
     }
 
     @RequiresApi(28)
+    private fun mbcBand(params: NightModeParameters) = DynamicsProcessing.MbcBand(
+        // inUse
+        true,
+        MBC_CUTOFF_HZ,
+        params.compressorAttackMs,
+        params.compressorReleaseMs,
+        params.compressorRatio,
+        params.compressorThresholdDb,
+        params.compressorKneeDb,
+        MBC_NOISE_GATE_DB,
+        MBC_EXPANDER_RATIO,
+        // preGain
+        0f,
+        params.compressorMakeupGainDb
+    )
+
+    @RequiresApi(28)
+    private fun limiter(params: NightModeParameters) = DynamicsProcessing.Limiter(
+        // inUse
+        true,
+        // enabled
+        true,
+        // linkGroup
+        0,
+        params.limiterAttackMs,
+        params.limiterReleaseMs,
+        params.limiterRatio,
+        params.limiterThresholdDb,
+        // postGain
+        0f
+    )
+
+    @RequiresApi(28)
     private fun tryDynamicsProcessing(sessionId: Int, channelCount: Int): Boolean = try {
-        val band = DynamicsProcessing.MbcBand(
-            // inUse
-            true,
-            MBC_CUTOFF_HZ,
-            MBC_ATTACK_MS,
-            MBC_RELEASE_MS,
-            MBC_RATIO,
-            MBC_THRESHOLD_DB,
-            MBC_KNEE_DB,
-            MBC_NOISE_GATE_DB,
-            MBC_EXPANDER_RATIO,
-            // preGain
-            0f,
-            MBC_POST_GAIN_DB
-        )
+        val band = mbcBand(parameters)
         val mbc = DynamicsProcessing.Mbc(
             // inUse
             true,
@@ -119,20 +161,7 @@ class AudioNormalizationEffect(private val log: (String, String, String) -> Unit
             // bandCount
             1
         ).apply { setBand(0, band) }
-        val limiter = DynamicsProcessing.Limiter(
-            // inUse
-            true,
-            // enabled
-            true,
-            // linkGroup
-            0,
-            LIMITER_ATTACK_MS,
-            LIMITER_RELEASE_MS,
-            LIMITER_RATIO,
-            LIMITER_THRESHOLD_DB,
-            // postGain
-            0f
-        )
+        val limiter = limiter(parameters)
         val channel = DynamicsProcessing.Channel(
             // inputGain
             0f,

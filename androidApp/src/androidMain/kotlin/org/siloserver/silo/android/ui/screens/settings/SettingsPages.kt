@@ -127,7 +127,11 @@ fun SettingsInterfaceScreen(viewModel: SettingsViewModel, onBackClick: () -> Uni
  * cellular quality, decoder settings, and skip intervals.
  */
 @Composable
-fun SettingsPlaybackScreen(viewModel: SettingsViewModel, onBackClick: () -> Unit) {
+fun SettingsPlaybackScreen(
+    viewModel: SettingsViewModel,
+    onBackClick: () -> Unit,
+    onOpenNightModeSettings: () -> Unit,
+) {
     val state by viewModel.uiState.collectAsState()
     val seekIntervals by viewModel.seekIntervals.state.collectAsState()
     val connectionSpeed = viewModel.connectionSpeed?.state?.collectAsState()?.value
@@ -180,7 +184,9 @@ fun SettingsPlaybackScreen(viewModel: SettingsViewModel, onBackClick: () -> Unit
         item(key = "audio") {
             PlaybackAudioSection(
                 audioNormalizationEnabled = state.audioNormalizationEnabled,
+                nightModeParametersLabel = nightModeParametersLabel(state.nightModeParameters),
                 onAudioNormalizationEnabledChanged = viewModel::setAudioNormalizationEnabled,
+                onOpenNightModeSettings = onOpenNightModeSettings,
             )
         }
         item(key = "cellular") {
