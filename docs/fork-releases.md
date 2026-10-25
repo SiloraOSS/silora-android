@@ -1,4 +1,4 @@
-# Silora daily releases
+# Silora releases
 
 **Silora — your media, after dark.**
 
@@ -51,6 +51,32 @@ Actions settings; their source files stay unchanged to reduce merge conflicts.
 The fork workflow never invokes Play publishing. A separate notification workflow
 reports its status to Discord as described below.
 
+### Release pushed changes without syncing upstream
+
+After pushing changes to `main`, open **Actions → Silora Manual Release →
+Run workflow** and select `main`. This workflow has only a manual trigger:
+there is no schedule or push trigger. Every run builds and publishes, even if
+the source matches the previous release.
+
+The manual workflow builds the exact commit selected when the run starts. It
+does not fetch upstream Git objects, merge upstream, or update `main`. Read-only
+GitHub API calls identify the upstream snapshot already included in that commit
+and list official version tags. Only tag commits already in the fork checkout
+are used for version stamping. Newer upstream code is not included.
+
+It uses the daily workflow's version format, signing key, tests, lint, APK
+verification, GitHub release publication, and Discord webhook configuration.
+Successful builds become regular **Latest** releases with the same APK names
+and permanent download links. Tags use `manual-YYYY-MM-DD.RUN` to avoid collisions
+with the daily workflow's separate run counter. Both workflows share a release
+lock so their builds and publishing do not overlap.
+
+The daily workflow recognizes complete manual releases as its comparison
+baseline. If the next daily sync produces the same source files, it skips the
+build as usual. The daily schedule and upstream sync behavior stay unchanged.
+
+## Published releases
+
 Each dated release includes:
 
 - `silora-phone.apk`: universal phone/tablet build.
@@ -59,7 +85,7 @@ Each dated release includes:
   code base, and workflow run counter.
 - `SHA256SUMS`: checksums covering both APKs and the provenance file.
 
-Each successful daily build is published as a regular GitHub release and
+Each successful build is published as a regular GitHub release and
 explicitly marked **Latest**. These permanent links follow that release:
 
 - [Latest phone APK](https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-phone.apk)
@@ -73,12 +99,15 @@ Published tags and assets are never overwritten by this workflow.
 
 ## Discord run notifications
 
-**Silora Daily Notifications** listens for the daily workflow's `in_progress`
-and `completed` events on `main`, including manual runs and reruns. It posts a
-start message and a final result to the configured staff log channel. Failure
-messages mention the configured Discord users; starts, successes, unchanged
+**Silora Daily Notifications** listens for **Silora Daily** and
+**Silora Manual Release** `in_progress` and `completed` events on `main`,
+including reruns. It posts a start message and a final result to the configured
+staff log channel. Failure messages mention the configured Discord users;
+starts, successes, unchanged
 source and cancellations have no pings. Every message links to the specific
 run and identifies its run number and attempt.
+Manual release messages identify the manual workflow and report build and
+publication status without claiming an upstream sync.
 
 Successful runs distinguish published APKs from an unchanged-source skip.
 Failed runs identify the failing job and step when GitHub provides them. A
@@ -99,10 +128,10 @@ Configure these on `SiloraOSS/silora-android` before enabling notifications:
 
 The notification workflow must be on the default branch to receive GitHub's
 workflow events. GitHub queues it independently, so delivery can lag the daily
-run. It uses trusted default-branch source and a read-only GitHub token, without
+or manual run. It uses trusted default-branch source and a read-only GitHub token, without
 downloading the triggering run's artifacts or caches. Notification failures
 appear in **Silora Daily Notifications** and do not stop syncing, building or
-publishing. A cancelled daily run sends a cancellation notice without pings.
+publishing. A cancelled run sends a cancellation notice without pings.
 
 Delivery waits for Discord's confirmation and reads the message back, checking
 its channel, content, embed and mentions. It never retries an uncertain send
@@ -144,8 +173,10 @@ Multiple builds on the same day share this visible date.
 
 The base version comes from the official Silo build tag with the highest
 repository-wide build number included in the checked upstream snapshot, such as
-`v1.0.0-beta.26`. Tags are fetched into a separate namespace; fork tags and newer
-upstream tags outside that snapshot cannot change its version. Main can contain
+`v1.0.0-beta.26`. Both workflows use official tags in a separate namespace;
+the daily workflow fetches them, while the manual workflow reads tag metadata
+without fetching upstream Git objects. Fork tags and newer upstream tags outside
+the included snapshot cannot change its version. Main can contain
 changes after that tagged release, so `build-info.json` and the release notes
 retain both the base tag and exact checked source SHAs. A missing official build
 tag stops publication rather than inventing a version. The upstream build number
@@ -155,8 +186,8 @@ Android's internal version codes still use elapsed UTC seconds since 2026 plus a
 fork-specific base, remaining monotonic even if the workflow run counter resets.
 They control update ordering independently of the visible date. Phone and TV
 retain distinct version codes. The workflow counter remains in provenance and
-the unique `daily-YYYY-MM-DD.RUN` Git tag used for publication and recovery;
-previously published releases are unchanged.
+the unique `daily-YYYY-MM-DD.RUN` or `manual-YYYY-MM-DD.RUN` Git tag used for
+publication and recovery; previously published releases are unchanged.
 
 ## Branding sources
 
@@ -210,7 +241,9 @@ It is prepared for use after written trademark permission is received.
   needed. Do not copy another project's private service credentials.
 - Re-run the checks after editing the workflow:
   `python3 scripts/test-fork-release.py`, `scripts/check-build-supply-chain.sh`,
-  and `actionlint .github/workflows/fork-daily-release.yml` when available.
+  `python3 scripts/test-notify-fork-daily.py`, and
+  `actionlint .github/workflows/fork-{daily,manual}-release.yml .github/workflows/fork-daily-notifications.yml`
+  when available.
 
 No personal access token is stored by this automation. The built-in repository
 `GITHUB_TOKEN` performs fork synchronization and release publishing; signing
