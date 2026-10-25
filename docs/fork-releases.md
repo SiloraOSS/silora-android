@@ -48,7 +48,8 @@ head of `main`, then checks out the exact tagged commit and runs
 release unit tests and lint, and builds both APKs with JDK 21 and R8 optimization.
 The inherited Google Play and Discord workflows are disabled in the fork's
 Actions settings; their source files stay unchanged to reduce merge conflicts.
-The fork workflow never invokes Play publishing or Discord posting.
+The fork workflow never invokes Play publishing. A separate notification workflow
+reports its status to Discord as described below.
 
 Each dated release includes:
 
@@ -69,6 +70,46 @@ release assets match the locally calculated checksums. A failed run leaves the
 previous public releases intact. A failed upload can leave an unpublished draft;
 rerunning the failed publish job completes it without replacing a public release.
 Published tags and assets are never overwritten by this workflow.
+
+## Discord run notifications
+
+**Silora Daily Notifications** listens for the daily workflow's `in_progress`
+and `completed` events on `main`, including manual runs and reruns. It posts a
+start message and a final result to the configured staff log channel. Failure
+messages mention the configured Discord users; starts, successes, unchanged
+source and cancellations have no pings. Every message links to the specific
+run and identifies its run number and attempt.
+
+Successful runs distinguish published APKs from an unchanged-source skip.
+Failed runs identify the failing job and step when GitHub provides them. A
+failure in **Merge upstream into main** explains that a merge conflict or API
+error blocked the sync. A failure reading job details still sends the known
+workflow result and run link.
+
+Configure these on `SiloraOSS/silora-android` before enabling notifications:
+
+- Actions secret `SILORA_DAILY_DISCORD_WEBHOOK_URL`: the staff log webhook URL.
+  Keep the URL out of source files, Git history and logs.
+- Actions variable `SILORA_DAILY_DISCORD_CHANNEL_ID`: the webhook's destination
+  channel ID. Delivery checks this before posting, so moving the webhook to a
+  different channel stops notifications instead of sending there.
+- Actions variable `SILORA_DAILY_FAILURE_USER_IDS`: comma-separated Discord
+  **user** IDs for Matt and Kyle. Only these users can be pinged; role and
+  everyone mentions are disabled.
+
+The notification workflow must be on the default branch to receive GitHub's
+workflow events. GitHub queues it independently, so delivery can lag the daily
+run. It uses trusted default-branch source and a read-only GitHub token, without
+downloading the triggering run's artifacts or caches. Notification failures
+appear in **Silora Daily Notifications** and do not stop syncing, building or
+publishing. A cancelled daily run sends a cancellation notice without pings.
+
+Delivery waits for Discord's confirmation and reads the message back, checking
+its channel, content, embed and mentions. It never retries an uncertain send
+automatically; inspect the channel before rerunning a failed notification job.
+Check changes with `python3 scripts/test-notify-fork-daily.py`,
+`scripts/check-build-supply-chain.sh`, and
+`actionlint .github/workflows/fork-daily-notifications.yml` when available.
 
 ## Persistent signing
 
