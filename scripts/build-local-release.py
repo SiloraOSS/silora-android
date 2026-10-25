@@ -13,6 +13,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parent.parent
+MODULES = {"phone": ("androidApp", 0), "tv": ("androidTvApp", 1)}
 spec = importlib.util.spec_from_file_location("fork_release", ROOT / "scripts/fork-release.py")
 fork_release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fork_release)
@@ -81,11 +82,12 @@ def build_metadata():
     return info
 
 
-def verify_apks(env, info, certificate_sha256):
+def verify_apks(env, info, certificate_sha256, targets=("phone", "tv")):
     sdk = Path(env["ANDROID_HOME"])
     apksigner = sdk / "build-tools/35.0.0/apksigner"
     analyzer = sdk / "cmdline-tools/latest/bin/apkanalyzer"
-    for module, offset in (("androidApp", 0), ("androidTvApp", 1)):
+    for target in targets:
+        module, offset = MODULES[target]
         apk = ROOT / module / f"build/outputs/apk/release/{module}-universal-release.apk"
         signed = capture([str(apksigner), "verify", "--verbose", "--print-certs", str(apk)], env=env)
         fingerprints = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]+)$",
@@ -106,6 +108,8 @@ def verify_apks(env, info, certificate_sha256):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--release", choices=("phone", "tv", "both"), default="both",
+                        help="APKs to build (default: both)")
     parser.add_argument("--signing-dir", type=Path,
                         default=Path(os.environ.get("SILORA_SIGNING_DIR", ROOT.parent / "silora-signing")),
                         help="directory containing release.jks and signing.json (default: ../silora-signing)")
@@ -114,10 +118,12 @@ def main():
     parser.add_argument("--tests", action="store_true",
                         help="run release-script tests and Gradle unit tests before building")
     parser.add_argument("--lint", action="store_true",
-                        help="run full release lint for phone and TV before building")
+                        help="run full release lint for the selected apps before building")
     args = parser.parse_args()
+    targets = ("phone", "tv") if args.release == "both" else (args.release,)
     env, fingerprint = signing_environment(args.signing_dir)
     info = build_metadata()
+    info["targets"] = list(targets)
     env.update({
         "SILO_VERSION_NAME": info["version_name"],
         "SILO_VERSION_CODE": str(info["version_code_base"]),
@@ -125,7 +131,9 @@ def main():
         "SILO_RELEASE_CHANNEL": "sideload",
     })
     print(f"Version: {info['version_name']}", flush=True)
-    print(f"Version codes: phone={info['version_code_base'] * 2}, TV={info['version_code_base'] * 2 + 1}", flush=True)
+    print("Version codes: " + ", ".join(
+        f"{target}={info['version_code_base'] * 2 + MODULES[target][1]}" for target in targets
+    ), flush=True)
     print(f"Signing key: {env['SILO_RELEASE_KEYSTORE']}", flush=True)
     print(f"Signing certificate SHA-256: {fingerprint}", flush=True)
     if args.check:
@@ -137,16 +145,16 @@ def main():
             subprocess.run([sys.executable, str(ROOT / "scripts" / test)], cwd=ROOT, env=env, check=True)
         tasks.append("test")
     if args.lint:
-        tasks.extend([":androidApp:lintRelease", ":androidTvApp:lintRelease"])
-    tasks.extend([":androidApp:assembleRelease", ":androidTvApp:assembleRelease"])
+        tasks.extend(f":{MODULES[target][0]}:lintRelease" for target in targets)
+    tasks.extend(f":{MODULES[target][0]}:assembleRelease" for target in targets)
     subprocess.run([str(ROOT / "scripts/check-build-supply-chain.sh")], cwd=ROOT, env=env, check=True)
     subprocess.run([
         str(ROOT / "gradlew"), *tasks,
         "-PallowDebugReleaseSigning=false", "--parallel", "--console=plain",
     ], cwd=ROOT, env=env, check=True)
-    verify_apks(env, info, fingerprint)
+    verify_apks(env, info, fingerprint, targets)
     output = ROOT / "dist" / info["tag"]
-    fork_release.package(ROOT, info, output)
+    fork_release.package(ROOT, info, output, targets=targets)
     print(f"Verified APKs and checksums: {output}", flush=True)
 
 

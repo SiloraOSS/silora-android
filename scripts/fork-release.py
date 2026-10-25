@@ -152,12 +152,13 @@ def prepare():
             print(f"{key}={info[key]}", file=out)
 
 
-def package(root, info, out):
+def package(root, info, out, *, targets=("phone", "tv")):
     sources = {
         "silora-phone.apk": root / "androidApp/build/outputs/apk/release/androidApp-universal-release.apk",
         "silora-tv.apk": root / "androidTvApp/build/outputs/apk/release/androidTvApp-universal-release.apk",
     }
-    # Fail before creating a partial distribution if either app is missing.
+    sources = {f"silora-{target}.apk": sources[f"silora-{target}.apk"] for target in targets}
+    # Fail before creating a partial distribution if a selected app is missing.
     for path in sources.values():
         if not path.is_file() or path.stat().st_size == 0:
             raise ValueError(f"missing or empty release APK: {path}")
@@ -175,10 +176,11 @@ def package(root, info, out):
         f"Version: **{info['version_name']}**. Based on Silo `{info['upstream_version_tag']}` "
         "plus the upstream changes included in the source snapshot below. "
         "The Silora date uses Pacific time (MMDDYYYY).\n\n"
-        "- `silora-phone.apk`: Android phones and tablets.\n"
-        "- `silora-tv.apk`: Android TV / Google TV.\n"
-        "- Both APKs are universal and signed with the persistent release key.\n"
-        "- These are optimized release APKs, published as regular GitHub releases.\n"
+        + ("- `silora-phone.apk`: Android phones and tablets.\n" if "phone" in targets else "")
+        + ("- `silora-tv.apk`: Android TV / Google TV.\n" if "tv" in targets else "")
+        + ("- Both APKs are universal and signed with the persistent release key.\n" if len(targets) == 2
+           else "- The APK is universal and signed with the persistent release key.\n")
+        + "- These are optimized release APKs, published as regular GitHub releases.\n"
         "- Latest phone APK: https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-phone.apk\n"
         "- Latest TV APK: https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-tv.apk\n\n"
         "Silora uses its own application ID and installs separately from Silo. "
