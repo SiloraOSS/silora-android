@@ -123,6 +123,7 @@ import org.siloserver.silo.android.ui.screens.settings.SettingsDownloadsScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsInterfaceScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsNotificationsScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsProfileSelectionScreen
+import org.siloserver.silo.android.ui.screens.settings.SettingsNightModeScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsPlaybackScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsSubtitlesScreen
@@ -1263,6 +1264,13 @@ fun AppNavigation(
         }
         composable(Route.SettingsPlayback.route) { entry ->
             SettingsPlaybackScreen(
+                viewModel = koinViewModel(viewModelStoreOwner = settingsOwner(navController, entry)),
+                onBackClick = { navController.popBackStack() },
+                onOpenNightModeSettings = { navController.navigate(Route.SettingsNightMode.route) },
+            )
+        }
+        composable(Route.SettingsNightMode.route) { entry ->
+            SettingsNightModeScreen(
                 viewModel = koinViewModel(viewModelStoreOwner = settingsOwner(navController, entry)),
                 onBackClick = { navController.popBackStack() },
             )

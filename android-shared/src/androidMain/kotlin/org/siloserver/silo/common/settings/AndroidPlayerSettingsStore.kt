@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
+import org.siloserver.silo.common.player.audio.NightModeParameters
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
 import org.siloserver.silo.model.download.DownloadQuality
@@ -378,6 +379,28 @@ class AndroidPlayerSettingsStore(
 
     override suspend fun setAudioNormalizationEnabled(value: Boolean) =
         writeBoolLocal(AUDIO_NORMALIZATION_ENABLED, value)
+
+    override val nightModeParametersFlow: Flow<NightModeParameters> =
+        profileScopedFlow(NightModeParameters.DEFAULT) { p, s ->
+            NightModeParameters.decode(p.stringFor(s, NIGHT_MODE_PARAMETERS, ""))
+        }
+
+    // The defaults are never stored, so a later retuning of them reaches
+    // everyone who did not change a value.
+    override suspend fun setNightModeParameters(value: NightModeParameters) {
+        val normalized = value.normalized()
+        if (normalized.isDefault) {
+            resetNightModeParameters()
+        } else {
+            writeStringLocal(NIGHT_MODE_PARAMETERS, normalized.encode())
+        }
+    }
+
+    override suspend fun resetNightModeParameters() {
+        withScope { scope, store ->
+            store.edit { it.remove(stringPreferencesKey(scope.keyPrefix + NIGHT_MODE_PARAMETERS)) }
+        }
+    }
 
     // ---- Ints ----------------------------------------------------------
     override val audioSyncMsFlow: Flow<Int> =
@@ -999,6 +1022,7 @@ class AndroidPlayerSettingsStore(
                 // it declares. Without this, the action would leave exactly the
                 // settings the user most associates with this device untouched.
                 it.remove(booleanPreferencesKey(scope.keyPrefix + AUDIO_NORMALIZATION_ENABLED))
+                it.remove(stringPreferencesKey(scope.keyPrefix + NIGHT_MODE_PARAMETERS))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + MATCH_CONTENT_RESOLUTION))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.PictureInPictureEnabled))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.ForceHdrPassthrough))
@@ -1364,6 +1388,7 @@ class AndroidPlayerSettingsStore(
     private companion object {
         const val MATCH_CONTENT_RESOLUTION = "match_content_resolution"
         const val AUDIO_NORMALIZATION_ENABLED = "audio_normalization_enabled"
+        const val NIGHT_MODE_PARAMETERS = "night_mode_parameters"
         const val SAVED_CUSTOM_SUBTITLE_APPEARANCE = "subtitle_appearance.saved_custom"
         /**
          * Local-only: the server-stored keys this device holds its own value

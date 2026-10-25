@@ -114,6 +114,7 @@ sealed class Route(val route: String) {
     // share the overview's SettingsViewModel through its back-stack entry.
     data object SettingsInterface : Route("settings/interface")
     data object SettingsPlayback : Route("settings/playback")
+    data object SettingsNightMode : Route("settings/playback/night-mode")
     data object SettingsSubtitles : Route("settings/subtitles")
     data object SettingsDownloads : Route("settings/downloads")
     data object SettingsNotifications : Route("settings/notifications")

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import org.siloserver.silo.model.profile.ActiveProfileStore
 import org.siloserver.silo.android.auth.SignOutTeardown
+import org.siloserver.silo.common.player.audio.NightModeParameters
 import org.siloserver.silo.common.settings.CardPresentationSource
 import org.siloserver.silo.common.settings.CardPresentationStore
 import org.siloserver.silo.common.settings.CardPresentationUiState
@@ -144,6 +145,7 @@ data class SettingsUiState(
     val passOutThreshold: Int = 3,
     val ignoreHevcLevelLimits: Boolean = PlayerSettingsStore.DEFAULT_IGNORE_HEVC_LEVEL_LIMITS,
     val audioNormalizationEnabled: Boolean = false,
+    val nightModeParameters: NightModeParameters = NightModeParameters.DEFAULT,
 
     // Downloads
     val downloadsWifiOnly: Boolean = true,
@@ -431,10 +433,21 @@ class SettingsViewModel(
         playerSettingsStore.audioNormalizationEnabledFlow
             .onEach { enabled -> _uiState.update { it.copy(audioNormalizationEnabled = enabled) } }
             .launchIn(viewModelScope)
+        playerSettingsStore.nightModeParametersFlow
+            .onEach { params -> _uiState.update { it.copy(nightModeParameters = params) } }
+            .launchIn(viewModelScope)
     }
 
     fun setAudioNormalizationEnabled(value: Boolean) {
         viewModelScope.launch { playerSettingsStore.setAudioNormalizationEnabled(value) }
+    }
+
+    fun setNightModeParameters(value: NightModeParameters) {
+        viewModelScope.launch { playerSettingsStore.setNightModeParameters(value) }
+    }
+
+    fun resetNightModeParameters() {
+        viewModelScope.launch { playerSettingsStore.resetNightModeParameters() }
     }
 
     fun setIgnoreHevcLevelLimits(value: Boolean) {
