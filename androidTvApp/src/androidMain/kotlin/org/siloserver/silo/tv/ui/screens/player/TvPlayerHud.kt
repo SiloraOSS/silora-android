@@ -509,10 +509,15 @@ internal fun TvPlayerHud(
                         // panes as a side effect of leaving (tvOS: defaultFocus
                         // on activeTab, for the same reason).
                         exit = { direction ->
-                            if (direction == FocusDirection.Up) {
-                                tabFocusRequesters[selectedTab] ?: FocusRequester.Default
-                            } else {
-                                FocusRequester.Default
+                            when (direction) {
+                                FocusDirection.Up ->
+                                    tabFocusRequesters[selectedTab] ?: FocusRequester.Default
+                                // Keep horizontal moves inside the pane. A
+                                // read-only column (Audio's output facts) has
+                                // no focus target, so the geometric fallback
+                                // could otherwise land on a different tab.
+                                FocusDirection.Left, FocusDirection.Right -> FocusRequester.Cancel
+                                else -> FocusRequester.Default
                             }
                         }
                     }
