@@ -267,6 +267,7 @@ internal fun TvPlayerHud(
         audioTracks = audioTracks,
         subtitleTracks = subtitleTracks,
         chapters = chapters,
+        requestedTab = initialTab,
     )
     var selectedTab by remember {
         mutableStateOf(initialTab.takeIf { it in tabs } ?: tabs.first())
@@ -730,9 +731,11 @@ internal fun visibleHudTabs(
     audioTracks: List<PlayerTrackEntry>,
     subtitleTracks: List<PlayerTrackEntry>,
     chapters: List<VersionChapter>,
+    requestedTab: HudTab? = null,
 ): List<HudTab> = buildList {
     add(HudTab.Info)
-    if (stats.hasHudRows()) add(HudTab.Stats)
+    // A direct Stats shortcut keeps its destination while playback data arrives.
+    if (stats.hasHudRows() || requestedTab == HudTab.Stats) add(HudTab.Stats)
     add(HudTab.Video)
     if (audioTracks.isNotEmpty()) add(HudTab.Audio)
     // Subtitles is always available (unlike tvOS, which hides it when empty):
@@ -1059,7 +1062,7 @@ private fun formatTvPlaybackSpeed(speed: Double): String {
 }
 
 /** Sleep-timer presets (minutes) — mirrors the phone SleepTimerSheet. */
-private val SLEEP_TIMER_PRESETS = listOf(15, 30, 45, 60, 90)
+internal val SLEEP_TIMER_PRESETS = listOf(15, 30, 45, 60, 90)
 
 private fun formatSleepRemaining(totalSeconds: Int): String {
     val s = totalSeconds.coerceAtLeast(0)

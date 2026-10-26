@@ -5,14 +5,13 @@ import kotlin.test.assertEquals
 
 class TvSettingsCategoryTest {
     @Test
-    fun diagnosticsSitsBetweenSubtitlesAndServer() {
-        // tvOS TVSettingsCategory order — the rail should read the same on both
-        // platforms.
+    fun remoteShortcutsSitsBeforeDiagnosticsAndServer() {
         assertEquals(
             listOf(
                 TvSettingsCategory.General,
                 TvSettingsCategory.Playback,
                 TvSettingsCategory.Subtitles,
+                TvSettingsCategory.RemoteShortcuts,
                 TvSettingsCategory.Diagnostics,
                 TvSettingsCategory.Server,
             ),
@@ -27,6 +26,7 @@ class TvSettingsCategoryTest {
                 TvSettingsCategory.General,
                 TvSettingsCategory.Playback,
                 TvSettingsCategory.Subtitles,
+                TvSettingsCategory.RemoteShortcuts,
                 TvSettingsCategory.Server,
             ),
             tvSettingsVisibleCategories(diagnosticsEligible = false),
