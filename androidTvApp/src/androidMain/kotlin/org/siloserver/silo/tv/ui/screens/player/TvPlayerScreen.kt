@@ -68,6 +68,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalView
+import android.view.ViewConfiguration
+import android.view.ViewTreeObserver
+import org.siloserver.silo.tv.data.preferences.TvRemoteShortcutAction
+import org.siloserver.silo.tv.data.preferences.TvRemoteShortcutsStore
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.boundsInWindow
@@ -350,6 +355,7 @@ fun TvPlayerScreen(
     // (they are installed once), so a settings change applies to the next
     // skip without restarting playback; the displayed glyphs recompose.
     val seekIntervalState by seekIntervalStore.state.collectAsState()
+    val remoteShortcutsStore: TvRemoteShortcutsStore = koinInject()
     val seekIntervals = seekIntervalState.video(LEGACY_TV_VIDEO_SEEK_INTERVALS)
     fun resolvedSkipBackMs(): Long = seekIntervalStore.state.value.video(LEGACY_TV_VIDEO_SEEK_INTERVALS).backMs
     fun resolvedSkipForwardMs(): Long =
@@ -392,6 +398,7 @@ fun TvPlayerScreen(
     val subtitleTextOpacitySupported by viewModel.subtitleTextOpacitySupported.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val sleepTimerState by viewModel.sleepTimerState.collectAsState()
+    val sleepTimerDefaultMinutes by viewModel.sleepTimerDefaultMinutes.collectAsState()
     val introSkipMode by viewModel.introSkipMode.collectAsState()
     val autoPlayNextEnabled by viewModel.autoPlayNextEnabled.collectAsState()
     val audioNormalizationEnabled by viewModel.audioNormalizationEnabled.collectAsState()
@@ -407,6 +414,7 @@ fun TvPlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnExit by rememberUpdatedState(onExit)
     val context = LocalContext.current
+    val playerComposeView = LocalView.current
     val hdrDisplayController = remember { HdrDisplayController() }
     val matchContentFrameRate by viewModel.matchContentFrameRate.collectAsState()
     val matchContentResolution by viewModel.matchContentResolution.collectAsState()
@@ -439,6 +447,11 @@ fun TvPlayerScreen(
     var exitRequested by remember { mutableStateOf(false) }
     var requestedHudTab by remember { mutableStateOf(HudTab.Info) }
     var showQuickSubtitlePicker by remember { mutableStateOf(false) }
+    var showShortcutSleepPicker by remember { mutableStateOf(false) }
+    var shortcutSubtitleToRestore by remember(state.contentId) { mutableStateOf<SubtitleIdentity?>(null) }
+    LaunchedEffect(state.contentId, state.showNextUp, state.error, isInPictureInPictureMode) {
+        showShortcutSleepPicker = false
+    }
     var subtitleFocusedStableId by remember { mutableStateOf<String?>(null) }
     // Captured PlayerView reference so subtitleManager.applyAppearance can hit
     // the inflated subtitleView after the AndroidView factory runs. Mirrors
@@ -1061,6 +1074,7 @@ fun TvPlayerScreen(
                 viewModel.onBufferingBack() -> Unit
             lowerQuality != null && !state.showControls -> qualityOffer.dismissed = true
             showQuickSubtitlePicker -> showQuickSubtitlePicker = false
+            showShortcutSleepPicker -> showShortcutSleepPicker = false
             // On the Up-Next overlay, Back exits the player (matches tvOS, where
             // the Up-Next "Back" button dismisses the whole player).
             state.showNextUp -> stopPlaybackAndExit()
@@ -1080,12 +1094,12 @@ fun TvPlayerScreen(
         }
     }
 
-    DisposableEffect(viewModel, watchParty) {
+    DisposableEffect(viewModel, watchParty, state.contentId, lifecycleOwner, playerComposeView) {
         // The downTime of the Back press a pill answered. The rest of that
         // press is the pill's, even after the hidden pill has recomposed: its
         // UP must not reach the transport's Back below.
         var pillBackDownTime = -1L
-        val handler: (KeyEvent) -> Boolean = handler@{ event ->
+        val normalHandler: (KeyEvent) -> Boolean = handler@{ event ->
             val playerState = viewModel.uiState.value
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 TvFocusLog.d {
@@ -1215,7 +1229,7 @@ fun TvPlayerScreen(
             if (event.action == KeyEvent.ACTION_DOWN && playerState.showControls) {
                 viewModel.setControlsVisible(true)
             }
-            if (latestShowQuickSubtitlePicker ||
+            if (showShortcutSleepPicker || latestShowQuickSubtitlePicker ||
                 playerState.hudOpen || latestShowPartyPanel ||
                 // The Up-Next overlay is a focus-trapping Compose surface that
                 // owns its own remote input (Play Now / Keep Watching / Back) —
@@ -1437,8 +1451,128 @@ fun TvPlayerScreen(
                 }
             }
         }
+        val shortcutPresses = TvRemoteShortcutPressHandler(
+            scope = cleanPlaybackSeekScope,
+            holdTimeoutMs = ViewConfiguration.getLongPressTimeout().toLong(),
+            isEligible = {
+                val current = viewModel.uiState.value
+                lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+                    playerComposeView.hasWindowFocus() &&
+                    !pictureInPictureCoordinator.isInPictureInPictureMode.value &&
+                    current.streamUrl != null && !current.isLoading && current.error == null &&
+                    !current.showControls && !current.hudOpen && !current.showNextUp &&
+                    !current.isScrubbing && cleanSeekRate == 0 && pendingCleanSeekDirection == 0 &&
+                    !current.showSubtitleSearchDialog && !current.showAiTranslateDialog &&
+                    !latestShowPartyPanel && !latestShowQuickSubtitlePicker && !showShortcutSleepPicker &&
+                    bufferingPillFocusedAction == null
+            },
+            actionFor = { button -> remoteShortcutsStore.mappings.value.getValue(button) },
+            onTap = { keyCode ->
+                // Replay a tap only after classification. Use a fresh, zero-length
+                // pair so the existing Left/Right hold-to-seek path stays a tap.
+                val now = android.os.SystemClock.uptimeMillis()
+                normalHandler(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0))
+                normalHandler(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0))
+            },
+            onHold = { action ->
+                val current = viewModel.uiState.value
+                fun openOptions(tab: HudTab) {
+                    requestedHudTab = tab
+                    viewModel.openHUD()
+                }
+                when (action) {
+                    TvRemoteShortcutAction.Default, TvRemoteShortcutAction.None -> Unit
+                    TvRemoteShortcutAction.ToggleSleepTimer -> {
+                        if (viewModel.sleepTimerState.value is SleepTimerState.Active) {
+                            viewModel.onCancelSleepTimer()
+                            viewModel.showPlayerMessage("Sleep timer off", 2_000L)
+                        } else {
+                            val minutes = viewModel.sleepTimerDefaultMinutes.value.takeIf { it > 0 } ?: 30
+                            viewModel.onStartSleepTimer(minutes)
+                            viewModel.showPlayerMessage("Sleep timer: $minutes minutes", 2_000L)
+                        }
+                    }
+                    TvRemoteShortcutAction.SleepTimerSettings -> showShortcutSleepPicker = true
+                    TvRemoteShortcutAction.SubtitleSettings -> openOptions(HudTab.Subtitles)
+                    TvRemoteShortcutAction.AudioSettings -> {
+                        if (current.audioTracks.isEmpty()) {
+                            viewModel.showPlayerMessage("No audio tracks available", 2_000L)
+                        } else {
+                            openOptions(HudTab.Audio)
+                        }
+                    }
+                    TvRemoteShortcutAction.PlaybackOptions -> openOptions(HudTab.Video)
+                    TvRemoteShortcutAction.PlayerStats -> openOptions(HudTab.Stats)
+                    TvRemoteShortcutAction.ToggleNightMode -> {
+                        val enabled = !viewModel.audioNormalizationEnabled.value
+                        viewModel.setAudioNormalizationEnabled(enabled)
+                        viewModel.showPlayerMessage("Night Mode ${if (enabled) "on" else "off"}", 2_000L)
+                    }
+                    TvRemoteShortcutAction.ToggleSubtitles -> {
+                        if (current.pendingSubtitleIdentity != null) {
+                            viewModel.showPlayerMessage("Subtitles are still changing", 2_000L)
+                        } else if (current.committedSubtitleIdentity != SubtitleIdentity.Off) {
+                            shortcutSubtitleToRestore = current.committedSubtitleIdentity
+                            viewModel.selectSubtitleOption(SubtitleIdentity.Off)
+                        } else {
+                            val options = buildTvSubtitleHudOptions(current.subtitleUrls, current.subtitleTracks)
+                                .filter { it.identity != SubtitleIdentity.Off }
+                            val target = options.firstOrNull { it.identity == shortcutSubtitleToRestore }
+                                ?: options.firstOrNull()
+                            if (target == null) {
+                                viewModel.showPlayerMessage("No subtitles available", 2_000L)
+                            } else {
+                                viewModel.selectSubtitleOption(target.identity)
+                            }
+                        }
+                    }
+                    TvRemoteShortcutAction.PlayPause -> {
+                        if (watchParty != null) watchParty.togglePlayPause() else viewModel.onPlayPause()
+                        viewModel.setControlsVisible(true)
+                        requestIdleOverlayFocus(TvIdleOverlayFocusTarget.Transport)
+                    }
+                    TvRemoteShortcutAction.SkipBack ->
+                        performRelativeSeek(-resolvedSkipBackMs(), latestRoomSnapshot, revealControls = true)
+                    TvRemoteShortcutAction.SkipForward ->
+                        performRelativeSeek(resolvedSkipForwardMs(), latestRoomSnapshot, revealControls = true)
+                    TvRemoteShortcutAction.Restart -> {
+                        if (watchParty != null) watchParty.seek(0.0) else viewModel.seekImmediate(0.0)
+                    }
+                    TvRemoteShortcutAction.NextEpisode -> when {
+                        watchParty != null -> viewModel.showPlayerMessage("Next episode is unavailable in a Watch Party", 2_000L)
+                        current.nextEpisode == null -> viewModel.showPlayerMessage("No next episode available", 2_000L)
+                        else -> viewModel.playNextEpisodeNow()
+                    }
+                }
+            },
+        )
+        val handler: (KeyEvent) -> Boolean = { event ->
+            shortcutPresses.dispatch(
+                keyCode = event.keyCode,
+                action = event.action,
+                repeatCount = event.repeatCount,
+                downTime = event.downTime,
+                eventTime = event.eventTime,
+                canceled = event.isCanceled,
+            ) || normalHandler(event)
+        }
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) shortcutPresses.cancelPending()
+        }
+        val windowFocusObserver = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+            if (!hasFocus) shortcutPresses.cancelPending()
+        }
+        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+        playerComposeView.viewTreeObserver.addOnWindowFocusChangeListener(windowFocusObserver)
         TvPlayerRemoteKeyBridge.install(handler)
-        onDispose { TvPlayerRemoteKeyBridge.clear(handler) }
+        onDispose {
+            shortcutPresses.cancelPending()
+            lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+            if (playerComposeView.viewTreeObserver.isAlive) {
+                playerComposeView.viewTreeObserver.removeOnWindowFocusChangeListener(windowFocusObserver)
+            }
+            TvPlayerRemoteKeyBridge.clear(handler)
+        }
     }
 
     // A subtitle or audio change that failed has to say so. Stage, validation,
@@ -2180,8 +2314,8 @@ fun TvPlayerScreen(
 
     // Ensure the outer Box owns focus when the overlay is hidden so the first
     // remote key press can reach onPreviewKeyEvent.
-    LaunchedEffect(state.showControls) {
-        if (!state.showControls) {
+    LaunchedEffect(state.showControls, showShortcutSleepPicker) {
+        if (!state.showControls && !showShortcutSleepPicker && !state.hudOpen && !state.showNextUp) {
             // The outer Box must own focus while the overlay is hidden or the
             // first remote press never reaches onPreviewKeyEvent — the viewer
             // presses once, nothing happens, and presses again.
@@ -2250,6 +2384,7 @@ fun TvPlayerScreen(
                     event.nativeKeyEvent.keyCode != KeyEvent.KEYCODE_BACK &&
                     event.nativeKeyEvent.keyCode != KeyEvent.KEYCODE_DPAD_LEFT &&
                     event.nativeKeyEvent.keyCode != KeyEvent.KEYCODE_DPAD_RIGHT &&
+                    !showShortcutSleepPicker &&
                     !state.showControls
                 ) {
                     viewModel.setControlsVisible(true)
@@ -2608,6 +2743,42 @@ fun TvPlayerScreen(
                         TvSkipSeekIndicator(
                             feedback = skipSeekFeedback,
                             showTrack = !state.showControls,
+                        )
+                    }
+                }
+
+                if (!isInPictureInPictureMode && showShortcutSleepPicker) {
+                    val closePicker = {
+                        showShortcutSleepPicker = false
+                    }
+                    BackHandler(onBack = closePicker)
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.42f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        HudPickerDialog(
+                            presentation = HudPickerPresentation(
+                                title = "Sleep timer",
+                                options = listOf(HudPickerOption("off", "Off")) +
+                                    SLEEP_TIMER_PRESETS.map { HudPickerOption(it.toString(), "$it minutes") },
+                                selectedId = if (sleepTimerState is SleepTimerState.Active) {
+                                    sleepTimerDefaultMinutes.toString()
+                                } else {
+                                    "off"
+                                },
+                                onSelect = { id ->
+                                    if (id == "off") {
+                                        viewModel.onCancelSleepTimer()
+                                        viewModel.showPlayerMessage("Sleep timer off", 2_000L)
+                                    } else {
+                                        id.toIntOrNull()?.let { minutes ->
+                                            viewModel.onStartSleepTimer(minutes)
+                                            viewModel.showPlayerMessage("Sleep timer: $minutes minutes", 2_000L)
+                                        }
+                                    }
+                                },
+                            ),
+                            onClose = closePicker,
                         )
                     }
                 }

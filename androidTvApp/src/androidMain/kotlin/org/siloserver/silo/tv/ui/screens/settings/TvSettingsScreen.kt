@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +45,7 @@ import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SmartDisplay
+import androidx.compose.material.icons.outlined.SettingsRemote
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -398,6 +401,12 @@ internal enum class TvSettingsCategory(
         blurb = "Language, behavior, and on-screen appearance.",
         icon = Icons.Outlined.ClosedCaption,
     ),
+    RemoteShortcuts(
+        title = "Remote Shortcuts",
+        railDescription = "Customize long presses",
+        blurb = "Choose what holding a remote button does during video playback.",
+        icon = Icons.Outlined.SettingsRemote,
+    ),
     Diagnostics(
         title = "Diagnostics",
         railDescription = "Reports and support",
@@ -658,23 +667,29 @@ private fun SettingsRail(
             onClick = onSwitchProfile,
         )
         Spacer(modifier = Modifier.height(9.dp))
-        visibleCategories.forEach { category ->
-            SettingsRailCategoryRow(
-                category = category,
-                selected = category == selectedCategory && !railActionHasFocus,
-                onClick = { onEnterCategory(category) },
-                // tvOS parity: focusing a category live-swaps the detail pane.
-                onFocused = {
-                    railActionHasFocus = false
-                    onRailCategoryFocused()
-                    onCategorySelected(category)
-                },
-                // Entry focus lands on General, not the profile row.
-                focusRequester = categoryFocusRequesters.getValue(category),
-                rightFocusRequester = detailFocusRequester,
-            )
+        // Keep every category reachable as the rail grows, with account and
+        // sign-out actions outside the scrolling category list.
+        Column(
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            visibleCategories.forEach { category ->
+                SettingsRailCategoryRow(
+                    category = category,
+                    selected = category == selectedCategory && !railActionHasFocus,
+                    onClick = { onEnterCategory(category) },
+                    // Focusing a category live-swaps the detail pane.
+                    onFocused = {
+                        railActionHasFocus = false
+                        onRailCategoryFocused()
+                        onCategorySelected(category)
+                    },
+                    // Entry focus lands on General, not the profile row.
+                    focusRequester = categoryFocusRequesters.getValue(category),
+                    rightFocusRequester = detailFocusRequester,
+                )
+            }
         }
-        Spacer(modifier = Modifier.weight(1f))
         SettingsRailActionRow(
             label = "Sign Out",
             icon = Icons.AutoMirrored.Filled.Logout,
@@ -965,6 +980,7 @@ private fun SettingsDetailPane(
                 onSubtitleDeviceOverrideEnabledChanged = onSubtitleDeviceOverrideEnabledChanged,
             onSubtitleMatchesDeviceChanged = onSubtitleMatchesDeviceChanged,
             )
+            TvSettingsCategory.RemoteShortcuts -> TvRemoteShortcutsSettingsPane(detailFocusRequester)
             TvSettingsCategory.Diagnostics -> TvDiagnosticsSettingsPane(
                 state = diagnosticsState,
                 serverName = state.serverName,

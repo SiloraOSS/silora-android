@@ -62,6 +62,7 @@ import org.siloserver.silo.tv.ui.screens.player.TvVideoPlaybackStarter
 import org.siloserver.silo.tv.ui.screens.profiles.TvProfileSelectionViewModel
 import org.siloserver.silo.tv.ui.screens.search.TvSearchViewModel
 import org.siloserver.silo.tv.data.preferences.TvLibraryScopeStore
+import org.siloserver.silo.tv.data.preferences.TvRemoteShortcutsStore
 import org.siloserver.silo.common.profiles.ProfileLaunchBehavior
 import org.siloserver.silo.common.profiles.ProfileLaunchPreferences
 import org.siloserver.silo.tv.profiles.TvActiveProfileReset
@@ -85,6 +86,11 @@ import org.koin.dsl.module
  * [org.siloserver.silo.tv.SiloTvApplication].
  */
 val androidTvModule = module {
+    single {
+        TvRemoteShortcutsStore(
+            androidContext().getSharedPreferences(TvRemoteShortcutsStore.PREFS_NAME, android.content.Context.MODE_PRIVATE),
+        )
+    }
     single<CleartextConsentStore> { DataStoreCleartextConsentStore(androidContext()) }
     single<org.siloserver.silo.network.CleartextOriginConsent> { get<CleartextConsentStore>() }
     // Single encrypted prefs handle shared between the server registry and
