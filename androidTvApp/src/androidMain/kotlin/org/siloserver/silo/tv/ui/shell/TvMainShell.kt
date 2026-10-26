@@ -410,6 +410,7 @@ fun TvMainShell(
     // handled: a counter that reset on recreation while that record survived
     // would read as a new request and replay the scroll and field focus.
     var searchBackToInputRequest by rememberSaveable { mutableIntStateOf(0) }
+    var searchInputOverlayOpen by remember { mutableStateOf(false) }
     // Same failure as the bar handoff: Back asks the search field to take
     // focus and consumes the press. If the field never reports focus, every
     // Back repeats that forever and Search cannot be left. Records the attempt
@@ -1069,6 +1070,8 @@ fun TvMainShell(
     }
 
     fun handleShellBack(): Boolean {
+        // Search owns Back while its app keyboard is open.
+        if (currentRoute == TvMainRoute.Search.route && searchInputOverlayOpen) return false
         // Settings owns a two-stage Back model (detail pane -> selected rail
         // category -> Home), so its nested BackHandler must remain in charge.
         if (currentRoute == TvMainRoute.Settings.route) return false
@@ -1143,7 +1146,8 @@ fun TvMainShell(
         barHandoffAttempted = focusState.barHandoffAttempted,
         onHome = selectedRoot == TvRootDestination.Home,
     )
-    val shellHandlesBack = currentRoute != TvMainRoute.Settings.route && when (pendingShellBackAction) {
+    val shellHandlesBack = currentRoute != TvMainRoute.Settings.route &&
+        !(currentRoute == TvMainRoute.Search.route && searchInputOverlayOpen) && when (pendingShellBackAction) {
         TvShellBackAction.ClosePanel,
         TvShellBackAction.ClosePanelPreview,
         TvShellBackAction.CloseProfileMenu,
@@ -1232,7 +1236,8 @@ fun TvMainShell(
                 .focusGroup()
                 .onPreviewKeyEvent { ev ->
                     when {
-                        ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionUp -> {
+                        ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionUp &&
+                            !(currentRoute == TvMainRoute.Search.route && searchInputOverlayOpen) -> {
                             val isRepeat = ev.nativeKeyEvent.repeatCount > 0
                             val contentHandledUp = contentUpFallback?.invoke(isRepeat)
                             if (contentHandledUp != null) {
@@ -1360,6 +1365,7 @@ fun TvMainShell(
                         onOpenLibraryItem = onOpenItemDetail,
                         onOpenPersonDetail = onOpenPersonDetail,
                         searchFieldFocusRequester = searchInputFocusRequester,
+                        onInputOverlayChanged = { searchInputOverlayOpen = it },
                         backToSearchFieldRequest = searchBackToInputRequest,
                         onSearchFieldFocusChanged = {
                             searchInputHasFocus = it
