@@ -1084,6 +1084,9 @@ private fun TvGeneralSettingsPane(
             }
         }
         item {
+            TvSearchKeyboardSettings()
+        }
+        item {
             // Device-local, server/profile-specific visibility and order for
             // the populated rows returned by Home, matching tvOS General.
             SettingsGroup(title = "Home Sections") {
