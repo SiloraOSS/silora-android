@@ -845,6 +845,8 @@ class TvPlayerViewModel(
     private val throughputMeter: org.siloserver.silo.common.player.PlaybackThroughputMeter? = null,
     /** Remembers a manual subtitle choice for the whole series on the server. */
     private val seriesTrackChoiceWriter: org.siloserver.silo.common.settings.SeriesTrackChoiceWriter? = null,
+    /** The server's seek-bar previews. Optional for the same reason. */
+    trickplayManifests: org.siloserver.silo.playback.trickplay.TrickplayManifestSource? = null,
 ) : ViewModel() {
 
     companion object {
@@ -1343,7 +1345,16 @@ class TvPlayerViewModel(
         // Video surface fill mode (letterbox vs zoom). Session-scoped — resets
         // to Fit on each new playback to match tvOS video-gravity behavior.
         val videoFillMode: VideoFillMode = VideoFillMode.Fit,
-    )
+        // The item whose first frame (or, for audio, first play) has shown.
+        // Until it matches [contentId] the item is on its first load: no
+        // controls, only the spinner. A retry, renewal, reconnect or replan
+        // keeps the content id, so only a new item brings that state back.
+        val startedContentId: String? = null,
+    ) {
+        /** The current item has not shown its first frame yet; see [startedContentId]. */
+        val awaitingFirstFrame: Boolean
+            get() = startedContentId != contentId
+    }
 
     private val _uiState = MutableStateFlow(
         UiState(
@@ -1769,6 +1780,19 @@ class TvPlayerViewModel(
 
     fun requestSubtitleSync(key: String) = subtitleSync.requestSync(key)
 
+    // Seek-bar thumbnails for the streamed file; the scrubber and the
+    // hold-seek chip stay text-only while this is null.
+    private val trickplay = trickplayManifests?.let {
+        org.siloserver.silo.common.player.trickplay.trickplayPreviews(it, viewModelScope)
+    }
+    val trickplayThumbnail: StateFlow<androidx.compose.ui.graphics.ImageBitmap?> =
+        trickplay?.thumbnail ?: MutableStateFlow(null)
+
+    /** The time a D-pad seek is previewing, or null when it ends. */
+    fun showTrickplay(seconds: Double?) {
+        trickplay?.show(seconds)
+    }
+
     fun resetSubtitleTiming(key: String) = subtitleSync.resetTiming(key)
 
     /**
@@ -1908,6 +1932,30 @@ class TvPlayerViewModel(
                 }
                 .distinctUntilChanged()
                 .collect { (mediaFileId, syncKeys) -> subtitleSync.bind(mediaFileId, syncKeys) }
+        }
+        // Seek previews follow the streamed file.
+        trickplay?.let { previews ->
+            viewModelScope.launch {
+                _uiState
+                    .map { state ->
+                        org.siloserver.silo.common.player.trickplay.trickplayTarget(
+                            contentId = state.contentId,
+                            fileId = state.mediaFileId,
+                            versions = state.fileVersions,
+                            streaming = !state.sessionId.isNullOrEmpty(),
+                        )
+                    }
+                    .distinctUntilChanged()
+                    .collect(previews::bind)
+            }
+            // The focused scrubber's preview; the hidden-controls hold seek
+            // reports its own through showTrickplay.
+            viewModelScope.launch {
+                _uiState
+                    .map { state -> state.scrubPreviewSec.takeIf { state.isScrubbing } }
+                    .distinctUntilChanged()
+                    .collect(previews::show)
+            }
         }
         viewModelScope.launch {
             val screen = _uiState
@@ -3626,9 +3674,20 @@ class TvPlayerViewModel(
         }
     }
 
+    /**
+     * A mount with audio and no video started playing. It renders no frame, so
+     * playing ends its first load instead; a callback from an earlier mount is
+     * ignored, as for [onFirstVideoFrameRendered].
+     */
+    fun onAudioOnlyPlaybackStarted(transportMountNonce: Long) {
+        if (transportMountNonce != _uiState.value.transportMountNonce) return
+        _uiState.update { it.copy(startedContentId = it.contentId) }
+    }
+
     fun onFirstVideoFrameRendered(transportMountNonce: Long?) {
         if (transportMountNonce != _uiState.value.transportMountNonce) return
         hasRenderedFirstFrame = true
+        _uiState.update { it.copy(startedContentId = it.contentId) }
         playbackSessionManager.reportFirstVideoFrame(_uiState.value.stats)
         if (nextUpTransitionGate.completeOnFirstFrame(transportMountNonce)) {
             _uiState.update {
