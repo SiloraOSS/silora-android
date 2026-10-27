@@ -21,21 +21,22 @@ class TvSearchKeyboardStoreTest {
 
     @Before fun clearPreferences() { prefs.edit(commit = true) { clear() } }
 
-    @Test fun appKeyboardIsTheDefaultForExistingAndNewInstalls() {
-        assertEquals(TvSearchKeyboardMode.App, TvSearchKeyboardStore(prefs).mode.value)
+    @Test fun systemKeyboardIsTheDefaultForExistingAndNewInstalls() {
+        assertEquals(TvSearchKeyboardMode.System, TvSearchKeyboardStore(prefs).mode.value)
     }
 
-    @Test fun choosingSystemKeyboardUpdatesTheFlowAndSurvivesReload() {
+    @Test fun choosingEitherKeyboardUpdatesTheFlowAndSurvivesReload() {
         val store = TvSearchKeyboardStore(prefs)
         store.setMode(TvSearchKeyboardMode.System)
         assertEquals(TvSearchKeyboardMode.System, store.mode.value)
         assertEquals(TvSearchKeyboardMode.System, TvSearchKeyboardStore(prefs).mode.value)
         store.setMode(TvSearchKeyboardMode.App)
+        assertEquals(TvSearchKeyboardMode.App, store.mode.value)
         assertEquals(TvSearchKeyboardMode.App, TvSearchKeyboardStore(prefs).mode.value)
     }
 
-    @Test fun unknownStoredModesFallBackToAppKeyboard() {
+    @Test fun unknownStoredModesFallBackToSystemKeyboard() {
         prefs.edit(commit = true) { putString("mode", "future-mode") }
-        assertEquals(TvSearchKeyboardMode.App, TvSearchKeyboardStore(prefs).mode.value)
+        assertEquals(TvSearchKeyboardMode.System, TvSearchKeyboardStore(prefs).mode.value)
     }
 }
