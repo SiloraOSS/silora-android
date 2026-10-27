@@ -58,13 +58,17 @@ Run workflow** and select `main`. This workflow has only a manual trigger:
 there is no schedule or push trigger. Every run builds and publishes, even if
 the source matches the previous release.
 
+The **Run the full unit test suite before building** checkbox defaults to off.
+Enable it to require the full Gradle test suite for that run. Release-tooling
+checks, full release lint, compilation, signing, and APK verification always run.
+
 The manual workflow builds the exact commit selected when the run starts. It
 does not fetch upstream Git objects, merge upstream, or update `main`. Read-only
 GitHub API calls identify the upstream snapshot already included in that commit
 and list official version tags. Only tag commits already in the fork checkout
 are used for version stamping. Newer upstream code is not included.
 
-It uses the daily workflow's version format, signing key, tests, lint, APK
+It uses the daily workflow's version format, signing key, lint, APK
 verification, GitHub release publication, and Discord webhook configuration.
 Successful builds become regular **Latest** releases with the same APK names
 and permanent download links. Tags use `manual-YYYY-MM-DD.RUN` to avoid collisions
@@ -174,8 +178,9 @@ Tests and full release lint are optional for local builds:
 
 Android's release-critical lint checks still run as part of APK assembly.
 Local builds enable Gradle project parallelism and use the default Gradle and
-R8 worker counts. GitHub release workflows still request tests and full lint
-and retain their own worker limits.
+R8 worker counts. GitHub release workflows require full lint and retain their
+own worker limits. Daily releases require the full test suite; manual releases
+run it only when the checkbox is enabled.
 
 Keep local signing files in `../silora-signing/`, beside this repository:
 
