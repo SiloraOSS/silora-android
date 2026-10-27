@@ -410,6 +410,7 @@ fun TvMainShell(
     // handled: a counter that reset on recreation while that record survived
     // would read as a new request and replay the scroll and field focus.
     var searchBackToInputRequest by rememberSaveable { mutableIntStateOf(0) }
+    var searchEntryRequest by rememberSaveable { mutableIntStateOf(0) }
     var searchInputOverlayOpen by remember { mutableStateOf(false) }
     // Same failure as the bar handoff: Back asks the search field to take
     // focus and consumes the press. If the field never reports focus, every
@@ -975,6 +976,7 @@ fun TvMainShell(
     // Search is no longer a root tab — it's a trailing icon button. Navigate to
     // the (still-defined) Search route and drop focus into the search field.
     val onSearchPressed: () -> Unit = {
+        searchEntryRequest++
         if (TvMainRoute.Search.route != currentRoute) {
             navigateToRoute(TvMainRoute.Search.route)
             moveFocusToContent(TvMainRoute.Search.route)
@@ -1365,6 +1367,7 @@ fun TvMainShell(
                         onOpenLibraryItem = onOpenItemDetail,
                         onOpenPersonDetail = onOpenPersonDetail,
                         searchFieldFocusRequester = searchInputFocusRequester,
+                        searchEntryRequest = searchEntryRequest,
                         onInputOverlayChanged = { searchInputOverlayOpen = it },
                         backToSearchFieldRequest = searchBackToInputRequest,
                         onSearchFieldFocusChanged = {
