@@ -1479,7 +1479,7 @@ fun TvPlayerScreen(
                     !latestShowPartyPanel && !latestShowQuickSubtitlePicker && !showShortcutSleepPicker &&
                     bufferingPillFocusedAction == null
             },
-            actionFor = { button -> remoteShortcutsStore.mappings.value.getValue(button) },
+            actionFor = remoteShortcutsStore::actionFor,
             onTap = { keyCode ->
                 // Replay a tap only after classification. Use a fresh, zero-length
                 // pair so the existing Left/Right hold-to-seek path stays a tap.

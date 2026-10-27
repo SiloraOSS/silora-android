@@ -90,11 +90,13 @@ val androidTvModule = module {
     single {
         TvSearchKeyboardStore(
             androidContext().getSharedPreferences(TvSearchKeyboardStore.PREFS_NAME, android.content.Context.MODE_PRIVATE),
+            get<ServerRegistry>().activeEntry,
         )
     }
     single {
         TvRemoteShortcutsStore(
             androidContext().getSharedPreferences(TvRemoteShortcutsStore.PREFS_NAME, android.content.Context.MODE_PRIVATE),
+            get<ServerRegistry>().activeEntry,
         )
     }
     single<CleartextConsentStore> { DataStoreCleartextConsentStore(androidContext()) }

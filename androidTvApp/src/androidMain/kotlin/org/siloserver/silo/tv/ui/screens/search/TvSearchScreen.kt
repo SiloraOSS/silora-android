@@ -155,8 +155,8 @@ fun TvSearchScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val keyboardStore: TvSearchKeyboardStore = koinInject()
-    val keyboardMode by keyboardStore.mode.collectAsState()
-    val autoOpenKeyboard by keyboardStore.autoOpenKeyboard.collectAsState()
+    val keyboardMode by keyboardStore.mode.collectAsState(initial = keyboardStore.currentMode)
+    val autoOpenKeyboard by keyboardStore.autoOpenKeyboard.collectAsState(initial = keyboardStore.currentAutoOpenKeyboard)
     var inputValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(state.query, TextRange(state.query.length)))
     }
