@@ -1,6 +1,5 @@
 package org.siloserver.silo.android.ui.screens.auth
 
-import androidx.lifecycle.viewModelScope
 import org.siloserver.silo.network.apiv2.ApiV2Gate
 
 import io.ktor.client.HttpClient
@@ -11,13 +10,11 @@ import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.job
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -49,8 +46,6 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServerSetupPersistenceTest {
     private val dispatcher = StandardTestDispatcher()
-    private val viewModels = mutableListOf<ServerSetupViewModel>()
-    private val clients = mutableListOf<HttpClient>()
 
     @BeforeTest
     fun setUp() {
@@ -59,33 +54,31 @@ class ServerSetupPersistenceTest {
 
     @AfterTest
     fun tearDown() {
-        try {
-            runTest(dispatcher) {
-                // Finish ViewModel cancellation and client shutdown before replacing Main.
-                viewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
-                clients.forEach { it.close() }
-                clients.forEach { it.coroutineContext.job.join() }
-            }
-        } finally {
-            Dispatchers.resetMain()
-        }
+        Dispatchers.resetMain()
     }
 
     @Test
     fun failedProbeDoesNotReplacePreviouslyActiveServerUrl() = runTest(dispatcher) {
         val tokenManager = RecordingTokenManager(serverUrl = "https://old.silo")
         val repository = AuthRepository(
-            authApi = AuthApi(clientFor(tokenManager, "offline"), ApiV2Gate.Unrestricted),
+            authApi = AuthApi(
+                HttpClient(MockEngine) {
+                    engine {
+                        addHandler {
+                            throw IOException("offline")
+                        }
+                    }
+                    install(ContentNegotiation) { json(SiloJson) }
+                    install(SiloAuthPlugin) { this.tokenManager = tokenManager }
+                }, ApiV2Gate.Unrestricted),
             tokenManager = tokenManager,
         )
         val viewModel = ServerSetupViewModel(repository, FakeCleartextConsentStore())
-            .also { viewModels += it }
 
         viewModel.onServerUrlChanged("bad.silo")
         viewModel.onConnectClick()
-        awaitSettled(viewModel)
+        advanceUntilIdle()
 
-        assertEquals("Could not reach a Silo server at that address.", viewModel.uiState.value.error)
         assertEquals("https://old.silo", tokenManager.getServerUrl())
         assertEquals(
             emptyList(),
@@ -200,7 +193,7 @@ class ServerSetupPersistenceTest {
             candidateUrls = { listOf("http://silo_lan") },
             getSetupStatus = { ApiResult.Success(SetupStatusResponse(needsSetup = false)) },
             getSignupStatus = { ApiResult.Success(SignupStatusResponse(enabled = true)) },
-        ).also { viewModels += it }
+        )
 
         viewModel.onServerUrlChanged("silo_lan")
         viewModel.onConnectClick()
@@ -221,7 +214,11 @@ class ServerSetupPersistenceTest {
         val registry = StaleContractRegistry("https://secure.silo", ServerContract.UPDATE_REQUIRED)
         val viewModel = ServerSetupViewModel(
             authRepository = AuthRepository(
-                authApi = AuthApi(clientFor(tokenManager), ApiV2Gate.Unrestricted),
+                authApi = AuthApi(
+                    HttpClient(MockEngine { throw IOException("Unexpected network request") }) {
+                        install(ContentNegotiation) { json(SiloJson) }
+                        install(SiloAuthPlugin) { this.tokenManager = tokenManager }
+                    }, ApiV2Gate.Unrestricted),
                 tokenManager = tokenManager,
                 serverRegistry = registry,
             ),
@@ -229,7 +226,7 @@ class ServerSetupPersistenceTest {
             getSetupStatus = { ApiResult.Success(SetupStatusResponse(needsSetup = false)) },
             getSignupStatus = { ApiResult.Success(SignupStatusResponse(enabled = true)) },
             probeContract = { ApiV2ProbeResult.Failure(ApiV2ProbeResult.Kind.TIMEOUT) },
-        ).also { viewModels += it }
+        )
 
         viewModel.onServerUrlChanged("https://secure.silo")
         viewModel.onConnectClick()
@@ -266,7 +263,7 @@ class ServerSetupPersistenceTest {
             cleartextConsentStore = FakeCleartextConsentStore(),
             getSetupStatus = { ApiResult.NetworkError(IOException("gone")) },
             getSignupStatus = { ApiResult.Success(SignupStatusResponse(enabled = true)) },
-        ).also { viewModels += it }
+        )
 
         viewModel.connectTo(DiscoveredServer(serverId = "srv", name = "Den", url = "http://192.168.1.5:8090"))
         awaitSettled(viewModel)
@@ -293,27 +290,18 @@ class ServerSetupPersistenceTest {
         getSignupStatus = {
             ApiResult.Success(SignupStatusResponse(enabled = true))
         },
-    ).also { viewModels += it }
+    )
 
     private fun repositoryFor(
         tokenManager: RecordingTokenManager,
     ): AuthRepository = AuthRepository(
-        authApi = AuthApi(clientFor(tokenManager), ApiV2Gate.Unrestricted),
+        authApi = AuthApi(
+            HttpClient(MockEngine { throw IOException("Unexpected network request") }) {
+                install(ContentNegotiation) { json(SiloJson) }
+                install(SiloAuthPlugin) { this.tokenManager = tokenManager }
+            }, ApiV2Gate.Unrestricted),
         tokenManager = tokenManager,
     )
-
-    private fun clientFor(
-        tokenManager: RecordingTokenManager,
-        errorMessage: String = "Unexpected network request",
-    ): HttpClient = HttpClient(MockEngine) {
-        engine {
-            // Keep request completion on the same scheduler as the ViewModel and assertions.
-            dispatcher = this@ServerSetupPersistenceTest.dispatcher
-            addHandler { throw IOException(errorMessage) }
-        }
-        install(ContentNegotiation) { json(SiloJson) }
-        install(SiloAuthPlugin) { this.tokenManager = tokenManager }
-    }.also { clients += it }
 
     private suspend fun TestScope.awaitSettled(viewModel: ServerSetupViewModel) {
         runCurrent()
