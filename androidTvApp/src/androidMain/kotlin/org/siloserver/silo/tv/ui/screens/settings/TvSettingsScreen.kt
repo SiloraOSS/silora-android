@@ -3267,7 +3267,10 @@ private fun TvNightModeSettingsRows(store: PlayerSettingsStore, enabled: Boolean
         onClick = { expanded = !expanded },
         focusRequester = settingsRowFocus,
         enabled = enabled,
-        modifier = Modifier.alpha(if (enabled) 1f else 0.42f),
+        // TV Surfaces stay focusable when disabled; skip the dimmed rows instead.
+        modifier = Modifier
+            .alpha(if (enabled) 1f else 0.42f)
+            .focusProperties { canFocus = enabled },
     )
     if (expanded) {
         SettingsNestedGroup(enabled = enabled) {
@@ -3277,13 +3280,16 @@ private fun TvNightModeSettingsRows(store: PlayerSettingsStore, enabled: Boolean
                     value = control.format(control.get(params)),
                     onClick = { activeControl = control },
                     enabled = enabled,
+                    modifier = Modifier.focusProperties { canFocus = enabled },
                 )
             }
+            val canReset = enabled && !params.isDefault
             SettingsActionRow(
                 label = "Restore Defaults",
                 onClick = { confirmingReset = true },
                 destructive = true,
-                enabled = enabled && !params.isDefault,
+                enabled = canReset,
+                modifier = Modifier.focusProperties { canFocus = canReset },
             )
         }
     }
