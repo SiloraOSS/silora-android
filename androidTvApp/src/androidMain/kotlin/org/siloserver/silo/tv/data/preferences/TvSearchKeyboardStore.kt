@@ -18,9 +18,17 @@ internal class TvSearchKeyboardStore(private val prefs: SharedPreferences) {
     )
     val mode = _mode.asStateFlow()
 
+    private val _autoOpenKeyboard = MutableStateFlow(prefs.getBoolean("auto_open_keyboard", false))
+    val autoOpenKeyboard = _autoOpenKeyboard.asStateFlow()
+
     fun setMode(value: TvSearchKeyboardMode) {
         prefs.edit { putString("mode", value.id) }
         _mode.value = value
+    }
+
+    fun setAutoOpenKeyboard(value: Boolean) {
+        prefs.edit { putBoolean("auto_open_keyboard", value) }
+        _autoOpenKeyboard.value = value
     }
 
     companion object {

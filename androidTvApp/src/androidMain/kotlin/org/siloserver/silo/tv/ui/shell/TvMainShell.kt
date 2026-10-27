@@ -397,6 +397,7 @@ fun TvMainShell(
     val searchInputFocusRequester = remember { FocusRequester() }
     var searchInputHasFocus by remember { mutableStateOf(false) }
     var searchInputOverlayOpen by remember { mutableStateOf(false) }
+    var searchEntryRequest by rememberSaveable { mutableIntStateOf(0) }
     var searchBackToInputRequest by remember { mutableIntStateOf(0) }
     // Same failure as the bar handoff: Back asks the search field to take
     // focus and consumes the press. If the field never reports focus, every
@@ -924,6 +925,7 @@ fun TvMainShell(
     // Search is no longer a root tab — it's a trailing icon button. Navigate to
     // the (still-defined) Search route and drop focus into the search field.
     val onSearchPressed: () -> Unit = {
+        searchEntryRequest++
         if (TvMainRoute.Search.route != currentRoute) {
             navigateToRoute(TvMainRoute.Search.route)
         }
@@ -1286,6 +1288,7 @@ fun TvMainShell(
                         onOpenLibraryItem = onOpenItemDetail,
                         onOpenPersonDetail = onOpenPersonDetail,
                         searchFieldFocusRequester = searchInputFocusRequester,
+                        searchEntryRequest = searchEntryRequest,
                         onInputOverlayChanged = { searchInputOverlayOpen = it },
                         backToSearchFieldRequest = searchBackToInputRequest,
                         onSearchFieldFocusChanged = {
