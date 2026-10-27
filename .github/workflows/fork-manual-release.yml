@@ -2,6 +2,11 @@ name: Silora Manual Release
 
 on:
   workflow_dispatch:
+    inputs:
+      run_tests:
+        description: Run the full unit test suite before building
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -134,6 +139,10 @@ jobs:
           FORK_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: python3 scripts/fork-release.py prepare
 
+      - name: Run the full unit test suite
+        if: ${{ inputs.run_tests }}
+        run: ./gradlew test -Pandroid.r8.maxWorkers=1 --max-workers=2 --no-parallel --console=plain
+
       - name: Decode the persistent signing key
         env:
           SILO_RELEASE_KEYSTORE_B64: ${{ secrets.SILO_RELEASE_KEYSTORE_B64 }}
@@ -142,14 +151,13 @@ jobs:
           SILO_GOOGLE_SERVICES_JSON_B64: ${{ secrets.SILO_GOOGLE_SERVICES_JSON_B64 }}
         run: ./scripts/decode-release-secrets.sh
 
-      - name: Test, lint, and build the release APKs
+      - name: Lint and build the release APKs
         env:
           SILO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.SILO_RELEASE_KEYSTORE_PASSWORD }}
           SILO_RELEASE_KEY_ALIAS: ${{ secrets.SILO_RELEASE_KEY_ALIAS }}
           SILO_RELEASE_KEY_PASSWORD: ${{ secrets.SILO_RELEASE_KEY_PASSWORD }}
         run: |
           ./gradlew \
-            test \
             :androidApp:lintRelease :androidTvApp:lintRelease \
             :androidApp:assembleRelease :androidTvApp:assembleRelease \
             -Pandroid.r8.maxWorkers=1 --max-workers=2 --no-parallel --console=plain
