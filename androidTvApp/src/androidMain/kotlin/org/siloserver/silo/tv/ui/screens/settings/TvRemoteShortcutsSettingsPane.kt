@@ -22,7 +22,7 @@ import org.siloserver.silo.tv.ui.theme.Spacing
 @Composable
 internal fun TvRemoteShortcutsSettingsPane(firstFocusRequester: FocusRequester) {
     val store: TvRemoteShortcutsStore = koinInject()
-    val mappings by store.mappings.collectAsState()
+    val mappings by store.mappings.collectAsState(initial = store.currentMappings)
     var editingButton by remember { mutableStateOf<TvRemoteButton?>(null) }
 
     LazyColumn(
@@ -43,14 +43,14 @@ internal fun TvRemoteShortcutsSettingsPane(firstFocusRequester: FocusRequester) 
                 SettingsFooterText(
                     "Hold a button to use its shortcut while the playback controls are hidden. " +
                         "Short presses keep their usual action. Menus and dialogs keep their normal navigation. " +
-                        "These shortcuts are saved on this TV.",
+                        "These shortcuts are saved for this profile on this TV.",
                 )
             }
         }
         item {
             SettingsGroup("Reset") {
                 SettingsActionRow(label = "Reset shortcuts", onClick = store::reset)
-                SettingsFooterText("Restore every button to Default behavior.")
+                SettingsFooterText("Restore every button to Default behavior for this profile on this TV.")
             }
         }
     }

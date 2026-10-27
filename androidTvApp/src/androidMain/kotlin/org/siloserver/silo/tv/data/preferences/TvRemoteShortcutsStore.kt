@@ -1,9 +1,8 @@
 package org.siloserver.silo.tv.data.preferences
 
 import android.content.SharedPreferences
-import androidx.core.content.edit
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import org.siloserver.silo.model.server.ServerEntry
 
 internal enum class TvRemoteButton(val id: String, val label: String) {
     Left("left", "Long press Left"),
@@ -36,23 +35,28 @@ internal enum class TvRemoteShortcutAction(val id: String, val label: String, va
     }
 }
 
-/** Remote mappings belong to this TV, independently of the server or active profile. */
-internal class TvRemoteShortcutsStore(private val prefs: SharedPreferences) {
-    private val _mappings = MutableStateFlow(
-        TvRemoteButton.entries.associateWith { button ->
-            TvRemoteShortcutAction.fromId(prefs.getString(button.id, null))
-        },
+/** Remote mappings belong to the active server/profile on this TV. */
+internal class TvRemoteShortcutsStore(prefs: SharedPreferences, activeServer: StateFlow<ServerEntry?>) {
+    private val preferences = TvProfilePreferences(
+        prefs, activeServer, legacyKeys = TvRemoteButton.entries.map { it.id }.toSet(),
     )
-    val mappings = _mappings.asStateFlow()
+    private val defaults = TvRemoteButton.entries.associateWith { TvRemoteShortcutAction.Default }
+    private val readMappings: (SharedPreferences, String) -> Map<TvRemoteButton, TvRemoteShortcutAction> = { stored, prefix ->
+        TvRemoteButton.entries.associateWith { button ->
+            TvRemoteShortcutAction.fromId(stored.getString(prefix + button.id, null))
+        }
+    }
+    val currentMappings get() = preferences.read(defaults, readMappings)
+    val mappings = preferences.observe(defaults, readMappings)
+
+    fun actionFor(button: TvRemoteButton): TvRemoteShortcutAction = currentMappings.getValue(button)
 
     fun setAction(button: TvRemoteButton, action: TvRemoteShortcutAction) {
-        prefs.edit { putString(button.id, action.id) }
-        _mappings.value = _mappings.value + (button to action)
+        preferences.edit { prefix -> putString(prefix + button.id, action.id) }
     }
 
     fun reset() {
-        prefs.edit { clear() }
-        _mappings.value = TvRemoteButton.entries.associateWith { TvRemoteShortcutAction.Default }
+        preferences.edit { prefix -> TvRemoteButton.entries.forEach { remove(prefix + it.id) } }
     }
 
     companion object {

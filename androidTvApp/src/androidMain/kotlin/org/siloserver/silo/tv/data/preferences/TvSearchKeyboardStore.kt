@@ -1,34 +1,38 @@
 package org.siloserver.silo.tv.data.preferences
 
 import android.content.SharedPreferences
-import androidx.core.content.edit
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import org.siloserver.silo.model.server.ServerEntry
 
 internal enum class TvSearchKeyboardMode(val id: String, val label: String) {
     App("app", "App keyboard"),
     System("system", "System keyboard"),
 }
 
-/** Search input is a device preference, shared by profiles on this TV. */
-internal class TvSearchKeyboardStore(private val prefs: SharedPreferences) {
-    private val _mode = MutableStateFlow(
-        TvSearchKeyboardMode.entries.firstOrNull { it.id == prefs.getString("mode", null) }
-            ?: TvSearchKeyboardMode.System,
+/** Search input belongs to the active server/profile on this TV. */
+internal class TvSearchKeyboardStore(prefs: SharedPreferences, activeServer: StateFlow<ServerEntry?>) {
+    private val preferences = TvProfilePreferences(
+        prefs, activeServer, legacyKeys = setOf("mode", "auto_open_keyboard"),
     )
-    val mode = _mode.asStateFlow()
+    private val readMode: (SharedPreferences, String) -> TvSearchKeyboardMode = { stored, prefix ->
+        TvSearchKeyboardMode.entries.firstOrNull { it.id == stored.getString(prefix + "mode", null) }
+            ?: TvSearchKeyboardMode.System
+    }
+    private val readAutoOpenKeyboard: (SharedPreferences, String) -> Boolean = { stored, prefix ->
+        stored.getBoolean(prefix + "auto_open_keyboard", false)
+    }
+    val currentMode get() = preferences.read(TvSearchKeyboardMode.System, readMode)
+    val mode = preferences.observe(TvSearchKeyboardMode.System, readMode)
 
-    private val _autoOpenKeyboard = MutableStateFlow(prefs.getBoolean("auto_open_keyboard", false))
-    val autoOpenKeyboard = _autoOpenKeyboard.asStateFlow()
+    val currentAutoOpenKeyboard get() = preferences.read(false, readAutoOpenKeyboard)
+    val autoOpenKeyboard = preferences.observe(false, readAutoOpenKeyboard)
 
     fun setMode(value: TvSearchKeyboardMode) {
-        prefs.edit { putString("mode", value.id) }
-        _mode.value = value
+        preferences.edit { prefix -> putString(prefix + "mode", value.id) }
     }
 
     fun setAutoOpenKeyboard(value: Boolean) {
-        prefs.edit { putBoolean("auto_open_keyboard", value) }
-        _autoOpenKeyboard.value = value
+        preferences.edit { prefix -> putBoolean(prefix + "auto_open_keyboard", value) }
     }
 
     companion object {
