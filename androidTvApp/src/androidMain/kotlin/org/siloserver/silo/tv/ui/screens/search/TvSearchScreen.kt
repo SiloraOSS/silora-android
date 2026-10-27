@@ -146,6 +146,7 @@ fun TvSearchScreen(
     onOpenLibraryItem: (contentId: String) -> Unit,
     onOpenPersonDetail: (personId: Long) -> Unit,
     searchFieldFocusRequester: FocusRequester? = null,
+    searchEntryRequest: Int = 0,
     backToSearchFieldRequest: Int = 0,
     onSearchFieldFocusChanged: (Boolean) -> Unit = {},
     onInputOverlayChanged: (Boolean) -> Unit = {},
@@ -155,6 +156,7 @@ fun TvSearchScreen(
     val state by viewModel.uiState.collectAsState()
     val keyboardStore: TvSearchKeyboardStore = koinInject()
     val keyboardMode by keyboardStore.mode.collectAsState()
+    val autoOpenKeyboard by keyboardStore.autoOpenKeyboard.collectAsState()
     var inputValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(state.query, TextRange(state.query.length)))
     }
@@ -229,6 +231,7 @@ fun TvSearchScreen(
     var microphoneFocused by remember { mutableStateOf(false) }
     var restoreMicrophoneFocus by remember { mutableIntStateOf(0) }
     var hasEnteredSearch by rememberSaveable { mutableStateOf(false) }
+    var lastSearchEntryRequest by rememberSaveable { mutableIntStateOf(0) }
     var keyboardState by remember { mutableStateOf(TvSearchKeyboardState()) }
     val isKeyboardOpen = keyboardState.keyboardOpen
     val appKeyboardOpen = isKeyboardOpen && keyboardMode == TvSearchKeyboardMode.App
@@ -423,6 +426,25 @@ fun TvSearchScreen(
             )
         }
         hasEnteredSearch = true
+    }
+    // Only selecting Search opens the keyboard automatically. Consume the
+    // shell's request so Back from a detail or a dismissed keyboard cannot
+    // reopen it when this screen is restored.
+    LaunchedEffect(searchEntryRequest) {
+        if (searchEntryRequest <= lastSearchEntryRequest) return@LaunchedEffect
+        lastSearchEntryRequest = searchEntryRequest
+        if (!autoOpenKeyboard) return@LaunchedEffect
+        pendingSearchFocus = false
+        returnPending = false
+        returnTarget = null
+        searchGridState.scrollToItem(0)
+        requestFocusUntilObserved(
+            maxAttempts = TvContentInitialFocusMaxAttempts,
+            awaitAttempt = { withFrameNanos { } },
+            requestFocus = activeSearchFieldFocusRequester::requestFocus,
+            isFocused = { focusedRegion == TvSearchFocusRegion.Field },
+        )
+        if (focusedRegion == TvSearchFocusRegion.Field) setKeyboardOpen(true)
     }
     // Return restoration. Deliberately separate from the pendingSearchFocus
     // handoff above: that one belongs to an explicit search submission, and
@@ -1147,6 +1169,15 @@ private fun SearchStage(
     val fieldShape = RoundedCornerShape(14.dp)
     var selectArmed by remember { mutableStateOf(false) }
 
+    // Wait for the editable field to compose before asking the system IME
+    // to show, for both automatic opening and an explicit OK press.
+    LaunchedEffect(isKeyboardOpen, appKeyboardMode) {
+        if (isKeyboardOpen && !appKeyboardMode) {
+            withFrameNanos { }
+            keyboardController?.show()
+        }
+    }
+
     // Rendered as the grid's header item, so the grid's contentPadding already
     // provides the horizontal gutters. Insetting again here put the field and
     // chips a full gutter to the right of the result cards beneath them.
@@ -1163,7 +1194,7 @@ private fun SearchStage(
         OutlinedTextField(
             value = inputValue,
             onValueChange = onInputChanged,
-            // System mode stays read-only until Select. App mode stays editable
+            // System mode stays read-only until the keyboard opens. App mode stays editable
             // for physical keyboards; its host blocks the platform input session.
             readOnly = !appKeyboardMode && !isKeyboardOpen,
             singleLine = true,
@@ -1217,14 +1248,9 @@ private fun SearchStage(
                         if (!appKeyboardMode && isKeyboardOpen) onKeyboardOpenChanged(false)
                     }
                 }
-                // Select opens the keyboard; focus alone does not.
-                //
-                // Raising it on focus is what made everything beside this field
-                // unreachable: the IME is a separate window that owns the
-                // D-pad, so with it up no key ever reaches this app. With the
-                // keyboard closed the D-pad belongs to the screen again. Typing
-                // costs one Select first, which is the trade, and it is the one
-                // the Wholphin client makes.
+                // Focus alone never reopens the keyboard. Select opens it
+                // manually; the optional automatic opening belongs to the
+                // shell's explicit Search entry request.
                 .onPreviewKeyEvent { event ->
                     val opensKeyboard = event.key == Key.DirectionCenter || event.key == Key.Enter
                     when {
@@ -1236,7 +1262,6 @@ private fun SearchStage(
                             if (selectArmed) {
                                 selectArmed = false
                                 onKeyboardOpenChanged(true)
-                                if (!appKeyboardMode) keyboardController?.show()
                             }
                             true
                         }
