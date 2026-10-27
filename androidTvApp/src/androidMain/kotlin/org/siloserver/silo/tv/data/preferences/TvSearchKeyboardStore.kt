@@ -14,7 +14,7 @@ internal enum class TvSearchKeyboardMode(val id: String, val label: String) {
 internal class TvSearchKeyboardStore(private val prefs: SharedPreferences) {
     private val _mode = MutableStateFlow(
         TvSearchKeyboardMode.entries.firstOrNull { it.id == prefs.getString("mode", null) }
-            ?: TvSearchKeyboardMode.App,
+            ?: TvSearchKeyboardMode.System,
     )
     val mode = _mode.asStateFlow()
 
