@@ -1,5 +1,6 @@
 package org.siloserver.silo.android.ui.screens.player
 
+import org.siloserver.silo.common.ui.LanguageNames
 import org.siloserver.silo.model.playback.PlayerSubtitleInfo
 import org.siloserver.silo.model.subtitles.SubtitleAiJobKind
 import org.siloserver.silo.model.subtitles.SubtitleAiQuota
@@ -31,11 +32,26 @@ internal fun isTranslatableSource(track: PlayerSubtitleInfo): Boolean {
  * transcription; otherwise transcribe-then-translate (web parity).
  */
 internal fun transcribeKindFor(audioLanguage: String?, targetLanguage: String): String =
-    if ((audioLanguage ?: "") == targetLanguage) {
+    if (isSameLanguage(audioLanguage, targetLanguage)) {
         SubtitleAiJobKind.Transcribe
     } else {
         SubtitleAiJobKind.TranscribeTranslate
     }
+
+/**
+ * Fork: compares normalized codes, so an "eng" audio track and an "en" target
+ * no longer start a paid English → English translation pass (TV parity with
+ * tvIsSameLanguage).
+ */
+private fun isSameLanguage(source: String?, target: String): Boolean {
+    val code = source?.trim()?.lowercase().orEmpty()
+    if (code.isEmpty()) return false
+    if (code == target.trim().lowercase()) return true
+    val normalized = LanguageNames.searchCode(code)
+    // searchCode maps unknown codes to "en"; don't mistake those for English.
+    if (normalized == "en" && LanguageNames.displayName(code) != "English") return false
+    return normalized == LanguageNames.searchCode(target)
+}
 
 /** Quota counter line, wording pinned to the web modal + its period labels. */
 internal fun quotaLineText(quota: SubtitleAiQuota): String {

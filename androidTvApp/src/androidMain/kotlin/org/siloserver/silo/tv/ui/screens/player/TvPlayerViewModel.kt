@@ -851,6 +851,7 @@ class TvPlayerViewModel(
 
     companion object {
         private const val TAG = "TvPlayerViewModel"
+        private const val AI_SUBTITLE_READY_FALLBACK_MS = 5_000L
         const val SERVER_UNREACHABLE_MESSAGE =
             "Can't reach server — check your connection."
         // A transient network blip retries the same route this many times before
@@ -3768,6 +3769,35 @@ class TvPlayerViewModel(
      */
     val pendingLocalAudioSelection: StateFlow<LocalAudioSelection?> =
         _pendingLocalAudioSelection.asStateFlow()
+
+    /**
+     * Fork: "From audio" sources for the AI dialog, indexed by the server's
+     * audio-track ordinal for the playing file. The server resolves the job's
+     * source_index against that list; a remuxed or transcoded stream muxes one
+     * audio track, so the ExoPlayer group ordinal was always 0 and a dubbed
+     * track transcribed the original language. Falls back to the mounted
+     * tracks when the catalog list is unknown.
+     */
+    fun aiAudioSources(): List<PlayerTrackEntry> {
+        val state = _uiState.value
+        val catalog = catalogAudioTracks(state)
+        if (catalog.isEmpty()) return state.audioTracks
+        val selected = state.desiredAudioOrdinal ?: selectedServerAudioTrackIndex(
+            selectedPlayerOrdinal = state.audioTracks.firstOrNull { it.isSelected }?.index,
+            catalogAudioTracks = catalog,
+            currentPlanTrackIndex = state.playbackPlan?.selectedTracks?.audioIndex,
+        )
+        return catalog.mapIndexed { ordinal, track ->
+            PlayerTrackEntry(
+                index = ordinal,
+                label = track.title.orEmpty(),
+                language = track.language,
+                isSelected = ordinal == selected,
+                codecOrMime = track.codec,
+                channelCount = track.channels ?: 0,
+            )
+        }
+    }
 
     private fun catalogAudioTracks(state: UiState): List<AudioTrack> = state.fileVersions
         .firstOrNull { it.fileId == (state.selectedFileId ?: state.mediaFileId) }
@@ -6806,6 +6836,25 @@ class TvPlayerViewModel(
                     tvSubtitleIdentity(readyRow),
                 )
                 if (selected) pendingAuthoritativeSubtitleDownloadId = null
+            } else if (source == TvSubtitleRefreshSource.AiCompletion && autoSelectSubtitleId != null) {
+                // Fork: the new track normally arrives as a realtime
+                // subtitle_ready event. If that event is missed, the job
+                // finished but the track never appeared. Replan once after a
+                // short wait so the session's inventory picks it up.
+                viewModelScope.launch {
+                    delay(AI_SUBTITLE_READY_FALLBACK_MS)
+                    val current = _uiState.value
+                    if (current.sessionId == sessionId &&
+                        pendingAuthoritativeSubtitleDownloadId == autoSelectSubtitleId &&
+                        authoritativeSubtitleReadyRows[sessionId to autoSelectSubtitleId] == null
+                    ) {
+                        startProtocolV3Replan(
+                            classification = "subtitle_inventory_changed",
+                            notice = "Subtitle inventory changed. Refreshing playback metadata.",
+                            state = current,
+                        )
+                    }
+                }
             }
             return true
         }

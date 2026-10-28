@@ -58,7 +58,7 @@ fun TvAiTranslateDialog(
     aiState: AiTranslateUiState,
     /** Text-based session subtitle tracks (PGS/DVD filtered out by the caller). */
     subtitleSources: List<PlayerSubtitleInfo>,
-    /** ExoPlayer audio track entries (ordinal index = server audio track index). */
+    /** The playing file's server audio tracks; `index` is the server's audio ordinal. */
     audioSources: List<PlayerTrackEntry>,
     defaultTargetLanguage: String,
     onSubmit: (kind: String, sourceIndex: Int, sourceLanguage: String?, targetLanguage: String) -> Unit,
