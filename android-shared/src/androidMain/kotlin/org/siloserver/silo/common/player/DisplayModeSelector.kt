@@ -38,8 +38,12 @@ internal object DisplayModeSelector {
             val pixels = fitting.minOfOrNull { it.pixels } ?: candidates.maxOfOrNull { it.pixels }
             candidates = candidates.filter { it.pixels == pixels }
         }
-        return candidates.minWithOrNull(
-            compareBy<Mode> { RefreshRateSelector.scoreRefreshRate(it.refreshRate, targetRate) }
+        return RefreshRateSelector.pickByRefreshRateAmong(
+            candidates = candidates,
+            frameRateHz = targetRate,
+            refreshRate = { it.refreshRate },
+            tieBreak = compareByDescending<Mode> { it.width * 9 == it.height * 16 }
+                .thenByDescending { it.pixels }
                 .thenBy { if (it.id == original.id) 0 else 1 }
                 .thenBy { it.id },
         )

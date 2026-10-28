@@ -12,6 +12,7 @@ import androidx.annotation.MainThread
  * TV-only HDMI switching. Resolution and frame-rate matching are independent;
  * disabled dimensions retain the mode captured by [attach] before playback.
  * [restore] returns to that mode when playback closes or both options are off.
+ * HDR negotiation follows the decoder's `Format.colorInfo`.
  */
 class HdrDisplayController {
 
