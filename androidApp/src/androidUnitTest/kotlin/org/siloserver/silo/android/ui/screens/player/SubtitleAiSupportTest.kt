@@ -39,6 +39,9 @@ class SubtitleAiSupportTest {
         assertEquals("transcribe", transcribeKindFor("en", "en"))
         assertEquals("transcribe_translate", transcribeKindFor("ja", "en"))
         assertEquals("transcribe_translate", transcribeKindFor(null, "en"))
+        assertEquals("transcribe", transcribeKindFor("eng", "en"))
+        assertEquals("transcribe_translate", transcribeKindFor("eng", "sl"))
+        assertEquals("transcribe_translate", transcribeKindFor("xyz", "en"))
     }
 
     @Test
