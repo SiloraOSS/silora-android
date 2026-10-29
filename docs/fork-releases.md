@@ -3,8 +3,9 @@
 **Silora — your media, after dark.**
 
 Silora is an unofficial fork of the Silo Android phone and TV clients. Its
-fork changes are an OLED-focused visual identity and an HEVC compatibility
-patch for NVIDIA Shield setups. The rest of the client feature set comes
+fork changes are an OLED-focused visual identity, an HEVC compatibility
+patch for NVIDIA Shield setups, and in-app YouTube trailers adapted from
+edrock200's fork. The rest of the client feature set comes
 from Silo.
 
 The visual identity uses a purple split-prism mark, charcoal launcher
@@ -14,6 +15,11 @@ HEVC level bounds from capability reports; Off uses the decoder's reported
 levels. Other compatibility checks still apply. This does not increase the
 hardware decoder's actual capabilities. Existing saved numeric levels become
 On; a saved Off stays Off.
+
+Movie and series details have a Trailer action. Local trailers use Silora's
+normal player; YouTube trailers open in an embedded player with TV remote
+controls and external fallback when the embed cannot start. See the
+[trailer overview and source commits](../README.md#silora-changes).
 
 The release workflow publishes optimized, signed phone and TV APKs on
 [GitHub Releases](https://github.com/SiloraOSS/silora-android/releases).
