@@ -1316,6 +1316,7 @@ class AndroidPlayerSettingsStoreTest {
             effective = mapOf(stored(PlaybackSettingsKeys.SubtitleAppearance, Json.parseToJsonElement(remote.toJsonString()))),
         )
         val store = newStore(repository = SettingsRepository(api))
+        store.setSubtitleDeviceOverrideEnabled(true)
         store.setSubtitleAppearance(custom)
 
         store.refreshFromServer()
@@ -1337,8 +1338,9 @@ class AndroidPlayerSettingsStoreTest {
         store.setSubtitleDeviceOverrideEnabled(false)
         assertEquals(remote, store.subtitleAppearanceFlow.first())
         assertEquals(custom, store.savedCustomSubtitleAppearanceFlow.first())
+        // Re-enabling pins the profile style currently on screen.
         store.setSubtitleDeviceOverrideEnabled(true)
-        assertEquals(custom, store.subtitleAppearanceFlow.first())
+        assertEquals(remote, store.subtitleAppearanceFlow.first())
     }
 
     @Test
