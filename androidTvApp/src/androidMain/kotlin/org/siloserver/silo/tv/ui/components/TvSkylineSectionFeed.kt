@@ -26,6 +26,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -585,7 +586,14 @@ fun TvSkylineSectionFeed(
             TvSkylineUpAction.EnterMenu -> false
             TvSkylineUpAction.StayInContent -> true
             TvSkylineUpAction.TryPreviousRow -> {
-                if (focusManager.moveFocus(FocusDirection.Up)) {
+                val targetRow = (currentRow - 1).coerceAtLeast(0)
+                // Searching beyond the visible band can restore a card whose
+                // enclosing lazy row has already been disposed. Its focusable
+                // then tries to pin that row and crashes. Lay the row out before
+                // allowing Compose to restore focus into it.
+                val targetIsVisible = rowBandState.layoutInfo.visibleItemsInfo
+                    .any { it.index == targetRow }
+                if (targetIsVisible && focusManager.moveFocus(FocusDirection.Up)) {
                     return@rememberUpdatedState true
                 }
                 // Previous row is scrolled off; bring it on-screen first, then
@@ -594,7 +602,6 @@ fun TvSkylineSectionFeed(
                 rowRelocationInFlight = true
                 rowBandScope.launch {
                     try {
-                        val targetRow = (currentRow - 1).coerceAtLeast(0)
                         rowBandState.animateScrollToItem(targetRow)
                         // On a slow device the row's cards can take more than one
                         // frame to lay out after the scroll settles; moving before
@@ -609,7 +616,9 @@ fun TvSkylineSectionFeed(
                             frames++
                         }
                         withFrameNanos { }
-                        focusManager.moveFocus(FocusDirection.Up)
+                        if (rowBandState.layoutInfo.visibleItemsInfo.any { it.index == targetRow }) {
+                            focusManager.moveFocus(FocusDirection.Up)
+                        }
                     } finally {
                         rowRelocationInFlight = false
                     }
@@ -990,88 +999,93 @@ fun TvSkylineSectionFeed(
                         key = { _, row -> row.id },
                         contentType = { _, _ -> "skyline-section-row" },
                     ) { rowIndex, section ->
-                        val isFirstRow = section.id == firstRowId
-                        val showProgress = showProgressForSection(section)
-                        val isReturnRow = locatedReturn?.sectionIndex == rowIndex
-                        TvMediaRow(
-                            title = section.title,
-                            items = section.items,
-                            onItemClick = { contentId ->
-                                val item = section.items.firstOrNull { it.contentId == contentId }
-                                returnTarget = TvReturnTarget(
-                                    sectionId = section.id,
-                                    itemId = contentId,
-                                    sectionIndex = rowIndex,
-                                    itemIndex = section.items
-                                        .indexOfFirst { it.contentId == contentId },
-                                )
-                                returnGeneration++
-                                detailReturnPending = true
-                                item?.let { clickActionForSection(section, it) }?.invoke()
-                                    ?: onItemClick(contentId)
-                            },
-                            icon = iconForSection(section),
-                            onSeeAllClick = onSeeAllClickForSection(section),
-                            showProgress = showProgress,
-                            style = styleForSection(section),
-                            startPadding = TvSkyline.safeAreaX,
-                            endPadding = Spacing.safeArea,
-                            itemSpacing = TvSkylineItemSpacing,
-                            rowTopPadding = TvSkylineRowCardVerticalPadding,
-                            rowBottomPadding = TvSkylineRowCardVerticalPadding,
-                            posterWidth = RowDimens.DensePosterWidth *
-                                presentation.posterSize.posterScale,
-                            firstItemFocusRequester = resolvedFirstRowFocusRequester
-                                .takeIf { isFirstRow },
-                            rowContainerFocusRequester = when {
-                                isFirstRow -> firstRowContainerFocusRequester
-                                isReturnRow -> detailReturnRowContainerFocusRequester
-                                else -> null
-                            },
-                            firstItemFocusRequest = if (isFirstRow) firstRowFocusRequest else 0,
-                            restoreFocusIndex = if (isReturnRow) {
-                                locatedReturn?.itemIndex ?: -1
-                            } else {
-                                -1
-                            },
-                            // Bumped when a ladder starts, so the row scrolls
-                            // its own LazyRow to the resolved card. A card that
-                            // moved horizontally can otherwise sit outside the
-                            // composed window, leaving the requester unattached
-                            // and every retry doomed.
-                            //
-                            // Gated on a ladder being IN FLIGHT, not on the row
-                            // merely being the return row: the pending target is
-                            // re-armed by every focus move and the counter
-                            // outlives its ladder, so an ungated request
-                            // re-fired the row's instant restore scrollToItem on
-                            // every focus move after a detail round trip —
-                            // cancelling the rail pin's animated glide. Ordinary
-                            // row rendering must never move the row.
-                            restoreFocusRequest = if (isReturnRow && restorationsInFlight > 0) {
-                                returnRestoreRequest
-                            } else {
-                                0
-                            },
-                            restoreFocusRequester = detailReturnItemFocusRequester
-                                .takeIf { isReturnRow },
-                            onItemFocusedAtIndex = { item, itemIndex ->
-                                onItemFocused(item, section.title, section.id, rowIndex, itemIndex)
-                            },
-                            cardActions = { item -> cardActions(section, item) },
-                            longClickAction = { item ->
-                                longClickActionForSection(section, item)
-                            },
-                            onExploreAllClick = onExploreAllForSection
-                                ?.takeIf { section.showsExploreAll() }
-                                ?.let { open ->
-                                    {
-                                        armExploreAllReturn(section, rowIndex)
-                                        open(section)
-                                    }
+                        // LazyColumn reuses same-type row compositions. Keep a
+                        // recycled row's focus nodes and saved child scoped to
+                        // this section, rather than the previous slot owner.
+                        key(section.id) {
+                            val isFirstRow = section.id == firstRowId
+                            val showProgress = showProgressForSection(section)
+                            val isReturnRow = locatedReturn?.sectionIndex == rowIndex
+                            TvMediaRow(
+                                title = section.title,
+                                items = section.items,
+                                onItemClick = { contentId ->
+                                    val item = section.items.firstOrNull { it.contentId == contentId }
+                                    returnTarget = TvReturnTarget(
+                                        sectionId = section.id,
+                                        itemId = contentId,
+                                        sectionIndex = rowIndex,
+                                        itemIndex = section.items
+                                            .indexOfFirst { it.contentId == contentId },
+                                    )
+                                    returnGeneration++
+                                    detailReturnPending = true
+                                    item?.let { clickActionForSection(section, it) }?.invoke()
+                                        ?: onItemClick(contentId)
                                 },
-                            onExploreAllFocused = { onExploreAllFocused(section, rowIndex) },
-                        )
+                                icon = iconForSection(section),
+                                onSeeAllClick = onSeeAllClickForSection(section),
+                                showProgress = showProgress,
+                                style = styleForSection(section),
+                                startPadding = TvSkyline.safeAreaX,
+                                endPadding = Spacing.safeArea,
+                                itemSpacing = TvSkylineItemSpacing,
+                                rowTopPadding = TvSkylineRowCardVerticalPadding,
+                                rowBottomPadding = TvSkylineRowCardVerticalPadding,
+                                posterWidth = RowDimens.DensePosterWidth *
+                                    presentation.posterSize.posterScale,
+                                firstItemFocusRequester = resolvedFirstRowFocusRequester
+                                    .takeIf { isFirstRow },
+                                rowContainerFocusRequester = when {
+                                    isFirstRow -> firstRowContainerFocusRequester
+                                    isReturnRow -> detailReturnRowContainerFocusRequester
+                                    else -> null
+                                },
+                                firstItemFocusRequest = if (isFirstRow) firstRowFocusRequest else 0,
+                                restoreFocusIndex = if (isReturnRow) {
+                                    locatedReturn?.itemIndex ?: -1
+                                } else {
+                                    -1
+                                },
+                                // Bumped when a ladder starts, so the row scrolls
+                                // its own LazyRow to the resolved card. A card that
+                                // moved horizontally can otherwise sit outside the
+                                // composed window, leaving the requester unattached
+                                // and every retry doomed.
+                                //
+                                // Gated on a ladder being IN FLIGHT, not on the row
+                                // merely being the return row: the pending target is
+                                // re-armed by every focus move and the counter
+                                // outlives its ladder, so an ungated request
+                                // re-fired the row's instant restore scrollToItem on
+                                // every focus move after a detail round trip —
+                                // cancelling the rail pin's animated glide. Ordinary
+                                // row rendering must never move the row.
+                                restoreFocusRequest = if (isReturnRow && restorationsInFlight > 0) {
+                                    returnRestoreRequest
+                                } else {
+                                    0
+                                },
+                                restoreFocusRequester = detailReturnItemFocusRequester
+                                    .takeIf { isReturnRow },
+                                onItemFocusedAtIndex = { item, itemIndex ->
+                                    onItemFocused(item, section.title, section.id, rowIndex, itemIndex)
+                                },
+                                cardActions = { item -> cardActions(section, item) },
+                                longClickAction = { item ->
+                                    longClickActionForSection(section, item)
+                                },
+                                onExploreAllClick = onExploreAllForSection
+                                    ?.takeIf { section.showsExploreAll() }
+                                    ?.let { open ->
+                                        {
+                                            armExploreAllReturn(section, rowIndex)
+                                            open(section)
+                                        }
+                                    },
+                                onExploreAllFocused = { onExploreAllFocused(section, rowIndex) },
+                            )
+                        }
                     }
                 }
             }
