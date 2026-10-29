@@ -37,6 +37,7 @@ import org.siloserver.silo.common.player.video.VideoPlaybackSessionCoordinator
 import org.siloserver.silo.common.player.video.VideoPlaybackStarter
 import org.siloserver.silo.tv.cast.TvSiloCastReceiver
 import org.siloserver.silo.tv.cast.SiloCastNowPlayingMetadataResolver
+import org.siloserver.silo.tv.cast.RemotePlaybackCandidatePolicy
 import org.siloserver.silo.tv.cast.RemotePlaybackIdentityManager
 import org.siloserver.silo.tv.ui.screens.player.TvPlayerLaunchArgs
 import org.siloserver.silo.tv.ui.screens.auth.TvLoginViewModel
@@ -422,15 +423,24 @@ val androidTvModule = module {
     }
     single { SiloCastNsdAdvertiser(androidContext()) }
     single {
+        val identityApi = get<org.siloserver.silo.network.api.ServerIdentityApi>()
+        val registry = get<ServerRegistry>()
+        val cleartextConsent = get<CleartextConsentStore>()
         RemotePlaybackIdentityManager(
             deviceLoginApi = get(),
             tokenManager = get(),
             deviceNameProvider = ::tvDeviceName,
+            identityProbe = { url -> identityApi.probeIdentity(url) },
+            savedUrlsFor = { identity ->
+                RemotePlaybackCandidatePolicy.savedUrls(registry.entries.value, registry.activeServerId.value, identity)
+            },
+            cleartextApproved = { url -> cleartextConsent.isApproved(url) },
         )
     }
     single {
         val playbackLifecycle = get<org.siloserver.silo.common.player.PlaybackSessionLifecycle>()
         val activeProfiles = get<org.siloserver.silo.model.profile.ActiveProfileStore>()
+        val serverIdentities = get<org.siloserver.silo.repository.ServerIdentityRepository>()
         TvSiloCastReceiver(
             advertiser = get(),
             serverRegistry = get(),
@@ -447,6 +457,7 @@ val androidTvModule = module {
             },
             ownProfileNameProvider = { activeProfiles.activeProfile.value?.name },
             nowPlayingMetadataLoader = SiloCastNowPlayingMetadataResolver.catalogLoader(get()),
+            recordServerIdentity = { entry -> serverIdentities.identityOf(entry) },
         )
     }
 
