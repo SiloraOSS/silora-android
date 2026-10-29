@@ -21,15 +21,29 @@ playback, browsing, profiles, and other client features; you need a running
 | --- | --- |
 | OLED-focused branding | A purple split-prism icon on charcoal, with matching phone and TV launcher artwork, in-app wordmarks, a short Silora startup animation, and a TV banner. |
 | Shield HEVC compatibility | **Ignore HEVC Level Limits**, a simple On/Off setting enabled by default on phone and TV. It lets playback be attempted when a file exceeds the decoder's advertised HEVC level. |
+| In-app trailers | Play YouTube trailers inside Silora on phone and TV, with a Trailer action on movie and series details and remote controls on TV. |
 
 The HEVC patch changes the level information reported to the server. Other
 compatibility checks still apply, and it cannot increase the decoder's actual
 capabilities. Turn **Ignore HEVC Level Limits** off in playback settings to use
 the decoder's reported levels again.
 
-The visual identity and HEVC patch are Silora's fork changes. The broader app
-features described below are inherited from Silo. Silora is independently
-maintained and is not an official Silo release.
+The Trailer action prefers local trailers, then YouTube trailers, then teasers.
+On phone, it moves into **More → Play Trailer** when Download and More already
+fill the action row. YouTube trailers use an embedded player without a YouTube
+sign-in; unavailable or blocked embeds fall back to the YouTube app or browser.
+On TV, OK or Play/Pause toggles playback, Left/Right seeks ten seconds, and Back
+returns to the detail page. The player closes when the trailer ends.
+
+The trailer feature is adapted from [edrock200's fork](https://github.com/edrock200/silo-android):
+the [in-app player](https://github.com/edrock200/silo-android/commit/76be6ebbcc62cb52e3dc68fa1b67d83428e25c38),
+[Trailer action](https://github.com/edrock200/silo-android/commit/e26a41e2b5326533207d2034f3a97521fc2f4114),
+[distinct icon](https://github.com/edrock200/silo-android/commit/80988e2c8266faa65c6706f3d7a77bbd3eec2625),
+and [playback and phone-layout fixes](https://github.com/edrock200/silo-android/commit/f81adc7d3f674112cc0e8abcbbcb166a3a25de8d).
+
+The visual identity, HEVC patch, and trailer playback are Silora's fork changes.
+The broader app features described below are inherited from Silo. Silora is
+independently maintained and is not an official Silo release.
 
 ---
 
