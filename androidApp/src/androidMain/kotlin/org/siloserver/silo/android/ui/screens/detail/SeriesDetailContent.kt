@@ -320,7 +320,6 @@ fun SeriesDetailContent(
                     primaryLabel = selectedEpisode?.let { "Play ${episodeNumberText(it)}" }
                         ?: computePlayLabel(detail, nextEpisodeLabel),
                     onPlay = onPlayClick,
-                    onPlayTrailer = rememberHeroTrailerAction(detail, onPlayExtra),
                     onPlayFromBeginning = onPlayFromBeginning,
                     resumeStoppedAtLabel = resumeStoppedAtLabel,
                     isFavorite = isFavorite,
