@@ -40,7 +40,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.Button
@@ -1333,8 +1332,6 @@ fun HeroActionStack(
     // resuming immediately, matching iOS. Null → the button plays directly.
     onPlayFromBeginning: (() -> Unit)? = null,
     resumeStoppedAtLabel: String? = null,
-    /** Fork: plays the item's main trailer. Null hides the Trailer button. */
-    onPlayTrailer: (() -> Unit)? = null,
 ) {
     var showResumeDialog by remember { mutableStateOf(false) }
     Column(
@@ -1347,41 +1344,11 @@ fun HeroActionStack(
             label = primaryLabel,
             onClick = { if (onPlayFromBeginning != null) showResumeDialog = true else onPlay() },
         )
-        // Fork: six equal columns are too tight on a narrow phone, so with
-        // Download and More both present the Trailer action moves into More.
-        val trailerInRow = onPlayTrailer != null && !(downloadSlot != null && overflow != null)
-        val overflowMenu: (@Composable (dismiss: () -> Unit) -> Unit)? =
-            if (onPlayTrailer != null && !trailerInRow && overflow != null) {
-                { dismiss ->
-                    SiloDropdownMenuItem(
-                        text = { Text("Play Trailer") },
-                        leadingIcon = { Icon(Icons.Filled.OndemandVideo, contentDescription = null) },
-                        onClick = {
-                            dismiss()
-                            onPlayTrailer()
-                        },
-                    )
-                    overflow(dismiss)
-                }
-            } else {
-                overflow
-            }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.Top,
         ) {
-            if (trailerInRow && onPlayTrailer != null) {
-                CircleActionButton(
-                    icon = Icons.Filled.OndemandVideo,
-                    activeIcon = Icons.Filled.OndemandVideo,
-                    isActive = false,
-                    contentDescription = "Play trailer",
-                    onClick = onPlayTrailer,
-                    label = "Trailer",
-                    modifier = Modifier.weight(1f),
-                )
-            }
             CircleActionButton(
                 icon = Icons.Filled.FavoriteBorder,
                 activeIcon = Icons.Filled.Favorite,
@@ -1419,9 +1386,9 @@ fun HeroActionStack(
                     Text("Download", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.60f))
                 }
             }
-            if (overflowMenu != null) {
+            if (overflow != null) {
                 CircleOverflowButton(
-                    menuContent = overflowMenu,
+                    menuContent = overflow,
                     modifier = Modifier.weight(1f),
                 )
             }

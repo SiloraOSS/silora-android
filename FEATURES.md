@@ -1,9 +1,8 @@
 # Silora — Feature List
 
 Silora is an unofficial fork of Silo's Android **phone** and **TV** clients.
-Its fork changes are the OLED-focused branding, the default-on HEVC level
-bypass for Shield setups, and in-app YouTube trailers adapted from edrock200's
-fork. The broader feature set below is inherited from Silo;
+Its fork changes are the OLED-focused branding and the default-on HEVC level
+bypass for Shield setups. The broader feature set below is inherited from Silo;
 see the [README](README.md#silora-changes) for the fork overview.
 
 Legend:
@@ -25,7 +24,6 @@ File pointers are repository-relative.
 | Feature | Phone | TV | Notes |
 |---|:---:|:---:|---|
 | Media3/ExoPlayer engine via shared `MediaSessionService` | ✅ | ✅ | One session per process; UI drives it via `MediaController`. `android-shared/.../player/SiloPlaybackService.kt` |
-| In-app YouTube trailers (Silora patch) | ✅ | ✅ | Embedded YouTube player with external fallback, TV remote controls, and a Trailer action on movie and series details. Local trailers use the normal player. `YoutubeTrailerActivity`, `primaryTrailer` |
 | Direct Play | ✅ | ✅ | Progressive HTTP; server-selected from advertised capabilities |
 | Remux (HLS or progressive container/audio re-mux) | ✅ | ✅ | Server-selected protocol-v3 plan |
 | Transcode (HLS full re-encode) | ✅ | ✅ | Server-selected plan or classified v3 replan |

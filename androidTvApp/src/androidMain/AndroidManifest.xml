@@ -120,11 +120,5 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
-        <!-- Fork: plays YouTube trailers in-app (no YouTube profile picker). -->
-        <activity
-            android:name="org.siloserver.silo.common.ui.YoutubeTrailerActivity"
-            android:exported="false"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,22 +36,19 @@ import org.siloserver.silo.android.ui.theme.SiloSurfaceElevated
 import org.siloserver.silo.common.ui.components.DeferImagePresentationWhileScrolling
 import org.siloserver.silo.common.ui.components.ThumbhashImage
 import org.siloserver.silo.common.ui.openYoutubeTrailer
-import org.siloserver.silo.model.catalog.ItemDetail
 import org.siloserver.silo.model.catalog.ItemExtra
 import org.siloserver.silo.model.catalog.TrailerRailEntry
 import org.siloserver.silo.model.catalog.extraKindLabel
-import org.siloserver.silo.model.catalog.primaryTrailer
 import org.siloserver.silo.model.catalog.trailerRailDurationLabel
-import org.siloserver.silo.model.catalog.trailerRailEntries
 
 /**
  * "Trailers & More" section — header plus a horizontal rail of remote
  * trailers and local extras (featurettes, behind the scenes, …). Mirrors
  * `PhoneTrailersRail.swift`.
  *
- * Remote trailers open in the in-app YouTube player, with an external
- * fallback if it cannot start. Local extras are ordinary playback targets,
- * so those taps go back up to the detail screen that owns player navigation.
+ * Remote trailers open in the YouTube app (or the browser when it isn't
+ * installed). Local extras are ordinary playback targets, so those taps go
+ * back up to the detail screen that owns player navigation.
  *
  * The whole section stays hidden when the item has neither, so there's no
  * orphaned header.
@@ -179,27 +175,6 @@ private fun TrailerCard(
                     maxLines = 1,
                 )
             }
-        }
-    }
-}
-
-/**
- * Fork: the hero Trailer button's action, playing the item's main trailer the
- * same way its rail card would. Null when the item has no trailer or teaser.
- */
-@Composable
-fun rememberHeroTrailerAction(
-    detail: ItemDetail,
-    onPlayExtra: (ItemExtra) -> Unit,
-): (() -> Unit)? {
-    val context = LocalContext.current
-    val trailer = remember(detail.videos, detail.extras) {
-        primaryTrailer(trailerRailEntries(detail))
-    } ?: return null
-    return {
-        when (trailer) {
-            is TrailerRailEntry.Remote -> openYoutubeTrailer(context, trailer.video)
-            is TrailerRailEntry.Local -> onPlayExtra(trailer.extra)
         }
     }
 }
