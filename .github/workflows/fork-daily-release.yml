@@ -37,7 +37,7 @@ jobs:
       - name: Merge upstream into main
         id: sync
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SILORA_SYNC_TOKEN }}
         run: |
           set -euo pipefail
           upstream_sha="$(gh api repos/Silo-Server/silo-android/commits/main --jq .sha)"
