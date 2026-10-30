@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Guard local release signing against fallback keys and incompatible APKs."""
+import datetime as dt
 import hashlib
 import importlib.util
 import json
@@ -66,6 +67,68 @@ class LocalReleaseTests(unittest.TestCase):
         with mock.patch.object(build, "capture", side_effect=capture):
             with self.assertRaisesRegex(ValueError, "unexpected APK version-code"):
                 build.verify_apks({"ANDROID_HOME": "/sdk"}, {"version_code_base": 400_000_000, "version_name": "test"}, "abcdef")
+
+
+class ReleaseArchiveTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        patch = mock.patch.object(build, "ROOT", self.root)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.info = build.fork_release.metadata(
+            dt.datetime(2026, 10, 30, tzinfo=dt.timezone.utc), 1, "a" * 40, "b" * 40,
+            upstream={"version": "1.0.0", "build": 28, "tag": "v1.0.0-beta.28"},
+        )
+        self.info["tag"] = "local-test"
+        for module, _ in build.MODULES.values():
+            apk = self.root / module / f"build/outputs/apk/release/{module}-universal-release.apk"
+            mapping = self.root / module / "build/outputs/mapping/release/mapping.txt"
+            apk.parent.mkdir(parents=True)
+            mapping.parent.mkdir(parents=True)
+            apk.write_bytes(f"APK for {module}".encode())
+            mapping.write_bytes(f"mapping for {module}".encode())
+
+    def test_selected_apks_keep_matching_mappings_and_checksums(self):
+        for targets in (("phone",), ("tv",), ("phone", "tv")):
+            with self.subTest(targets=targets):
+                info = dict(self.info, tag="local-" + "-".join(targets))
+                output = build.package_release(info, targets)
+                expected = {"build-info.json"}
+                for target in targets:
+                    module = build.MODULES[target][0]
+                    expected.update((f"silora-{target}.apk", f"silora-{target}-mapping.txt"))
+                    self.assertEqual((output / f"silora-{target}-mapping.txt").read_bytes(),
+                                     f"mapping for {module}".encode())
+                    self.assertEqual((output / f"silora-{target}.apk").read_bytes(),
+                                     f"APK for {module}".encode())
+                self.assertEqual({path.name for path in output.iterdir()},
+                                 expected | {"SHA256SUMS", "RELEASE_NOTES.md"})
+                entries = dict(line.split("  ")[::-1] for line in (output / "SHA256SUMS").read_text().splitlines())
+                self.assertEqual(set(entries), expected)
+                for name, digest in entries.items():
+                    self.assertEqual(digest, hashlib.sha256((output / name).read_bytes()).hexdigest())
+
+    def test_missing_or_empty_mapping_stops_before_packaging(self):
+        mapping = self.root / "androidTvApp/build/outputs/mapping/release/mapping.txt"
+        for missing in (True, False):
+            with self.subTest(missing=missing):
+                if missing:
+                    mapping.unlink()
+                else:
+                    mapping.write_bytes(b"")
+                with self.assertRaisesRegex(ValueError, "Missing or empty R8 mapping"):
+                    build.package_release(self.info, ("phone", "tv"))
+                self.assertFalse((self.root / "dist").exists())
+
+    def test_later_build_preserves_archived_mapping_and_existing_folder(self):
+        output = build.package_release(self.info, ("tv",))
+        mapping = self.root / "androidTvApp/build/outputs/mapping/release/mapping.txt"
+        mapping.write_bytes(b"mapping from a later build")
+        with self.assertRaisesRegex(ValueError, "output already exists"):
+            build.package_release(self.info, ("tv",))
+        self.assertEqual((output / "silora-tv-mapping.txt").read_bytes(), b"mapping for androidTvApp")
 
 
 if __name__ == "__main__":

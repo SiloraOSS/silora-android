@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -106,6 +107,27 @@ def verify_apks(env, info, certificate_sha256, targets=("phone", "tv")):
         print(f"Verified release signature, application ID, and version: {module}", flush=True)
 
 
+def package_release(info, targets):
+    mappings = {
+        f"silora-{target}-mapping.txt": ROOT / MODULES[target][0] / "build/outputs/mapping/release/mapping.txt"
+        for target in targets
+    }
+    # Require every selected mapping before packaging any APKs.
+    for path in mappings.values():
+        if not path.is_file() or path.stat().st_size == 0:
+            raise ValueError(f"Missing or empty R8 mapping: {path}")
+    output = ROOT / "dist" / info["tag"]
+    if output.exists():
+        raise ValueError(f"Release output already exists; keeping the previous build: {output}")
+    fork_release.package(ROOT, info, output, targets=targets)
+    with (output / "SHA256SUMS").open("a") as checksums:
+        for name, source in mappings.items():
+            destination = output / name
+            shutil.copyfile(source, destination)
+            checksums.write(f"{hashlib.sha256(destination.read_bytes()).hexdigest()}  {name}\n")
+    return output
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--release", choices=("phone", "tv", "both"), default="both",
@@ -153,9 +175,8 @@ def main():
         "-PallowDebugReleaseSigning=false", "--parallel", "--console=plain",
     ], cwd=ROOT, env=env, check=True)
     verify_apks(env, info, fingerprint, targets)
-    output = ROOT / "dist" / info["tag"]
-    fork_release.package(ROOT, info, output, targets=targets)
-    print(f"Verified APKs and checksums: {output}", flush=True)
+    output = package_release(info, targets)
+    print(f"Verified APKs, R8 mappings, and checksums: {output}", flush=True)
 
 
 if __name__ == "__main__":

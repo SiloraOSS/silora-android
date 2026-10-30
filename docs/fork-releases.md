@@ -158,8 +158,20 @@ Run `./build.sh` to build phone and TV APKs using the same release settings,
 signing identity, version-name format, timestamp-based version codes, and
 dependency checks as **Silora Daily** and **Silora Manual Release**.
 The script verifies the APK signatures, application ID, version, and
-non-debuggable flag before copying the universal APKs and checksums to
-`dist/local-YYYY-MM-DD.HHMMSS/`. It does not publish a GitHub release.
+non-debuggable flag before copying the universal APKs, matching R8 mappings,
+and checksums to `dist/local-YYYY-MM-DD.HHMMSS/`. It does not publish a GitHub
+release.
+
+Each selected APK has a mapping beside it: `silora-phone.apk` with
+`silora-phone-mapping.txt`, or `silora-tv.apk` with `silora-tv-mapping.txt`.
+The mapping files are included in `SHA256SUMS`. Keep these pairs to decode
+crash reports from that exact build; later Gradle builds replace the mappings
+under `build/`. Packaging fails if a selected mapping is missing or empty,
+and an existing dated output folder is preserved.
+
+`./build-mac.sh [phone|tv|both]` saves the same APK/mapping pairs and checksums
+in its checkout's `dist/local-YYYY-MM-DD.HHMMSS/`. Its optional `--install`
+uses the archived APK.
 
 Use `--release` to choose which APKs to build. Both apps are selected by default:
 
