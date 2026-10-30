@@ -51,6 +51,8 @@ into the build environment and are never printed or passed as command arguments.
 
 The default version code comes from the latest SiloraOSS/silora-android release
 (override with SILORA_RELEASE_REPO=owner/repo or --version-code N).
+The version label uses the included Silo version and today's Pacific date.
+Official upstream tags are fetched for version metadata before compilation.
 To install over an existing build, use the same app ID and signing key and an
 equal or higher version code. A build signed with Kyle's old key requires a
 one-time uninstall before switching to the shared key.
@@ -138,6 +140,7 @@ echo "Building ${modules[*]} from $(git rev-parse --abbrev-ref HEAD) @ $(git rev
 # Python reads JSON without shell evaluation and keeps passwords out of arguments.
 python3 -I - "$signing_dir" "$version_code" "$EXPECTED_CERT_SHA256" "${tasks[@]}" <<'PY'
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -187,6 +190,16 @@ except (OSError, subprocess.CalledProcessError):
 if hashlib.sha256(certificate).hexdigest() != sys.argv[3]:
     fail("release.jks does not contain the shared Silora release certificate")
 print("Shared Silora signing certificate verified.", flush=True)
+spec = importlib.util.spec_from_file_location("build_local_release", Path("scripts/build-local-release.py").resolve())
+build = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(build)
+info = build.build_metadata()
+env.update({
+    "SILO_VERSION_NAME": info["version_name"],
+    "SILO_BUILD_NUMBER": str(info["build_number"]),
+    "SILO_RELEASE_CHANNEL": "sideload",
+})
+print(f"Version: {info['version_name']}", flush=True)
 result = subprocess.run([
     "./gradlew", "-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8",
     "-PallowDebugReleaseSigning=false", *sys.argv[4:],
