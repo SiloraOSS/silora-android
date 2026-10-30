@@ -1,55 +1,20 @@
-<p align="center">
-  <img src="androidApp/src/androidMain/res/drawable/silo_wordmark.png" alt="Silora" width="420">
-</p>
+> **Using Silora?** See [README-SILORA.md](README-SILORA.md) for Silora features,
+> downloads, and installation instructions. The upstream Silo README follows below.
 
-# Silora
+# Silo Android
 
-**Your media, after dark.**
+Android **phone** and **Android TV** clients for the [Silo](https://github.com/Silo-Server/silo-server) self-hosted media server — stream and download your movies, shows, music, audiobooks, and ebooks, with quality-aware playback and multi-server/multi-profile support.
 
-Silora is an unofficial fork of the [Silo Android clients](https://github.com/Silo-Server/silo-android)
-for Android phones and Android TV, with an OLED-focused visual identity and an
-HEVC compatibility patch for NVIDIA Shield setups.
+Built as a Kotlin Multiplatform project: one shared business-logic core, two Jetpack Compose apps (touch + 10-foot TV). This branch uses the full Silo namespace cut: Kotlin packages live under `org.siloserver.silo`, and both apps share a single application ID `org.siloserver.silo` so they publish as one Google Play listing (Play routes each build by manifest feature filtering). Installs under legacy IDs do not upgrade in place; users should expect a fresh app install, sign-in, and offline media download.
 
-Stream your movies, shows, music, and audiobooks from your existing Silo server.
-The phone app also supports downloads and ebooks. Silora builds on Silo's
-playback, browsing, profiles, and other client features; you need a running
-[Silo server](https://github.com/Silo-Server/silo-server) to use it.
-
-## Silora changes
-
-| Focus | What this fork changes |
-| --- | --- |
-| OLED-focused branding | A purple split-prism icon on charcoal, with matching phone and TV launcher artwork, in-app wordmarks, a short Silora startup animation, and a TV banner. |
-| Shield HEVC compatibility | **Ignore HEVC Level Limits**, a simple On/Off setting enabled by default on phone and TV. It lets playback be attempted when a file exceeds the decoder's advertised HEVC level. |
-| In-app trailers | Play YouTube trailers inside Silora on phone and TV, with a Trailer action on movie and series details and remote controls on TV. |
-
-The HEVC patch changes the level information reported to the server. Other
-compatibility checks still apply, and it cannot increase the decoder's actual
-capabilities. Turn **Ignore HEVC Level Limits** off in playback settings to use
-the decoder's reported levels again.
-
-The Trailer action prefers local trailers, then YouTube trailers, then teasers.
-On phone, it moves into **More → Play Trailer** when Download and More already
-fill the action row. YouTube trailers use an embedded player without a YouTube
-sign-in; unavailable or blocked embeds fall back to the YouTube app or browser.
-On TV, OK or Play/Pause toggles playback, Left/Right seeks ten seconds, and Back
-returns to the detail page. The player closes when the trailer ends.
-
-The trailer feature is adapted from [edrock200's fork](https://github.com/edrock200/silo-android):
-the [in-app player](https://github.com/edrock200/silo-android/commit/76be6ebbcc62cb52e3dc68fa1b67d83428e25c38),
-[Trailer action](https://github.com/edrock200/silo-android/commit/e26a41e2b5326533207d2034f3a97521fc2f4114),
-[distinct icon](https://github.com/edrock200/silo-android/commit/80988e2c8266faa65c6706f3d7a77bbd3eec2625),
-and [playback and phone-layout fixes](https://github.com/edrock200/silo-android/commit/f81adc7d3f674112cc0e8abcbbcb166a3a25de8d).
-
-The visual identity, HEVC patch, and trailer playback are Silora's fork changes.
-The broader app features described below are inherited from Silo. Silora is
-independently maintained and is not an official Silo release.
+> **Status:** WIP (`v0.3.x`). Silo Android is pre-1.0 and some areas remain under active development (see [Roadmap](#roadmap)).
+>
+> **Current exposure note:** Requests is live on both Android surfaces, gated by the server's `requests_enabled` flag (`/api/v2/requests/status`), and reached from the profile menu and search on phone and from a top-bar tab and search on TV — matching the Apple clients. Request administration (approve, decline, retry, limits, auto-approve) stays in web admin. Other admin surfaces and session management are not exposed in the Android clients. Watch Party is experimental, behind Settings → Experimental → Watch Party (on in debug builds, off in release builds).
 
 ---
 
 ## Table of contents
 
-- [Silora changes](#silora-changes)
 - [What's inside](#whats-inside)
 - [Install APKs](#install-apks)
 - [Feature overview](#feature-overview)
@@ -69,7 +34,7 @@ independently maintained and is not an official Silo release.
 | | |
 |---|---|
 | **Apps** | Android phone · Android TV |
-| **Application ID** | `org.silora.app` (shared by phone and TV) |
+| **Application ID** | `org.siloserver.silo` (shared by phone + TV — one Play listing) |
 | **Language / UI** | Kotlin 2.1.20 · Jetpack Compose (Material 3) · Compose for TV (`androidx.tv`) |
 | **Playback** | AndroidX **Media3 / ExoPlayer** 1.11.0 with a pinned FFmpeg audio fallback extension |
 | **Networking** | **Ktor** 3.1.2 client · kotlinx.serialization · WebSockets for realtime |
@@ -79,7 +44,7 @@ independently maintained and is not an official Silo release.
 | **Images** | Coil 3 (Ktor-backed) |
 | **SDK** | Android 7.0+ / minSdk 24 · targetSdk 36 · compileSdk 36 · JDK 21 |
 
-The clients talk to a Silo server over its REST and WebSocket APIs. The server owns the library, scanning, metadata, transcoding decisions, and auth; the clients render it and drive playback.
+The clients talk to a Silo server over its `/api/v1/*` REST + WebSocket API. The server owns the library, scanning, metadata, transcoding decisions, and auth; the clients render it and drive playback.
 
 Android 7.0 and 7.1 (API 24/25) are supported on both phone and Android TV. Video and audiobook playback use the same Media3 service on every supported Android version.
 
@@ -87,43 +52,25 @@ Android 7.0 and 7.1 (API 24/25) are supported on both phone and Android TV. Vide
 
 ## Install APKs
 
-Get Silora builds from this fork's [GitHub Releases](https://github.com/SiloraOSS/silora-android/releases).
-Choose the APK for your device:
+Silo Android has no store release yet, so install the newest tester build. These links always serve it. See [docs/releasing.md](docs/releasing.md).
 
-| Device | File | Latest download |
-| --- | --- | --- |
-| Android phone or tablet | `silora-phone.apk` | [Phone APK](https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-phone.apk) |
-| NVIDIA Shield, Android TV, or Google TV | `silora-tv.apk` | [TV APK](https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-tv.apk) |
+| App | Downloader code | Downloader link | Direct APK |
+|---|---:|---|---|
+| Android | `2988950` | <http://aftv.news/2988950> | <https://github.com/Silo-Server/silo-android/releases/download/beta-latest/silo-android-latest-beta.apk> |
+| Android TV | `6033910` | <http://aftv.news/6033910> | <https://github.com/Silo-Server/silo-android/releases/download/beta-latest/silo-android-tv-latest-beta.apk> |
 
-These download links require a published Silora release marked **Latest**.
-Earlier releases keep their original names and assets. The old upstream
-Downloader codes install official Silo builds, so use this fork's APKs for Silora.
-
-Sideload the matching APK, open Silora, enter your Silo server address, and sign
-in. Set up a new Silo server through its web interface before connecting a client.
-
-Silora uses the application ID `org.silora.app`, so it installs separately from
-official Silo and previous Silune builds. Existing Silune settings, sign-ins,
-and downloads do not transfer automatically; set up Silora as a new app.
-Later Silora releases signed with the same key update in place. Switching from
-a locally debug-signed build to a release signed with a different key requires
-uninstalling that Silora install, which clears its local data.
-
-The daily workflow syncs upstream and builds optimized, signed APKs when tracked
-source files change. See [fork releases and signing](docs/fork-releases.md) for
-release timing, verification, build labels, and update details.
+Install **Downloader by AFTVnews** on Android TV / Google TV, enter the code for the app you want, then allow APK installs from Downloader when prompted.
 
 ---
 
 ## Feature overview
 
-The Silo feature set available in this fork. For the per-feature checklist,
-phone/TV coverage, and source pointers, see **[FEATURES.md](FEATURES.md)**.
+A condensed tour. For the exhaustive, per-feature checklist (with phone/TV coverage and file pointers) see **[FEATURES.md](FEATURES.md)**.
 
 ### 📺 Playback (phone + TV)
 - **Adaptive delivery** — the server picks **Direct Play**, **Remux**, or **Transcode** from the device's real capabilities; the client can also fall back to transcode at runtime if a track turns out to be undecodable (e.g. an AV receiver is unplugged mid-stream).
 - **Deep capability detection** — enumerates hardware decoders (H.264, HEVC, AV1, VP9, **Dolby Vision** profiles 5/7/8), panel HDR (HDR10, HDR10+, HLG, DV), and audio-sink passthrough (**E-AC3 JOC/Atmos, TrueHD, DTS-HD**); an optional bundled **FFmpeg** audio decoder fills gaps for lossless codecs.
-- **Quality-of-life** — staged playback buffering, per-content **refresh-rate matching** (phone + TV), independent **resolution matching** (TV), HDR toggle, intro auto-skip, chapters, sleep timer, playback speed, configurable video gravity (fit/fill/stretch).
+- **Quality-of-life** — staged playback buffering, per-content **refresh-rate matching** (phone), HDR toggle, intro auto-skip, chapters, sleep timer, playback speed, configurable video gravity (fit/fill/stretch).
 - **Tracks & subtitles** — audio-track switching (incl. mid-stream), subtitle selection with **styling, position, and sync offset**, plus a subtitle suite: provider **search & download** and **AI transcription/translation** with quota tracking.
 - **System integration** — single Media3 `MediaSession` powers lock-screen / notification / headset / Assistant controls; TV adds D-pad transport, an info HUD, a chapter scrubber, and HDMI EDID-driven display-mode selection.
 
@@ -282,13 +229,15 @@ On first launch, point the app at your Silo server URL, sign in, and pick a prof
 
 ## Contributing
 
-For Silora-specific branding, build, or HEVC compatibility issues, use this
-repository's issue tracker. Include your device model, app version, Silo server
-version, and steps to reproduce the problem.
+Right now, the most helpful way to contribute is a clear, accurate issue. We
+implement and review changes through our own workflow, and pull request volume
+has outgrown what we can review carefully, so a good issue usually helps us
+more than a pull request.
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for the inherited contributor guidelines
-and evidence requirements. See the [documentation index](docs/README.md) for
-playback contracts and implementation references.
+Pull requests are still welcome from contributors who've had one merged in a
+Silo repository, or when a maintainer asks for one. We close other pull
+requests without review. [CONTRIBUTING.md](CONTRIBUTING.md) explains what makes
+an issue useful.
 
 ---
 
@@ -306,17 +255,13 @@ Known gaps the docs track: TV has no reader/ebooks and no downloads management b
 
 ## Notes
 
-- The phone and TV apps share the application ID `org.silora.app`; their
-  manifests distinguish touchscreen and leanback devices. Silora builds are
-  distributed through this fork's GitHub Releases.
+- The Android phone and TV apps share one application ID, `org.siloserver.silo`, and publish as a single Google Play listing; Play delivers the right build per device via manifest feature filtering (phone requires a touchscreen, TV requires leanback).
 - The Android modules target Java 21.
 - The server repo lives at [`Silo-Server/silo-server`](https://github.com/Silo-Server/silo-server).
 
 ## License & Trademarks
 
-Silora is based on [Silo Android](https://github.com/Silo-Server/silo-android)
-and is licensed under `AGPL-3.0-or-later`. The Silo contributors provide the
-underlying clients and playback implementation. See [LICENSE](LICENSE).
+Silo Android is licensed under `AGPL-3.0-or-later`. See [LICENSE](LICENSE).
 
 The **Silo name, logo, and wordmark are trademarks of Silo Media L.L.C.** and
 are **not** covered by the AGPL. You're free to fork and redistribute the code,
