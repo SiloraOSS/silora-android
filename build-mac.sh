@@ -37,6 +37,10 @@ Options:
 Tests and full lint are skipped unless their flags are supplied. Android's
 release-critical lint checks still run as part of APK assembly.
 
+Verified APKs and their matching R8 mapping files are saved together in
+dist/local-YYYY-MM-DD.HHMMSS/ with SHA256SUMS. Keep each APK and mapping pair
+to decode crash reports from that build. Missing mappings stop packaging.
+
 It builds whatever is checked out in the repo (default ~/silora-android, or the
 silora-android checkout you run it from; override with SILORA_REPO=path).
 Signing files are read from ../silora-signing beside the checkout:
@@ -206,6 +210,43 @@ for module in "${modules[@]}"; do
   echo "✓ $apk"
 done
 echo "Signed with the Silora release key, version code base $version_code."
+
+# Archive verified APKs and mappings before a later Gradle build replaces them.
+output="$(python3 -I - "$repo_dir" "${modules[@]}" <<'PY'
+import datetime as dt
+import hashlib
+from pathlib import Path
+import shutil
+import sys
+
+root = Path(sys.argv[1])
+sources = {}
+for module in sys.argv[2:]:
+    target = {"androidApp": "phone", "androidTvApp": "tv"}[module]
+    sources[f"silora-{target}.apk"] = root / module / f"build/outputs/apk/release/{module}-universal-release.apk"
+    sources[f"silora-{target}-mapping.txt"] = root / module / "build/outputs/mapping/release/mapping.txt"
+for name, source in sources.items():
+    if not source.is_file() or source.stat().st_size == 0:
+        kind = "R8 mapping" if name.endswith("-mapping.txt") else "release APK"
+        sys.exit(f"error: missing or empty {kind}: {source}")
+stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d.%H%M%S")
+output = root / "dist" / f"local-{stamp}"
+try:
+    output.mkdir(parents=True)
+except FileExistsError:
+    sys.exit(f"error: release output already exists; keeping the previous build: {output}")
+for name, source in sources.items():
+    shutil.copyfile(source, output / name)
+(output / "SHA256SUMS").write_text("".join(
+    f"{hashlib.sha256((output / name).read_bytes()).hexdigest()}  {name}\n"
+    for name in sorted(sources)
+))
+print(output)
+PY
+)"
+if [[ -n "$phone_apk" ]]; then phone_apk="$output/silora-phone.apk"; fi
+if [[ -n "$tv_apk" ]]; then tv_apk="$output/silora-tv.apk"; fi
+echo "Verified APKs, R8 mappings, and checksums: $output"
 
 $install || exit 0
 
