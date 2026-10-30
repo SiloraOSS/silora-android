@@ -5699,9 +5699,9 @@ class PlayerViewModel(
 
     /**
      * Start an AI job and poll it to a terminal state. Android passes the
-     * current playhead as start_position and does NOT pass session_id — we
-     * poll for completion instead of streaming live cues
-     * (SubtitleTranslateRequest doc).
+     * current playhead as start_position and the playback session as
+     * session_id, so the server can run it as a foreground job; we still poll
+     * for completion instead of showing live cues (SubtitleTranslateRequest doc).
      */
     private var aiPlaybackGeneration = 0L
     private var aiCreationInFlight = false
@@ -5734,6 +5734,7 @@ class PlayerViewModel(
                     sourceLanguage = sourceLanguage.ifBlank { null },
                     targetLanguage = targetLanguage.ifBlank { null },
                     startPosition = state.position,
+                    sessionId = state.sessionId,
                 ),
                 owner,
             )
