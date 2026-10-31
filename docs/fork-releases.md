@@ -77,13 +77,16 @@ are used for version stamping. Newer upstream code is not included.
 It uses the daily workflow's version format, signing key, lint, APK
 verification, GitHub release publication, and Discord webhook configuration.
 Successful builds become regular **Latest** releases with the same APK names
-and permanent download links. Tags use `manual-YYYY-MM-DD.RUN` to avoid collisions
-with the daily workflow's separate run counter. Both workflows share a release
-lock so their builds and publishing do not overlap.
+and permanent download links. Both workflows use `build-YYYY-MM-DD.HHMMSS.RUN_ID`
+tags. The timestamp uses Pacific time; the GitHub run ID prevents collisions
+between workflows, including when the clock repeats at the end of daylight
+saving time. Both workflows share a release lock so their builds and publishing
+do not overlap.
 
-The daily workflow recognizes complete manual releases as its comparison
-baseline. If the next daily sync produces the same source files, it skips the
-build as usual. The daily schedule and upstream sync behavior stay unchanged.
+The daily workflow recognizes complete releases with the new tags and existing
+`daily-YYYY-MM-DD.RUN` and `manual-YYYY-MM-DD.RUN` tags as its comparison baseline.
+If the next daily sync produces the same source files, it skips the build as
+usual. The daily schedule and upstream sync behavior stay unchanged.
 
 ## Published releases
 
@@ -92,7 +95,7 @@ Each dated release includes:
 - `silora-phone.apk`: universal phone/tablet build.
 - `silora-tv.apk`: universal Android TV / Google TV build.
 - `build-info.json`: exact source SHA, checked upstream SHA, timestamp, version
-  code base, and workflow run counter.
+  code base, workflow run counter, and GitHub run ID.
 - `SHA256SUMS`: checksums covering both APKs and the provenance file.
 
 Each successful build is published as a regular GitHub release and
@@ -274,9 +277,10 @@ is also preserved in the client build header reported to Silo.
 Android's internal version codes still use elapsed UTC seconds since 2026 plus a
 fork-specific base, remaining monotonic even if the workflow run counter resets.
 They control update ordering independently of the visible date. Phone and TV
-retain distinct version codes. The workflow counter remains in provenance and
-the unique `daily-YYYY-MM-DD.RUN` or `manual-YYYY-MM-DD.RUN` Git tag used for
-publication and recovery; previously published releases are unchanged.
+retain distinct version codes. The workflow counter and GitHub run ID remain in
+provenance. The unique `build-YYYY-MM-DD.HHMMSS.RUN_ID` Git tag identifies the
+source used for publication and recovery; previously published releases are
+unchanged.
 
 ## Branding sources
 

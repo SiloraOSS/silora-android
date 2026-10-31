@@ -17,6 +17,9 @@ spec = importlib.util.spec_from_file_location("release_version", Path(__file__).
 release_version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release_version)
 
+BUILD_TAG = re.compile(r"build-(\d{4}-\d{2}-\d{2})\.(\d{6})\.([1-9]\d*)")
+LEGACY_TAG = re.compile(r"(?:daily|manual)-(\d{4}-\d{2}-\d{2})\.([1-9]\d*)")
+
 
 def build_decision(source_sha, releases, tree_for, force=False):
     """Compare source files with the last complete, published fork release."""
@@ -33,7 +36,8 @@ def build_decision(source_sha, releases, tree_for, force=False):
         release for release in releases
         if release.get("draft") is False and release.get("prerelease") is False
         and release.get("published_at")
-        and re.fullmatch(r"(?:daily|manual)-\d{4}-\d{2}-\d{2}\.\d+", release.get("tag_name", ""))
+        and (BUILD_TAG.fullmatch(release.get("tag_name", ""))
+             or LEGACY_TAG.fullmatch(release.get("tag_name", "")))
         and any(required <= {asset["name"] for asset in release.get("assets", []) if asset.get("size", 0) > 0}
                 for required in required_asset_sets)
     ]
@@ -98,17 +102,26 @@ def upstream_version(root, upstream_sha):
     return {"version": release_version.version_text(version), "build": build, "tag": tag}
 
 
-def metadata(now, run_number, source_sha, upstream_sha, reserved_tag=None, *, upstream):
+def metadata(now, run_number, source_sha, upstream_sha, reserved_tag=None, *, upstream, run_id=None):
     if run_number < 1:
         raise ValueError("run number must be positive")
+    if run_id is not None and run_id < 1:
+        raise ValueError("run ID must be positive")
     for sha in (source_sha, upstream_sha):
         if not re.fullmatch(r"[0-9a-f]{40}", sha):
             raise ValueError("source commits must be full Git SHAs")
-    day = now.astimezone(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d")
+    timestamp = now.astimezone(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d.%H%M%S")
+    day = timestamp.split(".")[0]
     if reserved_tag:
-        match = re.fullmatch(rf"(?:daily|manual)-(\d{{4}}-\d{{2}}-\d{{2}})\.{run_number}", reserved_tag)
-        if not match:
-            raise ValueError("reserved tag must match this workflow run")
+        match = BUILD_TAG.fullmatch(reserved_tag)
+        if match:
+            if run_id is None or int(match[3]) != run_id:
+                raise ValueError("reserved tag must match this workflow run ID")
+            dt.datetime.strptime(f"{match[1]}.{match[2]}", "%Y-%m-%d.%H%M%S")
+        else:
+            match = LEGACY_TAG.fullmatch(reserved_tag)
+            if not match or int(match[2]) != run_number:
+                raise ValueError("reserved tag must match this workflow run")
         day = dt.date.fromisoformat(match[1]).isoformat()
     # Above the upstream release range, increasing with time even if this
     # workflow is recreated and GitHub resets its run counter.
@@ -118,7 +131,7 @@ def metadata(now, run_number, source_sha, upstream_sha, reserved_tag=None, *, up
     silora_date = dt.date.fromisoformat(day).strftime("%m%d%Y")
     version_name = f"{upstream['version']} ({upstream['build']}) (silora:{silora_date})"
     return {
-        "tag": reserved_tag or f"daily-{day}.{run_number}",
+        "tag": reserved_tag or f"build-{timestamp}" + (f".{run_id}" if run_id is not None else ""),
         "title": f"Silora {version_name}",
         "version_name": version_name,
         "version_code_base": base,
@@ -127,6 +140,7 @@ def metadata(now, run_number, source_sha, upstream_sha, reserved_tag=None, *, up
         "upstream_version_tag": upstream["tag"],
         "silora_date": silora_date,
         "run_number": run_number,
+        "run_id": run_id,
         "source_sha": source_sha,
         "upstream_checked_sha": upstream_sha,
         "built_at": now.isoformat(),
@@ -137,7 +151,7 @@ def prepare():
     upstream = upstream_version(Path.cwd(), os.environ["UPSTREAM_SHA"])
     info = metadata(dt.datetime.now(dt.timezone.utc), int(os.environ["GITHUB_RUN_NUMBER"]),
                     os.environ["SOURCE_SHA"], os.environ["UPSTREAM_SHA"], os.environ.get("FORK_RELEASE_TAG"),
-                    upstream=upstream)
+                    upstream=upstream, run_id=int(os.environ["GITHUB_RUN_ID"]))
     path = Path(os.environ["RUNNER_TEMP"]) / "fork-build-info.json"
     path.write_text(json.dumps(info, indent=2) + "\n")
     with open(os.environ["GITHUB_ENV"], "a") as out:

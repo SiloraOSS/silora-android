@@ -18,14 +18,14 @@ UPSTREAM = {"version": "1.0.0", "build": 26, "tag": "v1.0.0-beta.26"}
 
 
 class ForkReleaseTest(unittest.TestCase):
-    def info(self, now=None, run=1):
+    def info(self, now=None, run=1, run_id=123456789):
         return release.metadata(now or dt.datetime(2026, 10, 22, 1, tzinfo=dt.timezone.utc), run,
-                                "a" * 40, "b" * 40, upstream=UPSTREAM)
+                                "a" * 40, "b" * 40, upstream=UPSTREAM, run_id=run_id)
 
     def test_pacific_day_and_monotonic_codes(self):
         first = self.info()
         later = self.info(dt.datetime(2026, 10, 22, 2, tzinfo=dt.timezone.utc), run=2)
-        self.assertEqual(first["tag"], "daily-2026-10-21.1")
+        self.assertEqual(first["tag"], "build-2026-10-21.180000.123456789")
         self.assertEqual(first["version_name"], "1.0.0 (26) (silora:10212026)")
         self.assertEqual(first["title"], "Silora 1.0.0 (26) (silora:10212026)")
         self.assertEqual(first["upstream_version_tag"], "v1.0.0-beta.26")
@@ -39,13 +39,39 @@ class ForkReleaseTest(unittest.TestCase):
         self.assertEqual(self.info(run=1000)["build_number"], 26)
         self.assertEqual(first["version_name"], self.info(run=1000)["version_name"])
 
+    def test_run_id_prevents_collisions_with_the_same_timestamp_and_run_counter(self):
+        first = self.info(run_id=123456789)
+        second = self.info(run_id=123456790)
+        self.assertNotEqual(first["tag"], second["tag"])
+        for key in ("version_name", "version_code_base", "build_number", "title"):
+            self.assertEqual(first[key], second[key])
+
     def test_rejects_invalid_provenance(self):
         with self.assertRaises(ValueError):
             self.info(run=0)
         with self.assertRaises(ValueError):
+            self.info(run_id=0)
+        with self.assertRaises(ValueError):
             release.metadata(dt.datetime.now(dt.timezone.utc), 1, "main", "b" * 40, upstream=UPSTREAM)
 
     def test_reserved_tag_survives_a_build_crossing_pacific_midnight(self):
+        now = dt.datetime(2026, 10, 23, 8, tzinfo=dt.timezone.utc)
+        tag = "build-2026-10-22.235959.123456789"
+        info = release.metadata(now, 7, "a" * 40, "b" * 40, tag,
+                                upstream=UPSTREAM, run_id=123456789)
+        self.assertEqual(info["tag"], tag)
+        self.assertEqual(info["silora_date"], "10222026")
+        self.assertEqual(info["run_id"], 123456789)
+        for run_id in (None, 123456790):
+            with self.subTest(run_id=run_id), self.assertRaises(ValueError):
+                release.metadata(now, 7, "a" * 40, "b" * 40, tag,
+                                 upstream=UPSTREAM, run_id=run_id)
+        for tag in ("build-2026-10-22.250000.123456789", "build-2026-02-30.120000.123456789"):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                release.metadata(now, 7, "a" * 40, "b" * 40, tag,
+                                 upstream=UPSTREAM, run_id=123456789)
+
+    def test_legacy_reserved_tag_keeps_its_pacific_date(self):
         now = dt.datetime(2026, 10, 23, 8, tzinfo=dt.timezone.utc)
         info = release.metadata(now, 7, "a" * 40, "b" * 40, "daily-2026-10-22.7", upstream=UPSTREAM)
         self.assertEqual(info["tag"], "daily-2026-10-22.7")
@@ -53,7 +79,7 @@ class ForkReleaseTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.metadata(now, 7, "a" * 40, "b" * 40, "daily-2026-10-22.8", upstream=UPSTREAM)
 
-    def test_manual_tag_keeps_the_same_version_scheme_without_daily_tag_collisions(self):
+    def test_legacy_manual_tag_keeps_the_same_version_scheme(self):
         now = dt.datetime(2026, 10, 23, 8, tzinfo=dt.timezone.utc)
         daily = release.metadata(now, 7, "a" * 40, "b" * 40, "daily-2026-10-22.7", upstream=UPSTREAM)
         manual = release.metadata(now, 7, "a" * 40, "b" * 40, "manual-2026-10-22.7", upstream=UPSTREAM)
@@ -93,7 +119,8 @@ class ForkReleaseTest(unittest.TestCase):
             self.assertEqual(release.upstream_version(root, "HEAD"),
                              {"version": "1.1.0", "build": 27, "tag": "v1.1.0-beta.27"})
             env = dict(os.environ, SOURCE_SHA="a" * 40, UPSTREAM_SHA=snapshot,
-                       GITHUB_RUN_NUMBER="7", FORK_RELEASE_TAG="daily-2026-10-21.7",
+                       GITHUB_RUN_NUMBER="7", GITHUB_RUN_ID="123456789",
+                       FORK_RELEASE_TAG="build-2026-10-21.180000.123456789",
                        RUNNER_TEMP=tmp, GITHUB_ENV=str(root / "env"), GITHUB_OUTPUT=str(root / "outputs"))
             subprocess.run(["python3", str(Path(release.__file__).resolve()), "prepare"],
                            cwd=root, env=env, check=True, capture_output=True, text=True)
@@ -101,6 +128,8 @@ class ForkReleaseTest(unittest.TestCase):
             self.assertIn("SILO_BUILD_NUMBER=26\n", (root / "env").read_text())
             info = json.loads((root / "fork-build-info.json").read_text())
             self.assertEqual(info["upstream_version_tag"], "v1.0.0-beta.26")
+            self.assertEqual(info["run_id"], 123456789)
+            self.assertEqual(info["tag"], env["FORK_RELEASE_TAG"])
 
     def test_missing_official_version_fails_instead_of_guessing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -139,7 +168,7 @@ class ForkReleaseTest(unittest.TestCase):
 
 class BuildDecisionTest(unittest.TestCase):
     source = "a" * 40
-    tag = "daily-2026-10-21.3"
+    tag = "build-2026-10-21.180000.123456789"
 
     def published(self, **changes):
         result = {
@@ -194,6 +223,12 @@ class BuildDecisionTest(unittest.TestCase):
         self.assertFalse(release.build_decision(self.source, [self.published(), manual], tree)[0])
         self.assertEqual(tree.call_args_list[-1], mock.call(manual["tag_name"]))
 
+    def test_legacy_daily_release_remains_a_source_baseline(self):
+        previous = self.published(tag_name="daily-2026-10-21.3")
+        tree = mock.Mock(return_value="b" * 40)
+        self.assertFalse(release.build_decision(self.source, [previous], tree)[0])
+        self.assertEqual(tree.call_args_list[-1], mock.call(previous["tag_name"]))
+
     def test_force_build_does_not_need_release_or_tree_queries(self):
         tree = mock.Mock(side_effect=AssertionError("force must not compare trees"))
         self.assertTrue(release.build_decision(self.source, [self.published()], tree, force=True)[0])
@@ -223,6 +258,40 @@ class BuildDecisionTest(unittest.TestCase):
                 release.decide()
             self.assertEqual(output.read_text(), "should_build=false\n")
             self.assertIn("skipping build", summary.read_text())
+
+
+class TagReservationTest(unittest.TestCase):
+    def test_both_workflows_reserve_timestamp_tags_with_the_run_id(self):
+        workflows = Path(__file__).resolve().parents[1] / ".github/workflows"
+        for index, name in enumerate(("fork-daily-release.yml", "fork-manual-release.yml")):
+            with self.subTest(workflow=name), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                step = (workflows / name).read_text().split("      - name: Reserve the release source tag\n", 1)[1]
+                script = textwrap.dedent(step.split("        run: |\n", 1)[1].split("\n  build:", 1)[0])
+                (root / "date").write_text(
+                    '#!/bin/bash\nset -eu\n'
+                    'test "$TZ" = America/Los_Angeles\n'
+                    'test "$1" = +%Y-%m-%d.%H%M%S\n'
+                    'echo 2026-10-22.235959\n')
+                (root / "gh").write_text(
+                    '#!/bin/bash\nset -eu\n'
+                    '[[ "$*" == *"--method POST"* ]] || exit 1\n'
+                    'printf "%s\\n" "$@" > "$RUNNER_TEMP/request"\n')
+                for tool in ("date", "gh"):
+                    (root / tool).chmod(0o755)
+                env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", RUNNER_TEMP=tmp,
+                           GITHUB_REPOSITORY="example/repo", SOURCE_SHA="a" * 40,
+                           GITHUB_RUN_NUMBER="7", GITHUB_RUN_ID=str(123456789 + index),
+                           GITHUB_OUTPUT=str(root / "output"))
+                result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                tag = (root / "output").read_text().strip().removeprefix("tag=")
+                self.assertEqual(tag, f"build-2026-10-22.235959.{env['GITHUB_RUN_ID']}")
+                self.assertIn(f"ref=refs/tags/{tag}\n", (root / "request").read_text())
+                info = release.metadata(dt.datetime(2026, 10, 23, 8, tzinfo=dt.timezone.utc),
+                                        7, "a" * 40, "b" * 40, tag, upstream=UPSTREAM,
+                                        run_id=int(env["GITHUB_RUN_ID"]))
+                self.assertEqual(info["silora_date"], "10222026")
 
 
 class PublishRecoveryTest(unittest.TestCase):
