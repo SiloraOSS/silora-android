@@ -36,7 +36,6 @@ google-services.json
 *.keystore
 
 # Local agent/tooling state
-/.agents/
 /.claude/
 .codex/
 .cursor/

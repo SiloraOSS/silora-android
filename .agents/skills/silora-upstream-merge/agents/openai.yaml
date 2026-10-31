@@ -1,0 +1,4 @@
+interface:
+  display_name: "Silora Upstream Merge"
+  short_description: "Merge upstream while preserving Silora fixes"
+  default_prompt: "Use $silora-upstream-merge to merge the latest Silo upstream main into the current Silora branch while preserving its fixes."
