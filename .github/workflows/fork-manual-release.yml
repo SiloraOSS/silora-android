@@ -53,8 +53,8 @@ jobs:
           SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
         run: |
           set -euo pipefail
-          day="$(TZ=America/Los_Angeles date +%Y-%m-%d)"
-          tag="manual-${day}.${GITHUB_RUN_NUMBER}"
+          timestamp="$(TZ=America/Los_Angeles date +%Y-%m-%d.%H%M%S)"
+          tag="build-${timestamp}.${GITHUB_RUN_ID}"
           # Pin the selected snapshot before compilation starts. GITHUB_TOKEN cannot
           # create a new release tag for an unreferenced workflow-changing
           # commit if main advances during the build.
