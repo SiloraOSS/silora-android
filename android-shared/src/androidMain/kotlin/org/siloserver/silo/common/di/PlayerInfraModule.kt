@@ -129,6 +129,7 @@ val playerInfraModule = module {
             playbackAnalytics = get(),
             throughputMeter = get(),
             audioNormalization = get(),
+            sidecarSubtitleHttpDataSourceFactory = get(PLAYER_SIDECAR_SUBTITLE_HTTP_DATA_SOURCE_FACTORY_QUALIFIER),
         )
     }
     // Video starts send the bandwidth probe's estimate, and plan summaries the

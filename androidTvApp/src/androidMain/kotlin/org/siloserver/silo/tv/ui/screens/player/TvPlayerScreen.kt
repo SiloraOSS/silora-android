@@ -116,6 +116,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import org.koin.compose.koinInject
+import org.siloserver.silo.common.R as CommonR
 import org.siloserver.silo.common.settings.SeekIntervalStore
 import org.siloserver.silo.model.settings.SeekIntervalPair
 import org.koin.compose.viewmodel.koinViewModel
@@ -149,6 +150,8 @@ import org.siloserver.silo.common.player.SleepTimerState
 import org.siloserver.silo.common.player.SubtitleManager
 import org.siloserver.silo.common.player.VideoPlayerMediaSpec
 import org.siloserver.silo.common.player.subtitlesForVideoMediaMount
+import org.siloserver.silo.common.player.mediaMountKey
+import org.siloserver.silo.common.player.mountedPlaybackKey
 import org.siloserver.silo.common.player.videoMountToken
 import org.siloserver.silo.common.player.backend.VideoPlaybackBackend
 import org.siloserver.silo.common.player.backend.VideoPlaybackBackendFactory
@@ -1913,8 +1916,7 @@ fun TvPlayerScreen(
                     viewModel.onPlayingChanged(isPlaying)
                     val live = viewModel.uiState.value
                     val key = live.sessionId?.let { sessionId ->
-                        "$sessionId:${live.streamUrl}:${live.playbackPlan?.planId.orEmpty()}:" +
-                            "${live.playbackPlan?.decisionTrace?.size ?: 0}:${live.transportMountNonce}"
+                        mountedPlaybackKey(sessionId, live.streamUrl, live.playbackPlan, live.transportMountNonce)
                     }
                     if (key != null) {
                         val rendered = (activePlayerHolder.player.value as? androidx.media3.exoplayer.ExoPlayer)
@@ -1982,15 +1984,13 @@ fun TvPlayerScreen(
         state.sessionId,
         state.streamUrl,
         state.playMethod,
-        state.playbackPlan?.planId,
         state.playbackPlan?.decisionTrace?.size,
         state.transportMountNonce,
     ) {
         val controller = mediaController ?: return@LaunchedEffect
         val sessionId = state.sessionId ?: return@LaunchedEffect
         val streamUrl = state.streamUrl ?: return@LaunchedEffect
-        val sessionKey = "$sessionId:$streamUrl:${state.playbackPlan?.planId.orEmpty()}:" +
-            "${state.playbackPlan?.decisionTrace?.size ?: 0}:${state.transportMountNonce}"
+        val sessionKey = mountedPlaybackKey(sessionId, streamUrl, state.playbackPlan, state.transportMountNonce)
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
                 val decoderCounters = (sessionPlayer as? androidx.media3.exoplayer.ExoPlayer)?.videoDecoderCounters
@@ -2108,13 +2108,16 @@ fun TvPlayerScreen(
         }
     }
 
-    // Prepare the player when a stream URL becomes available.
+    // Prepare the player when a stream URL becomes available. Keyed on the
+    // plan's media mount key rather than the whole plan, so a plan applied in
+    // place (same transport, another subtitle) keeps the mounted item.
+    val mediaMountKey = remember(state.playbackPlan) { state.playbackPlan?.mediaMountKey() }
     LaunchedEffect(
         videoBackend,
         state.sessionId,
         state.streamUrl,
         state.playMethod,
-        state.playbackPlan,
+        mediaMountKey,
         state.delivery,
         state.startPosition,
         state.transportMountNonce,
@@ -2167,16 +2170,14 @@ fun TvPlayerScreen(
             PlaybackRuntimeCorrectionMetrics.reset()
             dvSanitizerReported = false
             startupStallDetector.onMounted(
-                sessionKey = "$sessionId:$url:${plan?.planId.orEmpty()}:" +
-                    "${plan?.decisionTrace?.size ?: 0}:${state.transportMountNonce}",
+                sessionKey = mountedPlaybackKey(sessionId, url, plan, state.transportMountNonce),
                 playMethod = method,
                 startPositionMs = mediaSpec.startPositionMs,
                 nowMs = SystemClock.elapsedRealtime(),
                 clientTransformations = mediaSpec.transformations,
             )
             postResumeStallDetector.onMounted(
-                "$sessionId:$url:${plan?.planId.orEmpty()}:" +
-                    "${plan?.decisionTrace?.size ?: 0}:${state.transportMountNonce}",
+                mountedPlaybackKey(sessionId, url, plan, state.transportMountNonce),
             )
         }
         backend.mount(mediaSpec, playWhenReady = !viewModel.uiState.value.isPaused)
@@ -3494,10 +3495,13 @@ private fun TvQuickSubtitlePicker(
 ) {
     val checkedRow = presentation.rows.firstOrNull { row -> row.checked }
     val focusedRow = presentation.rows.firstOrNull { row -> row.focused }
+    val unsupportedFormat = stringResource(CommonR.string.subtitle_track_unsupported_format)
     val options = presentation.rows.map { row ->
         HudPickerOption(
             id = row.stableId,
             label = if (row.applying) "${row.label} · Applying…" else row.label,
+            detail = unsupportedFormat.takeIf { row.unplayable },
+            enabled = !row.unplayable,
         )
     }
 

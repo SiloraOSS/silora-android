@@ -1,5 +1,7 @@
 package org.siloserver.silo.tv.ui.shell
 
+import org.siloserver.silo.model.catalog.CatalogBoxSet
+import org.siloserver.silo.model.catalog.boxSetCard
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -216,6 +218,8 @@ fun TvMainShell(
     // Plays the first pick of a shuffle started from a library screen.
     onPlayShuffle: (shuffle: org.siloserver.silo.model.shuffle.Shuffle, libraryId: Int?) -> Unit = { _, _ -> },
     onOpenPersonDetail: (personId: Long) -> Unit,
+    /** Open a movie box set: one TMDB collection's movies in one library. */
+    onOpenBoxSet: (CatalogBoxSet) -> Unit = {},
 ) {
     val nestedNav = rememberNavController()
     val currentEntry by nestedNav.currentBackStackEntryAsState()
@@ -531,6 +535,11 @@ fun TvMainShell(
         restoreContentAfterDetail = true
         detailReturnRoot = null
         onOpenLibraryItemDetail(contentId, libraryId)
+    }
+    val openBoxSet: (CatalogBoxSet) -> Unit = { boxSet ->
+        restoreContentAfterDetail = true
+        detailReturnRoot = null
+        onOpenBoxSet(boxSet)
     }
     // Collections open outer routes too, so they need the same hand-back:
     // without it the return resume left focus to Compose's default search
@@ -1340,6 +1349,7 @@ fun TvMainShell(
                                 item = item,
                                 onOpenItemDetail = onOpenItemDetail,
                                 onOpenPersonDetail = onOpenPersonDetail,
+                                onOpenBoxSet = onOpenBoxSet,
                             )
                         },
                         onOpenRequestDetail = openRequestDetail,
@@ -1360,6 +1370,7 @@ fun TvMainShell(
                     TvLibrariesScreen(
                         onItemClick = openLibraryItemDetail,
                         onExploreSection = { section, libraryId -> openLibrarySection(section, libraryId, null) },
+                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onInitialContentFocus = { focusState.closeProfileMenuForContent() },
@@ -1370,6 +1381,7 @@ fun TvMainShell(
                     TvLibrariesScreen(
                         onItemClick = openLibraryItemDetail,
                         onExploreSection = { section, libraryId -> openLibrarySection(section, libraryId, null) },
+                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onInitialContentFocus = { focusState.closeProfileMenuForContent() },
@@ -1392,6 +1404,7 @@ fun TvMainShell(
                         onItemClick = { contentId ->
                             openLibraryItemDetail(contentId, activeLibrary(TvLibraryTabType.Movies)?.id)
                         },
+                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onExploreSection = openLibrarySection,
@@ -1411,6 +1424,7 @@ fun TvMainShell(
                         onItemClick = { contentId ->
                             openLibraryItemDetail(contentId, activeLibrary(TvLibraryTabType.Series)?.id)
                         },
+                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onExploreSection = openLibrarySection,
@@ -1430,6 +1444,7 @@ fun TvMainShell(
                         onItemClick = { contentId ->
                             openLibraryItemDetail(contentId, activeLibrary(TvLibraryTabType.Music)?.id)
                         },
+                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onExploreSection = openLibrarySection,
@@ -1449,6 +1464,7 @@ fun TvMainShell(
                         onItemClick = { contentId ->
                             openLibraryItemDetail(contentId, activeLibrary(TvLibraryTabType.Audiobooks)?.id)
                         },
+                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onExploreSection = openLibrarySection,
@@ -1844,6 +1860,7 @@ private fun TvLibraryTypeContent(
     selectedPill: TvLibraryPill,
     sectionRequestNonce: Int,
     onItemClick: (contentId: String) -> Unit,
+    onBoxSetClick: (CatalogBoxSet) -> Unit,
     onLibraryCollectionClick: (
         libraryId: Int,
         collectionId: String,
@@ -1887,7 +1904,9 @@ private fun TvLibraryTypeContent(
             libraryTitle = library.name,
             libraryType = library.type,
             mediaScope = type.mediaScope(library),
+            boxSetsEnabled = library.boxSetsEnabled,
             onItemClick = onItemClick,
+            onBoxSetClick = onBoxSetClick,
             onCollectionClick = { collectionId, title, isUserCollection ->
                 val scope = type.mediaScope(library)
                 if (scope != null) {
@@ -1912,8 +1931,12 @@ private fun openBrowseItem(
     item: BrowseItem,
     onOpenItemDetail: (contentId: String) -> Unit,
     onOpenPersonDetail: (personId: Long) -> Unit,
+    onOpenBoxSet: (CatalogBoxSet) -> Unit,
 ) {
-    if (item.type.equals("person", ignoreCase = true)) {
+    val boxSet = item.boxSetCard
+    if (boxSet != null) {
+        onOpenBoxSet(boxSet)
+    } else if (item.type.equals("person", ignoreCase = true)) {
         item.contentId.toLongOrNull()?.let(onOpenPersonDetail) ?: onOpenItemDetail(item.contentId)
     } else {
         onOpenItemDetail(item.contentId)
