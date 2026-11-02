@@ -6,7 +6,8 @@ description: Merge Silo-Server/silo-android main into the Silora Android fork wh
 # Merge upstream into Silora
 
 Integrate upstream changes into the checked-out fork branch, resolve conflicts,
-and verify that Silora's existing behavior survives. Use a merge, not a rebase:
+verify that Silora's existing behavior survives, and record each merge in the
+repository-root `CHANGELOG.md`. Use a merge, not a rebase:
 this fork already has shared commits and upstream merge history.
 
 ## Scope and sources
@@ -17,7 +18,8 @@ this fork already has shared commits and upstream merge history.
 - This fork is Silora. `origin` can point at SigmaStreams, while `silora` can
   point at SiloraOSS. Inspect actual remotes; neither name authorizes a push.
   Edrock's fork is a reference for adapted features, not the upstream source.
-- Read the applicable `AGENTS.md`, `README-SILORA.md`, and
+- Read the applicable `AGENTS.md`, `README-SILORA.md`, root `CHANGELOG.md`
+  (if present), and
   [fork checklist](references/fork-fixes.md). All source paths in the checklist
   are relative to the repository root. Read `docs/fork-releases.md` when build
   tooling is affected or APK validation is requested.
@@ -52,8 +54,9 @@ this fork already has shared commits and upstream merge history.
    the real merge base. Never use `--allow-unrelated-histories` to bypass a
    missing base.
 3. If `git merge-base --is-ancestor "$upstream_tip" "$fork_before"` succeeds,
-   report that upstream is already included and stop. Fork-only commits are
-   expected and are not a reason to reset the branch to upstream.
+   report that upstream is already included and stop without adding a changelog
+   entry. Fork-only commits are expected and are not a reason to reset the
+   branch to upstream.
 4. Before merging, create a local recovery ref pointing at `fork_before`, for
    example `refs/codex/upstream-merge/<UTC timestamp>`. Record its exact name.
    It protects committed history; it does not save uncommitted files.
@@ -103,6 +106,52 @@ Work through each conflict using the base, fork, and upstream versions.
 Review all affected fork behavior after the merge, including files Git merged
 without conflicts. Stage only files belonging to this merge and its fixes.
 
+## Record the merge in CHANGELOG.md
+
+Maintain `CHANGELOG.md` at the repository root, not inside the skill directory.
+Create it if absent with `# Changelog — Silora Android` and a brief description
+of the upstream merge log. Keep entries newest first and preserve older entries.
+If upstream introduces or changes this file, retain Silora's merge history when
+resolving it. Do not copy Edrock's fork features, version suffix, or build claims.
+
+For each merge, add one entry headed `## YYYY-MM-DD HH:mm z — upstream <short SHA>`
+using the merge's date/time in `America/Los_Angeles`; the time and upstream SHA
+distinguish multiple merges on the same day. Include:
+
+- **Merge inputs:** branch, full `fork_before` and `upstream_tip` SHAs, with a
+  short explanation of the main incoming changes. Record an existing version
+  or build label only when useful and verified; do not bump it for the log or
+  imply that an APK was built or published.
+- **Upstream commits added:** one bullet per commit newly reachable from the
+  fork through this merge, with its short SHA and exact subject (including PR
+  references). Derive the complete list from the pinned inputs:
+
+  ```sh
+  git log --reverse --topo-order --format='%h %s' "$fork_before..$upstream_tip"
+  ```
+
+  Use this reachability range rather than a date, the previous changelog entry,
+  or the merge base: commits already in the fork must not be counted again.
+  Keep merge commits in the list when present. A summary does not replace it.
+- **Silora merge decisions:** meaningful conflict resolutions, fork fixes
+  retained or adapted, and workarounds superseded by verified upstream fixes.
+  Describe the resulting behavior; claim unchanged fork behavior only after
+  reviewing it. Keep new local fixes separate from upstream commit bullets.
+- **Validation:** checks actually run and their results, plus relevant unrun
+  checks or limits such as no device playback validation. Do not infer success
+  from compilation or from the existence of a merge commit.
+
+Finalize and stage the entry after validation and before creating the merge
+commit, so code and log travel together. Identify the entry by its pinned inputs;
+do not try to put the containing merge commit's own SHA inside it. Report that
+result SHA in the final response. When resuming the same merge, update its entry
+instead of adding a duplicate. A failed or unfinished run must not appear as a
+completed merge: leave any draft uncommitted and clearly marked incomplete.
+Honor review-only requests without editing the log; for a validated no-commit
+merge, leave its entry with the merge changes and label it awaiting commit.
+Backfill older merges only when requested, using Git history and available
+validation evidence rather than copying another fork's log.
+
 ## Validate and finish
 
 1. Require no unmerged entries (`git ls-files -u`), review the staged diff,
@@ -128,7 +177,9 @@ without conflicts. Stage only files belonging to this merge and its fixes.
    unavailable SDK/dependencies/signing or unresolved failures precisely;
    do not silently weaken checks or describe unrun checks as passed. Leave
    unresolved work uncommitted with an exact status and recovery ref.
-5. When validation passes, create the local merge commit with a Conventional
+5. When validation passes, finalize the root `CHANGELOG.md` entry, verify its
+   commit list against `fork_before..upstream_tip`, stage it, and rerun
+   `git diff --cached --check`. Create the local merge commit with a Conventional
    Commit title, for example `chore: merge Silo upstream <short SHA>`, unless
    the user asked to leave it uncommitted. Verify both `fork_before` and
    `upstream_tip` are ancestors of the result and inspect final worktree status.
@@ -136,4 +187,5 @@ without conflicts. Stage only files belonging to this merge and its fixes.
    a rejection requires inspecting the new history, never a force-push.
 6. Report the branch and upstream SHA, merge result, meaningful incoming
    changes, conflict decisions, fork fixes retained or superseded, validation
-   and limits, recovery ref, and whether anything was pushed. Keep it concise.
+   and limits, changelog path, recovery ref, and whether anything was pushed.
+   Keep it concise.
