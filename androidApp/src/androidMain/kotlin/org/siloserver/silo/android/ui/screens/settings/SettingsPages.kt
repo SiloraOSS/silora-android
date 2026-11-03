@@ -202,6 +202,7 @@ fun SettingsPlaybackScreen(
             PlaybackEpisodesSection(
                 autoPlayNext = state.autoPlayNext,
                 nextUpPromptSeconds = state.nextUpPromptSeconds,
+                nextUpPromptMode = state.nextUpPromptMode,
                 introSkipMode = state.introSkipMode,
                 autoSkipCredits = state.autoSkipCredits,
                 resumeRewindSeconds = state.resumeRewindSeconds,
@@ -209,6 +210,7 @@ fun SettingsPlaybackScreen(
                 deviceOverrides = state.deviceOverrides,
                 onAutoPlayNextChanged = viewModel::setAutoPlayNext,
                 onNextUpPromptSecondsChanged = viewModel::setNextUpPromptSeconds,
+                onNextUpPromptModeChanged = viewModel::setNextUpPromptMode,
                 onIntroSkipModeChanged = viewModel::setIntroSkipMode,
                 onAutoSkipCreditsChanged = viewModel::setAutoSkipCredits,
                 onResumeRewindSecondsChanged = viewModel::setResumeRewindSeconds,

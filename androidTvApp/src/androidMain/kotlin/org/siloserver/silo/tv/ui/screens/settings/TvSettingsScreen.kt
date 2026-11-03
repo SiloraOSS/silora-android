@@ -120,6 +120,7 @@ import org.siloserver.silo.model.settings.CardPresentation
 import org.siloserver.silo.model.settings.LanguageOptions
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.settings.ProfileSettingsController
 import org.siloserver.silo.model.settings.QualityChoices
 import org.siloserver.silo.model.settings.QualityPresets
@@ -323,6 +324,7 @@ fun TvSettingsScreen(
         onTrueBlackBarsChanged = viewModel::onTrueBlackBarsChanged,
         onResumeRewindSecondsChanged = viewModel::onResumeRewindSecondsChanged,
         onPassOutThresholdChanged = viewModel::onPassOutThresholdChanged,
+        onNextUpPromptModeChanged = viewModel::onNextUpPromptModeChanged,
         onNextUpPromptSecondsChanged = viewModel::onNextUpPromptSecondsChanged,
         onResetPlaybackOverrides = viewModel::resetPlaybackOverrides,
         onUseProfileSetting = viewModel::onUseProfileSetting,
@@ -487,6 +489,7 @@ private fun SettingsSplitLayout(
     onTrueBlackBarsChanged: (Boolean) -> Unit,
     onResumeRewindSecondsChanged: (Int) -> Unit,
     onPassOutThresholdChanged: (Int) -> Unit,
+    onNextUpPromptModeChanged: (NextUpPromptMode) -> Unit,
     onNextUpPromptSecondsChanged: (Int) -> Unit,
     onResetPlaybackOverrides: () -> Unit,
     onUseProfileSetting: (String) -> Unit,
@@ -578,6 +581,7 @@ private fun SettingsSplitLayout(
             onTrueBlackBarsChanged = onTrueBlackBarsChanged,
             onResumeRewindSecondsChanged = onResumeRewindSecondsChanged,
             onPassOutThresholdChanged = onPassOutThresholdChanged,
+            onNextUpPromptModeChanged = onNextUpPromptModeChanged,
             onNextUpPromptSecondsChanged = onNextUpPromptSecondsChanged,
             onResetPlaybackOverrides = onResetPlaybackOverrides,
             onUseProfileSetting = onUseProfileSetting,
@@ -878,6 +882,7 @@ private fun SettingsDetailPane(
     onTrueBlackBarsChanged: (Boolean) -> Unit,
     onResumeRewindSecondsChanged: (Int) -> Unit,
     onPassOutThresholdChanged: (Int) -> Unit,
+    onNextUpPromptModeChanged: (NextUpPromptMode) -> Unit,
     onNextUpPromptSecondsChanged: (Int) -> Unit,
     onResetPlaybackOverrides: () -> Unit,
     onUseProfileSetting: (String) -> Unit,
@@ -944,6 +949,7 @@ private fun SettingsDetailPane(
             onTrueBlackBarsChanged = onTrueBlackBarsChanged,
                 onResumeRewindSecondsChanged = onResumeRewindSecondsChanged,
                 onPassOutThresholdChanged = onPassOutThresholdChanged,
+                onNextUpPromptModeChanged = onNextUpPromptModeChanged,
                 onNextUpPromptSecondsChanged = onNextUpPromptSecondsChanged,
                 onResetPlaybackOverrides = onResetPlaybackOverrides,
                 onUseProfileSetting = onUseProfileSetting,
@@ -1237,6 +1243,7 @@ private fun TvPlaybackSettingsPane(
     onTrueBlackBarsChanged: (Boolean) -> Unit,
     onResumeRewindSecondsChanged: (Int) -> Unit,
     onPassOutThresholdChanged: (Int) -> Unit,
+    onNextUpPromptModeChanged: (NextUpPromptMode) -> Unit,
     onNextUpPromptSecondsChanged: (Int) -> Unit,
     onResetPlaybackOverrides: () -> Unit,
     /** Receives the key of the control going back to the profile's value. */
@@ -1444,10 +1451,19 @@ private fun TvPlaybackSettingsPane(
                     )
                 }
                 SettingsValueRow(
-                    label = "Show Next Up",
-                    value = nextUpPromptLabel(state.nextUpPromptSeconds),
-                    onClick = { activePicker = PlaybackPicker.NextUpPrompt },
+                    label = "Up Next Trigger",
+                    value = state.nextUpPromptMode.label,
+                    onClick = { activePicker = PlaybackPicker.NextUpMode },
                 )
+                SettingsFooterText(text = NextUpPromptMode.settingsDescription)
+                if (state.nextUpPromptMode != NextUpPromptMode.Disabled) {
+                    SettingsValueRow(
+                        label = "Time remaining",
+                        value = nextUpPromptLabel(state.nextUpPromptSeconds),
+                        onClick = { activePicker = PlaybackPicker.NextUpTiming },
+                    )
+                    SettingsFooterText(text = NextUpPromptMode.timingDescription(state.nextUpPromptMode))
+                }
                 // Three-way, not a switch: the schema's recommended control
                 // is a select and TV has no segmented control, so this uses the
                 // same value row + picker sheet every other enum here does.
@@ -1615,14 +1631,26 @@ private fun TvPlaybackSettingsPane(
                 onDismiss = { activePicker = null },
             )
         }
-        PlaybackPicker.NextUpPrompt -> {
+        PlaybackPicker.NextUpMode -> {
+            TvSettingsPickerSheet(
+                title = "Up Next Trigger",
+                options = NextUpPromptMode.entries.map { PickerOption(it.wireValue, it.label, it.description) },
+                selectedId = state.nextUpPromptMode.wireValue,
+                onSelect = { id ->
+                    onNextUpPromptModeChanged(NextUpPromptMode.fromWire(id))
+                    activePicker = null
+                },
+                onDismiss = { activePicker = null },
+            )
+        }
+        PlaybackPicker.NextUpTiming -> {
             val (options, selectedId) = profileLayered(
                 PlaybackSettingsKeys.NextUpPromptSeconds,
-                NextUpPromptOptions.map { PickerOption(it.toString(), nextUpPromptLabel(it)) },
+                nextUpPromptOptions.map { PickerOption(it.toString(), nextUpPromptLabel(it)) },
                 state.nextUpPromptSeconds.toString(),
             )
             TvSettingsPickerSheet(
-                title = "Show Next Up",
+                title = "Time remaining",
                 options = options,
                 selectedId = selectedId,
                 onSelect = { id ->
@@ -2378,11 +2406,21 @@ private fun accountSubtitle(state: TvSettingsViewModel.UiState): String {
     return state.user?.username?.takeIf { it.isNotBlank() } ?: "Signed in"
 }
 
+private val nextUpPromptOptions = listOf(0, 10, 30, 60, 120)
+
+private fun nextUpPromptLabel(seconds: Int): String = when {
+    seconds <= 0 -> "At end"
+    seconds < 60 -> "$seconds seconds before end"
+    seconds == 60 -> "1 minute before end"
+    else -> "${seconds / 60} minutes before end"
+}
+
 private enum class PlaybackPicker {
     Resolution,
     MaxBitrate,
     AudioLanguage,
-    NextUpPrompt,
+    NextUpMode,
+    NextUpTiming,
     IntroSkipMode,
     BufferingQualityMode,
     ResumeRewind,
@@ -3116,21 +3154,11 @@ private fun invertedRowBorder() = ClickableSurfaceDefaults.border(
 private val ResumeRewindOptions = listOf(0, 3, 5, 7, 10, 15, 20, 30)
 private val PassOutThresholdOptions = listOf(0, 2, 3, 4, 5)
 
-// Up-Next prompt timing (seconds before end; 0 = at end). Mirrors tvOS.
-private val NextUpPromptOptions = listOf(0, 10, 30, 60, 120)
-
 private fun resumeRewindLabel(seconds: Int): String =
     if (seconds <= 0) "Off" else "${seconds}s"
 
 private fun passOutThresholdLabel(count: Int): String =
     if (count <= 0) "Off" else "$count"
-
-private fun nextUpPromptLabel(seconds: Int): String = when {
-    seconds <= 0 -> "At end"
-    seconds < 60 -> "$seconds seconds before end"
-    seconds == 60 -> "1 minute before end"
-    else -> "${seconds / 60} minutes before end"
-}
 
 /**
  * "Theme Music" and "Loop Theme Music", as the web app's device settings offer

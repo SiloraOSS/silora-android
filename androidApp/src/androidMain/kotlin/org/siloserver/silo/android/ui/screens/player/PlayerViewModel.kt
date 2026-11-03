@@ -82,6 +82,7 @@ import org.siloserver.silo.domain.player.toBufferingQualityPlan
 import org.siloserver.silo.domain.player.IntroAutoSkipController
 import org.siloserver.silo.domain.player.IntroAutoSkipState
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.player.settlingFalseEdges
 import org.siloserver.silo.model.catalog.AudioTrack
 import org.siloserver.silo.model.catalog.FileVersion
@@ -946,10 +947,12 @@ class PlayerViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, IntroSkipMode.Default)
     val autoPlayNextEnabled: StateFlow<Boolean> = playerSettingsStore.autoPlayNextFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    // Seconds before end to surface the Up Next card when no credits marker
-    // exists (0 = only at end). Credits marker wins when present.
-    private val nextUpPromptSeconds: StateFlow<Int> = playerSettingsStore.nextUpPromptSecondsFlow
-        .stateIn(viewModelScope, SharingStarted.Eagerly, 30)
+    // Wait for the persisted choice before allowing any automatic pre-end prompt.
+    private val nextUpPromptMode: StateFlow<NextUpPromptMode?> = playerSettingsStore.nextUpPromptModeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    // Lead time for Time remaining, or the fallback when Credits markers has no marker.
+    private val nextUpPromptSeconds: StateFlow<Int?> = playerSettingsStore.nextUpPromptSecondsFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
      * Video relative-seek intervals every phone surface uses (buttons,
@@ -3198,21 +3201,18 @@ class PlayerViewModel(
             )
         }
 
-        // F2: surface the Up Next card when playback CROSSES the credits point
-        // (only on the before->after transition, so resuming inside the credits
-        // doesn't instantly trigger it). Without a credits marker, fall back to
-        // crossing (duration - nextUpPromptSeconds); 0 = only at end (iOS parity).
+        // Cross the selected trigger during normal playback. Seeking or resuming
+        // beyond it must not immediately open Up Next. Wait for the saved mode
+        // before choosing a trigger; Disabled still allows the normal end screen.
         if (!seekWasActive) {
-            val creditsStart = _uiState.value.markerTimeline.upNextCreditsStart()
-            if (creditsStart != null) {
-                if (previousPosition < creditsStart && positionSec >= creditsStart) onApproachingEnd()
-            } else {
-                val promptSeconds = nextUpPromptSeconds.value
-                val duration = _uiState.value.duration
-                if (promptSeconds > 0 && duration > 0) {
-                    val promptStart = duration - promptSeconds
-                    if (previousPosition < promptStart && positionSec >= promptStart) onApproachingEnd()
-                }
+            val state = _uiState.value
+            val promptStart = nextUpPromptMode.value?.promptStartPosition(
+                creditsStart = state.markerTimeline.upNextCreditsStart(),
+                duration = state.duration,
+                secondsBeforeEnd = nextUpPromptSeconds.value,
+            )
+            if (promptStart != null && previousPosition < promptStart && positionSec >= promptStart) {
+                onApproachingEnd()
             }
         }
 
@@ -6041,7 +6041,7 @@ class PlayerViewModel(
     }
 
     /**
-     * Credits reached (primary) or stream ended (fallback) — surface the Up Next
+     * Selected Up Next point reached (primary) or stream ended (fallback) — surface the Up Next
      * card. When auto-play is on and the consecutive-auto-advance streak is
      * below the pass-out threshold, the card runs a countdown that plays the
      * next episode at zero. Once the streak hits the threshold (or auto-play is

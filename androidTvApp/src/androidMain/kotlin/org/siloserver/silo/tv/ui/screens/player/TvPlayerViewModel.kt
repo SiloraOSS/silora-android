@@ -100,6 +100,7 @@ import org.siloserver.silo.model.playback.PLAYBACK_QUALITY_AUTO
 import org.siloserver.silo.domain.player.IntroAutoSkipController
 import org.siloserver.silo.domain.player.IntroAutoSkipState
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.player.settlingFalseEdges
 import org.siloserver.silo.model.catalog.AudioTrack
 import org.siloserver.silo.model.catalog.FileVersion
@@ -1906,6 +1907,11 @@ class TvPlayerViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, IntroSkipMode.Default)
     val autoPlayNextEnabled: StateFlow<Boolean> = playerSettingsStore.autoPlayNextFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    // Wait for the persisted choice before allowing any automatic pre-end prompt.
+    private val nextUpPromptMode: StateFlow<NextUpPromptMode?> = playerSettingsStore.nextUpPromptModeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    private val nextUpPromptSeconds: StateFlow<Int?> = playerSettingsStore.nextUpPromptSecondsFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     // Per-profile "Still watching?" threshold (default 3; 0 = off).
     val passOutThreshold: StateFlow<Int> = playerSettingsStore.passOutThresholdFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, 3)
@@ -3781,13 +3787,18 @@ class TvPlayerViewModel(
         if (positionSec > 0 && transientNetworkRetries > 0) {
             transientNetworkRetries = 0
         }
-        // F2: auto-advance / prompt when playback CROSSES the credits point —
-        // only on the transition from before to after, so resuming an episode
-        // whose saved position is already inside the credits doesn't instantly
-        // skip to the next one (a seek into credits also won't trigger it).
+        // Cross the selected trigger during normal playback. Seeking or resuming
+        // beyond it must not immediately open Up Next. Wait for the saved mode
+        // before choosing a trigger; Disabled still allows the normal end screen.
         if (!seekWasActive) {
-            _uiState.value.markerTimeline.upNextCreditsStart()?.let { creditsStart ->
-                if (previousPosition < creditsStart && positionSec >= creditsStart) onApproachingEnd()
+            val state = _uiState.value
+            val promptStart = nextUpPromptMode.value?.promptStartPosition(
+                creditsStart = state.markerTimeline.upNextCreditsStart(),
+                duration = state.duration,
+                secondsBeforeEnd = nextUpPromptSeconds.value,
+            )
+            if (promptStart != null && previousPosition < promptStart && positionSec >= promptStart) {
+                onApproachingEnd()
             }
         }
         // Forward to the lifecycle so its 10s reporter has a fresh sample.
@@ -5270,7 +5281,7 @@ class TvPlayerViewModel(
     }
 
     /**
-     * Called by the screen when the credits point is reached (primary) or the
+     * Called when the selected Up Next point is reached (primary) or the
      * stream ends (fallback). Surfaces the Up-Next overlay — a 16:9 mini-player
      * beside the next-episode panel — as the end-of-playback surface (mirrors
      * tvOS PlayerNextUpScreen), replacing the old "Still watching?" dialog.
@@ -5284,7 +5295,7 @@ class TvPlayerViewModel(
      *
      * [videoEnded] true when the stream has actually ended (STATE_ENDED) — the
      * panel reads "End of playback" / "Playing Next" and hides Keep Watching;
-     * false at the credits-crossing while video is still rolling.
+     * false at the pre-end prompt while video is still rolling.
      */
     fun onApproachingEnd(videoEnded: Boolean = false) {
         if (nextUpTransitionGate.isActive) return

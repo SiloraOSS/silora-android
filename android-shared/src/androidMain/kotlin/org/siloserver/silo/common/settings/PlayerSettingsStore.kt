@@ -3,6 +3,7 @@ package org.siloserver.silo.common.settings
 import org.siloserver.silo.common.player.audio.NightModeParameters
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.model.settings.CellularQuality
 import org.siloserver.silo.model.settings.SubtitleAppearance
 import kotlinx.coroutines.flow.Flow
@@ -144,6 +145,10 @@ interface PlayerSettingsStore {
     val audioSyncMsFlow: Flow<Int>
     /** Canonical device-scoped subtitle offset (`player.subtitle_sync_ms`). */
     val subtitleSyncMsFlow: Flow<Int>
+    /** Device-local, per-profile automatic Up Next presentation during playback. */
+    val nextUpPromptModeFlow: Flow<NextUpPromptMode>
+        get() = flowOf(NextUpPromptMode.Default)
+    suspend fun setNextUpPromptMode(value: NextUpPromptMode) = Unit
     val nextUpPromptSecondsFlow: Flow<Int>
     val sleepTimerDefaultMinutesFlow: Flow<Int>
     /** Seconds to skip back on resume (F1). Default 7; 0 = off. Local-only. */

@@ -14,6 +14,7 @@ import org.siloserver.silo.common.store.AccountScopedKeys
 import org.siloserver.silo.common.player.audio.NightModeParameters
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.model.download.DownloadQuality
 import org.siloserver.silo.model.settings.CellularQuality
 import org.siloserver.silo.model.settings.EffectiveSettingValue
@@ -419,6 +420,11 @@ class AndroidPlayerSettingsStore(
     override val subtitleSyncMsFlow: Flow<Int> =
         profileScopedFlow(0) { p, s -> p.intFor(s, PlaybackSettingsKeys.SubtitleSyncMs, 0) }
 
+    override val nextUpPromptModeFlow: Flow<NextUpPromptMode> =
+        profileScopedFlow(NextUpPromptMode.Default) { p, s ->
+            NextUpPromptMode.fromWire(p.stringFor(s, NEXT_UP_PROMPT_MODE, ""))
+        }
+
     override val nextUpPromptSecondsFlow: Flow<Int> =
         profileScopedFlow(30) { p, s -> p.intFor(s, PlaybackSettingsKeys.NextUpPromptSeconds, 30) }
 
@@ -719,6 +725,9 @@ class AndroidPlayerSettingsStore(
             )
         }
     }
+
+    override suspend fun setNextUpPromptMode(value: NextUpPromptMode) =
+        writeStringLocal(NEXT_UP_PROMPT_MODE, value.wireValue)
 
     override suspend fun setNextUpPromptSeconds(value: Int) =
         writeInt(PlaybackSettingsKeys.NextUpPromptSeconds, value.coerceIn(0, 120))
@@ -1125,6 +1134,7 @@ class AndroidPlayerSettingsStore(
                 // settings the user most associates with this device untouched.
                 it.remove(booleanPreferencesKey(scope.keyPrefix + AUDIO_NORMALIZATION_ENABLED))
                 it.remove(stringPreferencesKey(scope.keyPrefix + NIGHT_MODE_PARAMETERS))
+                it.remove(stringPreferencesKey(scope.keyPrefix + NEXT_UP_PROMPT_MODE))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + MATCH_CONTENT_RESOLUTION))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.PictureInPictureEnabled))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.ForceHdrPassthrough))
@@ -1491,6 +1501,7 @@ class AndroidPlayerSettingsStore(
         const val MATCH_CONTENT_RESOLUTION = "match_content_resolution"
         const val AUDIO_NORMALIZATION_ENABLED = "audio_normalization_enabled"
         const val NIGHT_MODE_PARAMETERS = "night_mode_parameters"
+        const val NEXT_UP_PROMPT_MODE = "silora.next_up_prompt_mode"
         const val SAVED_CUSTOM_SUBTITLE_APPEARANCE = "subtitle_appearance.saved_custom"
         /**
          * Local-only: the server-stored keys this device holds its own value
