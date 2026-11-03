@@ -19,6 +19,7 @@ import org.siloserver.silo.common.settings.SeekIntervalStore
 import org.siloserver.silo.common.player.AudiobookSettingsStore
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.settings.ProfileSettingsController
 import org.siloserver.silo.model.auth.User
 import org.siloserver.silo.model.profile.Profile
@@ -128,6 +129,7 @@ data class SettingsUiState(
     // many seconds before the end to surface the card (0 = only at end).
     val autoPlayNext: Boolean = true,
     val nextUpPromptSeconds: Int = 30,
+    val nextUpPromptMode: NextUpPromptMode = NextUpPromptMode.Default,
     /**
      * Keys this device holds its own value for. A profile-layered control
      * whose key is absent shows "Use profile setting" as its choice.
@@ -420,13 +422,15 @@ class SettingsViewModel(
             playerSettingsStore.passOutThresholdFlow,
             playerSettingsStore.autoPlayNextFlow,
             playerSettingsStore.nextUpPromptSecondsFlow,
-        ) { rewind, threshold, autoPlayNext, nextUpPrompt ->
+            playerSettingsStore.nextUpPromptModeFlow,
+        ) { rewind, threshold, autoPlayNext, nextUpPrompt, nextUpMode ->
             _uiState.update {
                 it.copy(
                     resumeRewindSeconds = rewind,
                     passOutThreshold = threshold,
                     autoPlayNext = autoPlayNext,
                     nextUpPromptSeconds = nextUpPrompt,
+                    nextUpPromptMode = nextUpMode,
                 )
             }
         }.launchIn(viewModelScope)
@@ -463,6 +467,10 @@ class SettingsViewModel(
 
     fun setAutoPlayNext(value: Boolean) {
         viewModelScope.launch { playerSettingsStore.setAutoPlayNext(value) }
+    }
+
+    fun setNextUpPromptMode(value: NextUpPromptMode) {
+        viewModelScope.launch { playerSettingsStore.setNextUpPromptMode(value) }
     }
 
     fun setNextUpPromptSeconds(value: Int) {

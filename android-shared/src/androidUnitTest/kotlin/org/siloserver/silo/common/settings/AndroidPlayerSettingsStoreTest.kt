@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.model.settings.EffectiveSettingValue
 import org.siloserver.silo.model.settings.EffectiveSettingValuesResponse
 import org.siloserver.silo.model.settings.PlaybackSettingsKeys
@@ -319,6 +320,39 @@ class AndroidPlayerSettingsStoreTest {
             fakeFlusher.calls.any { it.key == PlaybackSettingsKeys.PictureInPictureEnabled },
             "PiP is platform-local and must never flush an unknown setting key to the server",
         )
+    }
+
+    @Test
+    fun `up next mode persists locally without crossing profile server or device scopes`() = runTest {
+        var profile = "profile-a"
+        var server = "https://one.example"
+        var device = "device-a"
+        val stores = mutableMapOf<String, DataStore<Preferences>>()
+        fun newStore() = AndroidPlayerSettingsStore(
+            context = mockContextStub(), legacyCache = fakeLegacyCache,
+            getActiveProfileId = { profile }, getServerUrl = { server },
+            getDeviceId = { device }, serverSettingsFlusher = fakeFlusher,
+            dataStoreFactory = { id -> stores.getOrPut(id) {
+                PreferenceDataStoreFactory.create(produceFile = { File(tempFolder.root, "up_next_$id.preferences_pb") })
+            } },
+        )
+        val store = newStore()
+        assertEquals(NextUpPromptMode.Enabled, store.nextUpPromptModeFlow.first())
+        store.setNextUpPromptMode(NextUpPromptMode.Disabled)
+        assertEquals(NextUpPromptMode.Disabled, newStore().nextUpPromptModeFlow.first())
+        profile = "profile-b"
+        assertEquals(NextUpPromptMode.Enabled, store.nextUpPromptModeFlow.first())
+        profile = "profile-a"
+        server = "https://two.example"
+        assertEquals(NextUpPromptMode.Enabled, store.nextUpPromptModeFlow.first())
+        server = "https://one.example"
+        device = "device-b"
+        assertEquals(NextUpPromptMode.Enabled, store.nextUpPromptModeFlow.first())
+        device = "device-a"
+        assertEquals(NextUpPromptMode.Disabled, store.nextUpPromptModeFlow.first())
+        assertTrue(fakeFlusher.calls.isEmpty(), "Silora's mode must not be sent to the server")
+        store.resetAllDeviceSettings()
+        assertEquals(NextUpPromptMode.Enabled, store.nextUpPromptModeFlow.first())
     }
 
     @Test

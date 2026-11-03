@@ -81,6 +81,7 @@ import org.siloserver.silo.domain.player.toBufferingQualityPlan
 import org.siloserver.silo.domain.player.IntroAutoSkipController
 import org.siloserver.silo.domain.player.IntroAutoSkipState
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.player.settlingFalseEdges
 import org.siloserver.silo.model.catalog.AudioTrack
 import org.siloserver.silo.model.catalog.FileVersion
@@ -945,8 +946,10 @@ class PlayerViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, IntroSkipMode.Default)
     val autoPlayNextEnabled: StateFlow<Boolean> = playerSettingsStore.autoPlayNextFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    // Seconds before end to surface the Up Next card when no credits marker
-    // exists (0 = only at end). Credits marker wins when present.
+    // Wait for the persisted choice before allowing any automatic pre-end prompt.
+    private val nextUpPromptMode: StateFlow<NextUpPromptMode?> = playerSettingsStore.nextUpPromptModeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    // Original phone fallback, used only when no credits marker exists.
     private val nextUpPromptSeconds: StateFlow<Int> = playerSettingsStore.nextUpPromptSecondsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, 30)
 
@@ -3199,7 +3202,7 @@ class PlayerViewModel(
         // (only on the before->after transition, so resuming inside the credits
         // doesn't instantly trigger it). Without a credits marker, fall back to
         // crossing (duration - nextUpPromptSeconds); 0 = only at end (iOS parity).
-        if (!seekWasActive) {
+        if (!seekWasActive && nextUpPromptMode.value == NextUpPromptMode.Enabled) {
             val creditsStart = _uiState.value.markerTimeline.upNextCreditsStart()
             if (creditsStart != null) {
                 if (previousPosition < creditsStart && positionSec >= creditsStart) onApproachingEnd()
@@ -6038,7 +6041,7 @@ class PlayerViewModel(
     }
 
     /**
-     * Credits reached (primary) or stream ended (fallback) — surface the Up Next
+     * Selected Up Next point reached (primary) or stream ended (fallback) — surface the Up Next
      * card. When auto-play is on and the consecutive-auto-advance streak is
      * below the pass-out threshold, the card runs a countdown that plays the
      * next episode at zero. Once the streak hits the threshold (or auto-play is

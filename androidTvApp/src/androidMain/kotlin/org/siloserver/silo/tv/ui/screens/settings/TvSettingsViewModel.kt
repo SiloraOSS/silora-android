@@ -16,6 +16,7 @@ import org.siloserver.silo.model.settings.CardPresentation
 import org.siloserver.silo.model.auth.User
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.settings.ProfileSettingsController
 import org.siloserver.silo.model.settings.QualityPresets
 import org.siloserver.silo.model.settings.SubtitleAppearance
@@ -168,9 +169,7 @@ class TvSettingsViewModel(
         // before the "Still watching?" prompt (0 = off).
         val resumeRewindSeconds: Int = 7,
         val passOutThreshold: Int = 3,
-        // Seconds before the end of an episode to surface the Up-Next prompt
-        // (0 = at the very end). Mirrors tvOS `nextUpPromptSeconds`.
-        val nextUpPromptSeconds: Int = 10,
+        val nextUpPromptMode: NextUpPromptMode = NextUpPromptMode.Default,
         /**
          * Keys this device holds its own value for. A profile-layered control
          * whose key is absent shows "Use profile setting" as its choice.
@@ -441,10 +440,9 @@ class TvSettingsViewModel(
                 }
             }
         }
-        // Up-Next prompt timing lives outside the 8-arg combine above.
         viewModelScope.launch {
-            playerSettingsStore.nextUpPromptSecondsFlow.collect { seconds ->
-                _uiState.update { it.copy(nextUpPromptSeconds = seconds) }
+            playerSettingsStore.nextUpPromptModeFlow.collect { mode ->
+                _uiState.update { it.copy(nextUpPromptMode = mode) }
             }
         }
         viewModelScope.launch {
@@ -879,8 +877,8 @@ class TvSettingsViewModel(
         viewModelScope.launch { playerSettingsStore.setPassOutThreshold(value) }
     }
 
-    fun onNextUpPromptSecondsChanged(value: Int) {
-        viewModelScope.launch { playerSettingsStore.setNextUpPromptSeconds(value) }
+    fun onNextUpPromptModeChanged(value: NextUpPromptMode) {
+        viewModelScope.launch { playerSettingsStore.setNextUpPromptMode(value) }
     }
 
     /**

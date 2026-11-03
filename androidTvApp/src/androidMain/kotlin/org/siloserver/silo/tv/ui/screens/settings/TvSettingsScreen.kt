@@ -120,6 +120,7 @@ import org.siloserver.silo.model.settings.CardPresentation
 import org.siloserver.silo.model.settings.LanguageOptions
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.settings.ProfileSettingsController
 import org.siloserver.silo.model.settings.QualityChoices
 import org.siloserver.silo.model.settings.QualityPresets
@@ -323,7 +324,7 @@ fun TvSettingsScreen(
         onTrueBlackBarsChanged = viewModel::onTrueBlackBarsChanged,
         onResumeRewindSecondsChanged = viewModel::onResumeRewindSecondsChanged,
         onPassOutThresholdChanged = viewModel::onPassOutThresholdChanged,
-        onNextUpPromptSecondsChanged = viewModel::onNextUpPromptSecondsChanged,
+        onNextUpPromptModeChanged = viewModel::onNextUpPromptModeChanged,
         onResetPlaybackOverrides = viewModel::resetPlaybackOverrides,
         onUseProfileSetting = viewModel::onUseProfileSetting,
         seekIntervals = viewModel.seekIntervals,
@@ -487,7 +488,7 @@ private fun SettingsSplitLayout(
     onTrueBlackBarsChanged: (Boolean) -> Unit,
     onResumeRewindSecondsChanged: (Int) -> Unit,
     onPassOutThresholdChanged: (Int) -> Unit,
-    onNextUpPromptSecondsChanged: (Int) -> Unit,
+    onNextUpPromptModeChanged: (NextUpPromptMode) -> Unit,
     onResetPlaybackOverrides: () -> Unit,
     onUseProfileSetting: (String) -> Unit,
     seekIntervals: SeekIntervalSettingsModel? = null,
@@ -578,7 +579,7 @@ private fun SettingsSplitLayout(
             onTrueBlackBarsChanged = onTrueBlackBarsChanged,
             onResumeRewindSecondsChanged = onResumeRewindSecondsChanged,
             onPassOutThresholdChanged = onPassOutThresholdChanged,
-            onNextUpPromptSecondsChanged = onNextUpPromptSecondsChanged,
+            onNextUpPromptModeChanged = onNextUpPromptModeChanged,
             onResetPlaybackOverrides = onResetPlaybackOverrides,
             onUseProfileSetting = onUseProfileSetting,
             seekIntervals = seekIntervals,
@@ -878,7 +879,7 @@ private fun SettingsDetailPane(
     onTrueBlackBarsChanged: (Boolean) -> Unit,
     onResumeRewindSecondsChanged: (Int) -> Unit,
     onPassOutThresholdChanged: (Int) -> Unit,
-    onNextUpPromptSecondsChanged: (Int) -> Unit,
+    onNextUpPromptModeChanged: (NextUpPromptMode) -> Unit,
     onResetPlaybackOverrides: () -> Unit,
     onUseProfileSetting: (String) -> Unit,
     seekIntervals: SeekIntervalSettingsModel? = null,
@@ -944,7 +945,7 @@ private fun SettingsDetailPane(
             onTrueBlackBarsChanged = onTrueBlackBarsChanged,
                 onResumeRewindSecondsChanged = onResumeRewindSecondsChanged,
                 onPassOutThresholdChanged = onPassOutThresholdChanged,
-                onNextUpPromptSecondsChanged = onNextUpPromptSecondsChanged,
+                onNextUpPromptModeChanged = onNextUpPromptModeChanged,
                 onResetPlaybackOverrides = onResetPlaybackOverrides,
                 onUseProfileSetting = onUseProfileSetting,
                 seekIntervals = seekIntervals,
@@ -1231,7 +1232,7 @@ private fun TvPlaybackSettingsPane(
     onTrueBlackBarsChanged: (Boolean) -> Unit,
     onResumeRewindSecondsChanged: (Int) -> Unit,
     onPassOutThresholdChanged: (Int) -> Unit,
-    onNextUpPromptSecondsChanged: (Int) -> Unit,
+    onNextUpPromptModeChanged: (NextUpPromptMode) -> Unit,
     onResetPlaybackOverrides: () -> Unit,
     /** Receives the key of the control going back to the profile's value. */
     onUseProfileSetting: (String) -> Unit,
@@ -1438,9 +1439,13 @@ private fun TvPlaybackSettingsPane(
                     )
                 }
                 SettingsValueRow(
-                    label = "Show Next Up",
-                    value = nextUpPromptLabel(state.nextUpPromptSeconds),
-                    onClick = { activePicker = PlaybackPicker.NextUpPrompt },
+                    label = "Up Next during playback",
+                    value = state.nextUpPromptMode.label,
+                    onClick = { activePicker = PlaybackPicker.NextUpMode },
+                )
+                SettingsFooterText(
+                    text = "Enabled uses the original credits-marker behavior. Disabled keeps skip controls " +
+                        "and stops automatic prompts until playback ends. Saved for this profile on this device.",
                 )
                 // Three-way, not a switch: the schema's recommended control
                 // is a select and TV has no segmented control, so this uses the
@@ -1609,22 +1614,13 @@ private fun TvPlaybackSettingsPane(
                 onDismiss = { activePicker = null },
             )
         }
-        PlaybackPicker.NextUpPrompt -> {
-            val (options, selectedId) = profileLayered(
-                PlaybackSettingsKeys.NextUpPromptSeconds,
-                NextUpPromptOptions.map { PickerOption(it.toString(), nextUpPromptLabel(it)) },
-                state.nextUpPromptSeconds.toString(),
-            )
+        PlaybackPicker.NextUpMode -> {
             TvSettingsPickerSheet(
-                title = "Show Next Up",
-                options = options,
-                selectedId = selectedId,
+                title = "Up Next during playback",
+                options = NextUpPromptMode.entries.map { PickerOption(it.wireValue, it.label) },
+                selectedId = state.nextUpPromptMode.wireValue,
                 onSelect = { id ->
-                    if (id == UseProfileSettingId) {
-                        onUseProfileSetting(PlaybackSettingsKeys.NextUpPromptSeconds)
-                    } else {
-                        id.toIntOrNull()?.let(onNextUpPromptSecondsChanged)
-                    }
+                    onNextUpPromptModeChanged(NextUpPromptMode.fromWire(id))
                     activePicker = null
                 },
                 onDismiss = { activePicker = null },
@@ -2374,7 +2370,7 @@ private enum class PlaybackPicker {
     Resolution,
     MaxBitrate,
     AudioLanguage,
-    NextUpPrompt,
+    NextUpMode,
     IntroSkipMode,
     BufferingQualityMode,
     ResumeRewind,
@@ -3108,21 +3104,11 @@ private fun invertedRowBorder() = ClickableSurfaceDefaults.border(
 private val ResumeRewindOptions = listOf(0, 3, 5, 7, 10, 15, 20, 30)
 private val PassOutThresholdOptions = listOf(0, 2, 3, 4, 5)
 
-// Up-Next prompt timing (seconds before end; 0 = at end). Mirrors tvOS.
-private val NextUpPromptOptions = listOf(0, 10, 30, 60, 120)
-
 private fun resumeRewindLabel(seconds: Int): String =
     if (seconds <= 0) "Off" else "${seconds}s"
 
 private fun passOutThresholdLabel(count: Int): String =
     if (count <= 0) "Off" else "$count"
-
-private fun nextUpPromptLabel(seconds: Int): String = when {
-    seconds <= 0 -> "At end"
-    seconds < 60 -> "$seconds seconds before end"
-    seconds == 60 -> "1 minute before end"
-    else -> "${seconds / 60} minutes before end"
-}
 
 /**
  * "Theme Music" and "Loop Theme Music", as the web app's device settings offer

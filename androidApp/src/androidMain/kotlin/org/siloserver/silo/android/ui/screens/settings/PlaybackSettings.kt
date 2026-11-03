@@ -21,6 +21,7 @@ import org.siloserver.silo.common.settings.bufferingQualityModeLabel
 import org.siloserver.silo.common.settings.learnedLimitLabel
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.model.settings.CellularQuality
 import org.siloserver.silo.model.settings.LanguageOptions
 import org.siloserver.silo.model.settings.PlaybackSettingsKeys
@@ -314,6 +315,7 @@ fun PlaybackCellularSection(
 fun PlaybackEpisodesSection(
     autoPlayNext: Boolean,
     nextUpPromptSeconds: Int,
+    nextUpPromptMode: NextUpPromptMode,
     introSkipMode: IntroSkipMode,
     autoSkipCredits: Boolean,
     resumeRewindSeconds: Int,
@@ -322,6 +324,7 @@ fun PlaybackEpisodesSection(
     deviceOverrides: Set<String>,
     onAutoPlayNextChanged: (Boolean) -> Unit,
     onNextUpPromptSecondsChanged: (Int) -> Unit,
+    onNextUpPromptModeChanged: (NextUpPromptMode) -> Unit,
     onIntroSkipModeChanged: (IntroSkipMode) -> Unit,
     onAutoSkipCreditsChanged: (Boolean) -> Unit,
     onResumeRewindSecondsChanged: (Int) -> Unit,
@@ -346,16 +349,29 @@ fun PlaybackEpisodesSection(
             onUseProfileSetting = { onUseProfileSetting(PlaybackSettingsKeys.AutoPlayNext) },
         )
 
-        ProfileLayeredDropdownRow(
-            label = "Show Next Up",
-            value = nextUpPromptLabel(nextUpPromptSeconds),
-            options = nextUpPromptOptions.map(::nextUpPromptLabel),
-            overridden = overridden(PlaybackSettingsKeys.NextUpPromptSeconds),
+        SettingsDropdownRow(
+            label = "Up Next during playback",
+            value = nextUpPromptMode.label,
+            options = NextUpPromptMode.entries.map { it.label },
             onOptionSelected = { label ->
-                nextUpPromptOptions.firstOrNull { nextUpPromptLabel(it) == label }?.let(onNextUpPromptSecondsChanged)
+                NextUpPromptMode.entries.firstOrNull { it.label == label }?.let(onNextUpPromptModeChanged)
             },
-            onUseProfileSetting = { onUseProfileSetting(PlaybackSettingsKeys.NextUpPromptSeconds) },
+            description = "Enabled uses the original credits-marker behavior. Disabled keeps skip controls " +
+                "and stops automatic prompts until playback ends. Saved for this profile on this device.",
         )
+        if (nextUpPromptMode != NextUpPromptMode.Disabled) {
+            ProfileLayeredDropdownRow(
+                label = "Without credits markers",
+                value = nextUpPromptLabel(nextUpPromptSeconds),
+                options = nextUpPromptOptions.map(::nextUpPromptLabel),
+                overridden = overridden(PlaybackSettingsKeys.NextUpPromptSeconds),
+                onOptionSelected = { label ->
+                    nextUpPromptOptions.firstOrNull { nextUpPromptLabel(it) == label }
+                        ?.let(onNextUpPromptSecondsChanged)
+                },
+                onUseProfileSetting = { onUseProfileSetting(PlaybackSettingsKeys.NextUpPromptSeconds) },
+            )
+        }
 
         // Three-way, not a switch: the boolean this replaced could not say
         // "never". Option labels and semantics are fixed by the contract.
