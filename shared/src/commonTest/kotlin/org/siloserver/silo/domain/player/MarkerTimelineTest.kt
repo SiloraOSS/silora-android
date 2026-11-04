@@ -109,4 +109,16 @@ class MarkerTimelineTest {
         assertEquals(1700.0, resolve(listOf(early, late)).upNextCreditsStart(1800.0))
         assertNull(resolve(listOf(late)).upNextCreditsStart(Double.NaN))
     }
+    @Test fun endWindowAndRuntimeToleranceHaveExplicitBoundaries() {
+        fun start(vararg ranges: MarkerSegment, duration: Double = 1800.0) =
+            MarkerTimeline.resolve(ranges.toList(), null, null, null, null).upNextCreditsStart(duration)
+        assertEquals(1350.0, start(MarkerSegment("credits", 1350.0, 1801.0)))
+        assertNull(start(MarkerSegment("credits", 1349.0, 1800.0)))
+        assertNull(start(MarkerSegment("credits", 1700.0, 1801.01)))
+        // Filter implausible ranges before merging touching ranges backward.
+        assertEquals(1350.0, start(MarkerSegment("credits", 1300.0, 1350.0), MarkerSegment("credits", 1350.0, 1800.0)))
+        assertNull(start(MarkerSegment("credits", 1700.0, 1800.0), duration = 0.0))
+        assertNull(start(MarkerSegment("credits", 1700.0, 1800.0), duration = Double.POSITIVE_INFINITY))
+    }
+
 }

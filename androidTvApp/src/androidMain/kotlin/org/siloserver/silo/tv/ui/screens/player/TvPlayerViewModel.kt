@@ -5322,8 +5322,8 @@ class TvPlayerViewModel(
                 refreshShuffleNext()
             }
         }
-        // Playback end reopens a dismissed card without restarting its timer.
-        // A card still showing keeps its existing countdown.
+        // A dismissed automatic pre-end card gets one new countdown at actual end.
+        // An end cancellation remains handled; repeated end events do not re-arm it.
         if (autoAdvanceHandled && preEndDismissal.consumeAtEnd(videoEnded)) {
             autoAdvanceHandled = false
         }
@@ -5798,11 +5798,11 @@ class TvPlayerViewModel(
     /** Up-Next "Keep Watching" — dismiss the overlay and stay on the current episode. */
     fun dismissNextUp() {
         if (nextUpTransitionGate.isActive) return
-        preEndDismissal.dismiss(autoAdvanceHandled && !manualNextUp, _uiState.value.nextUpVideoEnded)
+        val keepEndCardVisible = preEndDismissal.dismiss(autoAdvanceHandled && !manualNextUp, _uiState.value.nextUpVideoEnded)
         autoAdvanceHandled = true
         nextUpCountdownJob?.cancel()
         nextUpCountdownJob = null
-        _uiState.update { it.copy(showNextUp = false, nextUpCountdownSeconds = null) }
+        _uiState.update { it.copy(showNextUp = keepEndCardVisible, nextUpCountdownSeconds = null) }
     }
 
     /**

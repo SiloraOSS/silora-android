@@ -16,7 +16,7 @@ class NextUpPromptModeTest {
         assertEquals(NextUpPromptMode.TimeRemaining, NextUpPromptMode.fromWire("time_remaining"))
     }
 
-    @Test fun creditsTakePriorityEvenWhenTheFallbackIsAtEndOrNotLoaded() {
+    @Test fun earlyCreditsUseFallbackAndEligibleCreditsDoNotNeedTiming() {
         assertEquals(1790.0, NextUpPromptMode.CreditsMarkers.promptStartPosition(88.0, 1800.0, 10))
         assertNull(NextUpPromptMode.CreditsMarkers.promptStartPosition(88.0, 1800.0, 0))
         assertEquals(1700.0, NextUpPromptMode.CreditsMarkers.promptStartPosition(1700.0, 1800.0, null))

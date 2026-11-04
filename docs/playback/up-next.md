@@ -35,7 +35,8 @@ Automatic pre-end prompts wait for saved settings and a finite, positive runtime
 Keep Watching cancels a pre-end countdown and suppresses the card through seeks
 for that episode. At actual playback end, a fresh countdown is offered once if
 autoplay and the existing safety gates allow it. Cancel autoplay at the end
-stops that countdown. Raw markers and skip controls are unchanged.
+stops that countdown and keeps the end screen visible. Opening and dismissing
+a manual TV card does not erase a pending automatic end countdown. Raw markers and skip controls are unchanged.
 
 ## Saved choices
 
@@ -46,5 +47,9 @@ selects **Time remaining**. A missing or unknown value uses **Credits markers**.
 
 ## Validation
 
-Kotlin regression tests cover marker selection and dismissal state. Gradle and
-device playback verification are pending for this change.
+Focused Kotlin tests cover marker selection, runtime/window boundaries and dismissal
+state. They pass under `:shared:testDebugUnitTest`. Restoring the old behavior
+while retaining the compatible test/helper signatures produces assertion failures;
+restoring the fix passes. The tests do not instantiate the phone/TV viewmodels,
+so their wiring also requires independent source review and device validation.
+Device playback verification remains outstanding.

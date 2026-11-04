@@ -6075,8 +6075,7 @@ class PlayerViewModel(
         }
         if (autoAdvanceHandled) {
             if (videoEnded) {
-                // Keep Watching dismisses the credits prompt, but finishing the
-                // episode must still offer Play Now without restarting its timer.
+                // A handled end cancellation still offers Play Now without a timer.
                 _uiState.update { it.copy(showUpNext = true, upNextVideoEnded = true) }
             }
             return
@@ -6185,11 +6184,11 @@ class PlayerViewModel(
      */
     fun dismissUpNext() {
         if (nextUpTransitionGate.isActive) return
-        preEndDismissal.dismiss(autoAdvanceHandled, _uiState.value.upNextVideoEnded)
+        val keepEndCardVisible = preEndDismissal.dismiss(autoAdvanceHandled, _uiState.value.upNextVideoEnded)
         autoAdvanceHandled = true
         upNextCountdownJob?.cancel()
         upNextCountdownJob = null
-        _uiState.update { it.copy(showUpNext = false, upNextCountdownSeconds = null) }
+        _uiState.update { it.copy(showUpNext = keepEndCardVisible, upNextCountdownSeconds = null) }
     }
 
     /**
