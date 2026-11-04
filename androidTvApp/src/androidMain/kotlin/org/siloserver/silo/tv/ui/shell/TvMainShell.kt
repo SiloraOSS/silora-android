@@ -30,9 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
@@ -1805,14 +1803,6 @@ fun TvMainShell(
                 entersMenu = focusState.profileMenuEntered,
                 focusEntryToken = focusState.profileMenuFocusEntryToken,
                 onSwitchProfile = closeMenuAnd(onSwitchProfile),
-                onWatchlist = closeMenuAnd {
-                    navigateToSecondary(TvMainRoute.Watchlist.route)
-                    moveFocusToContent(TvMainRoute.Watchlist.route)
-                },
-                onFavorites = closeMenuAnd {
-                    navigateToSecondary(TvMainRoute.Favorites.route)
-                    moveFocusToContent(TvMainRoute.Favorites.route)
-                },
                 onHistory = closeMenuAnd {
                     navigateToSecondary(TvMainRoute.History.route)
                     moveFocusToContent(TvMainRoute.History.route)
@@ -2040,9 +2030,9 @@ private fun cascadePanelOffset(
  * consumes input and focuses its first row on open; Back/Menu closes it and
  * returns focus to the avatar via [onDismiss].
  *
- * Row set + order mirrors tvOS: Switch Profile · Watchlist · Favorites ·
- * History · Watch Party (Settings → Experimental) · Settings · Switch Server ·
- * Sign Out. Calendar and Requests are top-level tabs.
+ * Row set + order: Switch Profile · History · Watch Party (Settings →
+ * Experimental) · Settings · Switch Server · Sign Out. Watchlist and Favorites
+ * live under For You only. Calendar and Requests remain top-level tabs.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -2051,8 +2041,6 @@ private fun TvProfileDropdown(
     entersMenu: Boolean,
     focusEntryToken: Int,
     onSwitchProfile: () -> Unit,
-    onWatchlist: () -> Unit,
-    onFavorites: () -> Unit,
     onHistory: () -> Unit,
     showWatchParty: Boolean,
     onWatchParty: () -> Unit,
@@ -2098,8 +2086,6 @@ private fun TvProfileDropdown(
             focusRequester = firstFocus,
             onClick = onSwitchProfile,
         )
-        ProfileDropdownRow(label = "Watchlist", icon = Icons.Filled.Bookmark, onClick = onWatchlist)
-        ProfileDropdownRow(label = "Favorites", icon = Icons.Filled.Favorite, onClick = onFavorites)
         ProfileDropdownRow(label = "History", icon = Icons.Filled.History, onClick = onHistory)
         if (showWatchParty) {
             ProfileDropdownRow(
