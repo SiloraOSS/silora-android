@@ -457,7 +457,7 @@ class PlayerViewModelLoadOwnershipIntegrationTest {
     }
 
     @Test
-    fun keepWatchingSuppressesCreditsPromptButReopensNextUpAtPlaybackEnd() = runTest(dispatcher) {
+    fun keepWatchingRearmsOnceAtEndAndCancellationPreservesEndScreen() = runTest(dispatcher) {
         val starter = DeferredNonCooperativeStarter()
         val fixture = playerViewModel(starter, backgroundScope)
         val store = ViewModelStore().also { it.put("player", fixture.viewModel) }
@@ -477,6 +477,22 @@ class PlayerViewModelLoadOwnershipIntegrationTest {
             viewModel.onApproachingEnd(videoEnded = true)
             assertTrue(viewModel.uiState.value.showUpNext)
             assertTrue(viewModel.uiState.value.upNextVideoEnded)
+            assertEquals(10, viewModel.uiState.value.upNextCountdownSeconds)
+            runCurrent()
+            testScheduler.advanceTimeBy(2_000)
+            runCurrent()
+            val remaining = viewModel.uiState.value.upNextCountdownSeconds
+            assertEquals(8, remaining)
+            viewModel.onApproachingEnd(videoEnded = true)
+            assertEquals(remaining, viewModel.uiState.value.upNextCountdownSeconds)
+
+            // The same action becomes Cancel autoplay at the actual end.
+            viewModel.dismissUpNext()
+            assertTrue(viewModel.uiState.value.showUpNext)
+            assertTrue(viewModel.uiState.value.upNextVideoEnded)
+            assertNull(viewModel.uiState.value.upNextCountdownSeconds)
+            viewModel.onApproachingEnd(videoEnded = true)
+            assertTrue(viewModel.uiState.value.showUpNext)
             assertNull(viewModel.uiState.value.upNextCountdownSeconds)
             testScheduler.advanceTimeBy(30_000)
             runCurrent()
