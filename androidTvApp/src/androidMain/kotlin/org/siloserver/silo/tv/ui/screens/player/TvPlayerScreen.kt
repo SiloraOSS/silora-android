@@ -3860,9 +3860,9 @@ private fun TvPlayerNextUpOverlay(
                                 )
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                if (!videoEnded) {
+                                if (!videoEnded || countdownSeconds != null) {
                                     TvDialogActionRow(
-                                        title = "Keep Watching",
+                                        title = if (videoEnded) "Cancel autoplay" else "Keep Watching",
                                         onClick = onKeepWatching,
                                         modifier = Modifier.width(220.dp),
                                     )

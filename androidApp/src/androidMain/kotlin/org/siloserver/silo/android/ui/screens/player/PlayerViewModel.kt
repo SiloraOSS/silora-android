@@ -82,6 +82,7 @@ import org.siloserver.silo.domain.player.toBufferingQualityPlan
 import org.siloserver.silo.domain.player.IntroAutoSkipController
 import org.siloserver.silo.domain.player.IntroAutoSkipState
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpDismissal
 import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.player.settlingFalseEdges
 import org.siloserver.silo.model.catalog.AudioTrack
@@ -985,6 +986,7 @@ class PlayerViewModel(
     // The guard reads the threshold lazily so a settings change applies live.
     private val autoPlayGuard = AutoPlayGuard(threshold = { passOutThreshold.value })
     // Once-per-episode guard for the credits/ended trigger; reset on each load.
+    private val preEndDismissal = NextUpDismissal()
     private var autoAdvanceHandled = false
     // End point fired before the next episode resolved — remember it (and the
     // strongest videoEnded flag seen) so resolveNextEpisode can commit the card.
@@ -1664,6 +1666,7 @@ class PlayerViewModel(
         // New item: re-arm the once-per-episode auto-advance trigger. (The
         // AutoPlayGuard streak intentionally PERSISTS across episodes.)
         autoAdvanceHandled = false
+        preEndDismissal.reset()
         pendingApproachingEndVideoEnded = null
         shuffleNextPartFileId = null
         shuffleRefreshedForPostRoll = false
@@ -3207,7 +3210,7 @@ class PlayerViewModel(
         if (!seekWasActive) {
             val state = _uiState.value
             val promptStart = nextUpPromptMode.value?.promptStartPosition(
-                creditsStart = state.markerTimeline.upNextCreditsStart(),
+                creditsStart = state.markerTimeline.upNextCreditsStart(state.duration),
                 duration = state.duration,
                 secondsBeforeEnd = nextUpPromptSeconds.value,
             )
@@ -6067,6 +6070,9 @@ class PlayerViewModel(
                 refreshShuffleNext()
             }
         }
+        if (autoAdvanceHandled && preEndDismissal.consumeAtEnd(videoEnded)) {
+            autoAdvanceHandled = false
+        }
         if (autoAdvanceHandled) {
             if (videoEnded) {
                 // Keep Watching dismisses the credits prompt, but finishing the
@@ -6179,6 +6185,7 @@ class PlayerViewModel(
      */
     fun dismissUpNext() {
         if (nextUpTransitionGate.isActive) return
+        preEndDismissal.dismiss(autoAdvanceHandled, _uiState.value.upNextVideoEnded)
         autoAdvanceHandled = true
         upNextCountdownJob?.cancel()
         upNextCountdownJob = null

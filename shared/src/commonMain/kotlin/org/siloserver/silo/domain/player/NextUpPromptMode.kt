@@ -4,7 +4,7 @@ package org.siloserver.silo.domain.player
 enum class NextUpPromptMode(val wireValue: String, val label: String, val description: String) {
     CreditsMarkers(
         "credits", "Credits markers",
-        "Show Up Next when credits begin. Use Time remaining only if this episode has no credits markers.",
+        "Show Up Next when credits begin. Use Time remaining only if this episode has no eligible credits markers.",
     ),
     TimeRemaining(
         "time_remaining", "Time remaining",
@@ -17,8 +17,9 @@ enum class NextUpPromptMode(val wireValue: String, val label: String, val descri
 
     /** Null means wait for playback to end instead of opening an automatic pre-end prompt. */
     fun promptStartPosition(creditsStart: Double?, duration: Double, secondsBeforeEnd: Int?): Double? {
-        if (this == Disabled) return null
-        if (this == CreditsMarkers && creditsStart != null) return creditsStart
+        if (this == Disabled || !duration.isFinite() || duration <= 0) return null
+        if (this == CreditsMarkers && creditsStart != null && creditsStart.isFinite() &&
+            creditsStart >= duration * (1.0 - MarkerTimeline.UP_NEXT_END_WINDOW_FRACTION) && creditsStart < duration) return creditsStart
         if (secondsBeforeEnd == null || secondsBeforeEnd <= 0 || !duration.isFinite() || duration <= 0) return null
         // Do not open on startup when the configured lead time exceeds the runtime.
         return (duration - secondsBeforeEnd).takeIf { it > 0 }
@@ -30,7 +31,7 @@ enum class NextUpPromptMode(val wireValue: String, val label: String, val descri
         val settingsDescription: String = entries.joinToString("\n") { "${it.label}: ${it.description}" }
 
         fun timingDescription(mode: NextUpPromptMode): String = when (mode) {
-            CreditsMarkers -> "Fallback only: used when this episode has no credits markers. " +
+            CreditsMarkers -> "Fallback only: used when this episode has no eligible credits markers. " +
                 "Credits markers take priority. At end waits until playback finishes."
             TimeRemaining -> "Show Up Next this long before the end, even when credits markers are present. " +
                 "At end waits until playback finishes."

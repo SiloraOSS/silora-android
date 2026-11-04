@@ -100,6 +100,7 @@ import org.siloserver.silo.model.playback.PLAYBACK_QUALITY_AUTO
 import org.siloserver.silo.domain.player.IntroAutoSkipController
 import org.siloserver.silo.domain.player.IntroAutoSkipState
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpDismissal
 import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.player.settlingFalseEdges
 import org.siloserver.silo.model.catalog.AudioTrack
@@ -1762,6 +1763,8 @@ class TvPlayerViewModel(
 
     // ---- Next-episode auto-advance (F2) ----
     private var autoAdvanceCount: Int = launchArgs.autoAdvanceCount
+    private val preEndDismissal = NextUpDismissal()
+    private var manualNextUp = false
     private var autoAdvanceHandled = false // once-per-item guard
     // The credits or the end of this item was reached. Unlike autoAdvanceHandled,
     // opening Up Next by hand or Keep Watching never sets it.
@@ -3793,7 +3796,7 @@ class TvPlayerViewModel(
         if (!seekWasActive) {
             val state = _uiState.value
             val promptStart = nextUpPromptMode.value?.promptStartPosition(
-                creditsStart = state.markerTimeline.upNextCreditsStart(),
+                creditsStart = state.markerTimeline.upNextCreditsStart(state.duration),
                 duration = state.duration,
                 secondsBeforeEnd = nextUpPromptSeconds.value,
             )
@@ -4821,6 +4824,8 @@ class TvPlayerViewModel(
         autoTextSubtitleSelectionAttempted = false
         autoAdvanceHandled = false
         reachedCreditsOrEnd = false
+        preEndDismissal.reset()
+        manualNextUp = false
         pendingApproachingEndVideoEnded = null
         episodeSelectionHandoffSlot.invalidate()
         _uiState.update { it.copy(contentId = newContentId, nextEpisode = null) }
@@ -5319,6 +5324,9 @@ class TvPlayerViewModel(
         }
         // Playback end reopens a dismissed card without restarting its timer.
         // A card still showing keeps its existing countdown.
+        if (autoAdvanceHandled && preEndDismissal.consumeAtEnd(videoEnded)) {
+            autoAdvanceHandled = false
+        }
         if (autoAdvanceHandled) {
             if (videoEnded) {
                 _uiState.update { it.copy(showNextUp = true, hudOpen = false, nextUpVideoEnded = true) }
@@ -5391,6 +5399,7 @@ class TvPlayerViewModel(
         if (_uiState.value.showNextUp) return
         nextUpCountdownJob?.cancel()
         nextUpCountdownJob = null
+        manualNextUp = true
         _uiState.update {
             it.copy(showNextUp = true, hudOpen = false, nextUpCountdownSeconds = null)
         }
@@ -5398,6 +5407,7 @@ class TvPlayerViewModel(
 
     private fun commitApproachingEnd(next: NextEpisodeState, videoEnded: Boolean) {
         autoAdvanceHandled = true
+        manualNextUp = false
         pendingApproachingEndVideoEnded = null
         // Threshold 0 (or less) = off: never gate, always allow auto-countdown.
         val threshold = passOutThreshold.value
@@ -5580,6 +5590,8 @@ class TvPlayerViewModel(
             autoAdvanceCount = nextAutoAdvanceCount
             autoAdvanceHandled = false
             reachedCreditsOrEnd = false
+            preEndDismissal.reset()
+            manualNextUp = false
             pendingApproachingEndVideoEnded = null
             shuffleNextPartFileId = null
             shuffleRefreshedForPostRoll = false
@@ -5786,6 +5798,7 @@ class TvPlayerViewModel(
     /** Up-Next "Keep Watching" — dismiss the overlay and stay on the current episode. */
     fun dismissNextUp() {
         if (nextUpTransitionGate.isActive) return
+        preEndDismissal.dismiss(autoAdvanceHandled && !manualNextUp, _uiState.value.nextUpVideoEnded)
         autoAdvanceHandled = true
         nextUpCountdownJob?.cancel()
         nextUpCountdownJob = null
