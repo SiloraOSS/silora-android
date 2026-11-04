@@ -4,6 +4,72 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-04 01:17 PST — upstream 64ae5f08c
+
+Merged upstream `main` into Silora's `main`. Phone and TV calendars now show
+DIGITAL and PHYSICAL movie-release badges. Library grids list individual movies
+rather than grouping them into box sets; box sets remain available through
+search, movie details, and their own pages. TV search gains a clear button.
+
+### Merge inputs
+
+- Branch: `main`
+- Fork before: `020174afd275b4d3787f63afc28a6651729840ed`
+- Upstream tip: `64ae5f08ccb3efa2f82ebce0d200be3bc01d9b83`
+- Recovery ref: `refs/codex/upstream-merge/20261104T032000Z`
+
+### Upstream commits added
+
+- `6f3e36820` fix(box-sets): stop grouping box sets in library grids (#796)
+- `548e3cb77` feat(tv): add a clear button to the search field (#798)
+- `64ae5f08c` feat(calendar): show DIGITAL and PHYSICAL badges on movie releases (#722)
+
+### Silora merge decisions
+
+- Resolved the TV search conflict by integrating upstream's clear button with
+  Silora's existing text/cursor state, app/system keyboard selection, voice
+  button, physical typing, and focus handling. Right moves from the field to
+  Clear when text exists, then to Voice; clearing returns focus to the field
+  before removing Clear and opens the selected keyboard. System IME opening
+  retains the existing wait for the editable field to compose.
+- Reviewed the automatic merges in TV dependency injection and the main shell.
+  Retained profile-scoped keyboard/remote stores and server-gated Requests in
+  the top bar, plus For You and experimental Watch Party behavior. Adopted
+  upstream's removal of box-set grouping parameters and library-grid callbacks.
+- Compared all 195 fork-specific file entries outside the three overlapping
+  paths with the pre-merge tree, including deletions; they were unchanged before
+  this log update. Preserved HEVC setting keys/defaults and read recovery,
+  Night Mode and tuning, independent TV resolution/frame-rate matching, Extra
+  small subtitles, remote shortcuts, keyboard/voice preferences and migration,
+  embedded trailers, AI subtitle fixes, and all three Up Next trigger choices
+  with their existing persistence, timing, and controls.
+- Preserved Silora branding/application IDs and Kotlin namespaces, fork release
+  tooling, dependency verification, and the product exposure rules. The README
+  still matches upstream plus its Silora link. No fork workaround was
+  superseded by these incoming changes.
+
+### Validation
+
+- Passed 36 selected release unit tests: `CalendarBadgeLabelTest` (2),
+  `BoxSetsV2Test` (3), `RoomCatalogCacheRepositoryTest` (13), and
+  `LibrariesViewModelTest` (18), with no failures, errors, or skips.
+- Passed phone and TV release Kotlin compilation, including shared and
+  Android-shared compilation, and `:androidApp:lintRelease` plus
+  `:androidTvApp:lintRelease`. Lint used the existing baselines and reported
+  warnings/hints; compiler and Gradle deprecation warnings remain.
+- Confirmed Gradle task availability. An initial invocation requested
+  `:androidTvApp:testReleaseUnitTest`, which this repository disables because
+  its Robolectric manifest dependency is debug-only; that invocation stopped
+  before validation tasks ran. The corrected release validation passed. TV
+  unit tests and the full test suites were not run.
+- Passed `scripts/check-build-supply-chain.sh`, staged whitespace checks, and
+  inspection for unmerged entries. Reviewed the staged changes against both
+  pinned inputs and verified the remaining fork paths against the pre-merge
+  diff.
+- No device/UI or playback validation was performed. No APK was packaged or
+  installed. Release metadata was unchanged, no release was published, and
+  nothing was pushed.
+
 ## 2026-11-03 03:31 PST — upstream 65664d7ce
 
 Merged upstream `main` into Silora's `main`, adding temporary-password
