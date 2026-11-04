@@ -50,6 +50,8 @@ selects **Time remaining**. A missing or unknown value uses **Credits markers**.
 Focused Kotlin tests cover marker selection, runtime/window boundaries and dismissal
 state. They pass under `:shared:testDebugUnitTest`. Restoring the old behavior
 while retaining the compatible test/helper signatures produces assertion failures;
-restoring the fix passes. The tests do not instantiate the phone/TV viewmodels,
-so their wiring also requires independent source review and device validation.
+restoring the fix passes. The phone ViewModel integration test exercises pre-end dismissal, the single
+end countdown, cancellation with the card retained, and repeated end callbacks.
+Its execution is recorded separately from the shared tests. TV wiring has been
+reviewed independently from source; device validation remains required.
 Device playback verification remains outstanding.
