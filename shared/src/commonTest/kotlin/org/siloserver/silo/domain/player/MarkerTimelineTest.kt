@@ -89,14 +89,24 @@ class MarkerTimelineTest {
     }
 
     @Test fun upNextWaitsForTheLastCreditsRangeSoAMidCreditsScenePlays() {
-        assertEquals(3189.0, timeline.upNextCreditsStart())
+        assertEquals(3189.0, timeline.upNextCreditsStart(3300.0))
         val touching = MarkerTimeline.resolve(
             segments = listOf(MarkerSegment("credits", 1200.0, 1250.0), MarkerSegment("credits", 1250.5, 1300.0)),
             intro = null, credits = null, recap = null, preview = null,
         )
-        assertEquals(1200.0, touching.upNextCreditsStart())
+        assertEquals(1200.0, touching.upNextCreditsStart(1300.0))
         val single = MarkerTimeline.resolve(null, intro = null, credits = TimeRange(1200.0, 1260.0), recap = null, preview = null)
-        assertEquals(1200.0, single.upNextCreditsStart())
-        assertNull(MarkerTimeline.EMPTY.upNextCreditsStart())
+        assertEquals(1200.0, single.upNextCreditsStart(1300.0))
+        assertNull(MarkerTimeline.EMPTY.upNextCreditsStart(1800.0))
+    }
+    @Test fun earlyCreditsAreIgnoredWithoutChangingRawMarkers() {
+        val early = MarkerSegment("credits", 88.0, 134.0)
+        val late = MarkerSegment("credits", 1700.0, 1800.0)
+        fun resolve(segments: List<MarkerSegment>) = MarkerTimeline.resolve(segments, null, null, null, null)
+        val bad = resolve(listOf(MarkerSegment("intro", 88.0, 133.0), early))
+        assertNull(bad.upNextCreditsStart(1800.0))
+        assertEquals(TimeRange(88.0, 134.0), bad.active(MarkerKind.Credits, 90.0))
+        assertEquals(1700.0, resolve(listOf(early, late)).upNextCreditsStart(1800.0))
+        assertNull(resolve(listOf(late)).upNextCreditsStart(Double.NaN))
     }
 }

@@ -4,7 +4,9 @@ On phone and TV, open **Settings → Playback → Episodes → Up Next Trigger**
 The descriptions under the setting explain all three choices:
 
 - **Credits markers** (default): open Up Next when playback crosses the start
-  of the last credits range. If this episode has no credits markers, use the
+  of the last eligible credits range. A range is eligible when it starts in the
+  final 25% of the known runtime and ends no more than one second after it.
+  If no eligible range exists, use the
   **Time remaining** setting as a fallback.
 - **Time remaining**: ignore credits markers and open Up Next at the selected
   time before the end. Use this when credits markers are unreliable.
@@ -15,9 +17,9 @@ The descriptions under the setting explain all three choices:
 The **Time remaining** row offers **At end**, **10 seconds**, **30 seconds**,
 **1 minute**, or **2 minutes** before the end. Its description changes with the
 trigger: under **Credits markers** it explicitly says this is a fallback used
-only when the episode has no credits markers; under **Time remaining** it says
+when the episode has no eligible credits markers; under **Time remaining** it says
 markers are ignored. **At end** waits until playback finishes when timing is
-used. A credits marker still takes priority in **Credits markers** mode.
+used. An eligible credits marker still takes priority in **Credits markers** mode.
 The timing row is hidden while the trigger is **Disabled**.
 
 The trigger choice is local to the active profile, server, and device. It does
@@ -29,7 +31,11 @@ that value. **Use Profile Settings** clears the local trigger choice too.
 autoplay. The countdown keeps its existing behavior, and **Play Now** can start
 the next episode immediately. Seeking and resuming beyond a trigger do not
 open Up Next immediately; Watch Party keeps ownership of episode transitions.
-Timers wait for the saved settings and a known runtime before opening a prompt.
+Automatic pre-end prompts wait for saved settings and a finite, positive runtime.
+Keep Watching cancels a pre-end countdown and suppresses the card through seeks
+for that episode. At actual playback end, a fresh countdown is offered once if
+autoplay and the existing safety gates allow it. Cancel autoplay at the end
+stops that countdown. Raw markers and skip controls are unchanged.
 
 ## Saved choices
 
@@ -40,10 +46,5 @@ selects **Time remaining**. A missing or unknown value uses **Credits markers**.
 
 ## Validation
 
-Phone and TV release compilation passed, along with seven focused trigger tests
-and the profile/server/device persistence test. Lint and the full test suites
-were not run. No APK was packaged or installed for this revision; device
-playback and UI verification remain outstanding.
-
-Related upstream report:
-[comment on server PR #2971](https://github.com/Silo-Server/silo-server/pull/2971#issuecomment-6600721172).
+Kotlin regression tests cover marker selection and dismissal state. Gradle and
+device playback verification are pending for this change.

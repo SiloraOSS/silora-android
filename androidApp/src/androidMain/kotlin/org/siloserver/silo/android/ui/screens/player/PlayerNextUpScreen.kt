@@ -182,6 +182,7 @@ fun PlayerNextUpScreen(
                     NextUpActionButtons(
                         hasNextEpisode = nextEpisode != null,
                         videoEnded = videoEnded,
+                        countdownSeconds = countdownSeconds,
                         onPlayNow = onPlayNow,
                         onKeepWatching = onKeepWatching,
                         onBack = onBack,
@@ -280,6 +281,7 @@ private class PickAnotherAction(val enabled: Boolean, val onClick: () -> Unit)
 private fun NextUpActionButtons(
     hasNextEpisode: Boolean,
     videoEnded: Boolean,
+    countdownSeconds: Int?,
     onPlayNow: () -> Unit,
     onKeepWatching: () -> Unit,
     onBack: () -> Unit,
@@ -320,12 +322,12 @@ private fun NextUpActionButtons(
             Text("Pick Another", color = Color.White)
         }
     }
-    if (!videoEnded) {
+    if (!videoEnded || countdownSeconds != null) {
         OutlinedButton(
             onClick = onKeepWatching,
             modifier = modifier,
         ) {
-            Text("Keep Watching", color = Color.White)
+            Text(if (videoEnded) "Cancel autoplay" else "Keep Watching", color = Color.White)
         }
     }
     OutlinedButton(

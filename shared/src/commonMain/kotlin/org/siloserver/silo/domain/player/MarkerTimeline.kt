@@ -58,8 +58,10 @@ class MarkerTimeline private constructor(private val regions: List<Pair<MarkerKi
      * back over credits ranges that run into it, so a scene between two
      * credits ranges still plays.
      */
-    fun upNextCreditsStart(): Double? {
-        val credits = ranges(MarkerKind.Credits)
+    fun upNextCreditsStart(duration: Double): Double? {
+        if (!duration.isFinite() || duration <= 0) return null
+        val earliest = duration * (1.0 - UP_NEXT_END_WINDOW_FRACTION)
+        val credits = ranges(MarkerKind.Credits).filter { it.start >= earliest && it.start < duration && it.end <= duration + 1.0 }
         var start = credits.lastOrNull()?.start ?: return null
         for (range in credits.asReversed()) {
             // Allow timestamp rounding between touching ranges.
@@ -69,6 +71,9 @@ class MarkerTimeline private constructor(private val regions: List<Pair<MarkerKi
     }
 
     companion object {
+        /** Credits prompts must start in the final 25% of the runtime. */
+        const val UP_NEXT_END_WINDOW_FRACTION = 0.25
+
         val EMPTY = MarkerTimeline(emptyList())
 
         /** Prefers [segments]; the singular fields stand in when a server sends none. */

@@ -17,9 +17,10 @@ class NextUpPromptModeTest {
     }
 
     @Test fun creditsTakePriorityEvenWhenTheFallbackIsAtEndOrNotLoaded() {
-        assertEquals(88.0, NextUpPromptMode.CreditsMarkers.promptStartPosition(88.0, 1800.0, 10))
-        assertEquals(88.0, NextUpPromptMode.CreditsMarkers.promptStartPosition(88.0, 1800.0, 0))
-        assertEquals(88.0, NextUpPromptMode.CreditsMarkers.promptStartPosition(88.0, 1800.0, null))
+        assertEquals(1790.0, NextUpPromptMode.CreditsMarkers.promptStartPosition(88.0, 1800.0, 10))
+        assertNull(NextUpPromptMode.CreditsMarkers.promptStartPosition(88.0, 1800.0, 0))
+        assertEquals(1700.0, NextUpPromptMode.CreditsMarkers.promptStartPosition(1700.0, 1800.0, null))
+        assertNull(NextUpPromptMode.CreditsMarkers.promptStartPosition(1700.0, Double.NaN, 10))
     }
 
     @Test fun timeRemainingIgnoresAnEarlyCreditsMarker() {
