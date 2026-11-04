@@ -14,6 +14,24 @@ class NextUpDismissalTest {
         state.dismiss(automaticHandled = true, videoEnded = true)
         assertFalse(state.consumeAtEnd(true))
     }
+    @Test fun endCancellationPreservesTheCardWithoutRearming() {
+        val state = NextUpDismissal()
+        assertFalse(state.dismiss(automaticHandled = true, videoEnded = false))
+        assertTrue(state.consumeAtEnd(true))
+        assertTrue(state.dismiss(automaticHandled = true, videoEnded = true))
+        assertFalse(state.consumeAtEnd(true))
+        assertFalse(state.consumeAtEnd(true))
+    }
+
+    @Test fun manualCardDoesNotEraseEarlierAutomaticDismissal() {
+        val state = NextUpDismissal()
+        assertFalse(state.dismiss(automaticHandled = true, videoEnded = false))
+        assertFalse(state.dismiss(automaticHandled = false, videoEnded = false))
+        assertFalse(state.consumeAtEnd(false))
+        assertTrue(state.consumeAtEnd(true))
+        assertFalse(state.consumeAtEnd(true))
+    }
+
     @Test fun manualAndResetNeverArmAutoplay() {
         val state = NextUpDismissal()
         state.dismiss(automaticHandled = false, videoEnded = false)
