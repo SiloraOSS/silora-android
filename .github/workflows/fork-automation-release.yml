@@ -1,0 +1,283 @@
+name: Silora Automation Release
+run-name: Silora ${{ inputs.publish && 'release' || 'validation' }} ${{ inputs.source_sha }} upstream ${{ inputs.upstream_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full validated Silora merge SHA (must match the selected main commit)
+        type: string
+        required: true
+      upstream_sha:
+        description: Full official upstream SHA included and validated by the local merge skill
+        type: string
+        required: true
+      publish:
+        description: Publish verified APKs (off builds and verifies without tags or releases)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Share publication ordering with the unchanged daily and manual workflows.
+concurrency:
+  group: silora-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    if: github.repository == 'SiloraOSS/silora-android' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
+      upstream_sha: ${{ steps.source.outputs.upstream_sha }}
+      tag: ${{ steps.source.outputs.tag }}
+      should_build: ${{ steps.source.outputs.should_build }}
+    steps:
+      - name: Check out the dispatch commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate the handoff and reserve its source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          UPSTREAM_SHA: ${{ inputs.upstream_sha }}
+          PUBLISH: ${{ inputs.publish }}
+        run: python3 scripts/automation-release.py prepare
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      title: ${{ steps.metadata.outputs.title }}
+    steps:
+      - name: Check signing configuration
+        env:
+          CONFIGURED: ${{ secrets.SILO_RELEASE_KEYSTORE_B64 != '' && secrets.SILO_RELEASE_KEYSTORE_PASSWORD != '' && secrets.SILO_RELEASE_KEY_ALIAS != '' }}
+        run: |
+          if [[ "${CONFIGURED}" != true ]]; then
+            echo '::error::Configure the persistent signing secrets described in docs/fork-releases.md.'
+            exit 1
+          fi
+
+      - name: Check out the selected commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check release tooling
+        run: |
+          python3 scripts/test-fork-release.py
+          python3 scripts/test-build-local-release.py
+          python3 scripts/test-automation-release.py
+
+      - name: Read official version tags already present in the source history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Read tag metadata through the API, without fetching upstream objects.
+          # Only commits already included in the fork checkout can become refs.
+          gh api 'repos/Silo-Server/silo-android/tags?per_page=100' --paginate \
+            --jq '.[] | [.name, .commit.sha] | @tsv' > "${RUNNER_TEMP}/silo-version-tags.tsv"
+          while IFS=$'\t' read -r tag sha; do
+            if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+              git update-ref "refs/silo-upstream/tags/${tag}" "${sha}"
+            fi
+          done < "${RUNNER_TEMP}/silo-version-tags.tsv"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+      - name: Cache Robolectric Android runtimes
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: fork-robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', '**/build.gradle.kts') }}
+          restore-keys: |
+            fork-robolectric-${{ runner.os }}-
+
+      - name: Install the Android SDK packages
+        run: '"${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" "build-tools;35.0.0"'
+
+      - name: Check build dependencies
+        run: ./scripts/check-build-supply-chain.sh
+
+      - name: Stamp the fork build
+        id: metadata
+        env:
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          UPSTREAM_SHA: ${{ needs.prepare.outputs.upstream_sha }}
+          FORK_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: python3 scripts/fork-release.py prepare
+
+      - name: Run the full unit test suite
+        run: ./gradlew test -Pandroid.r8.maxWorkers=1 --max-workers=2 --no-parallel --console=plain
+
+      - name: Decode the persistent signing key
+        env:
+          SILO_RELEASE_KEYSTORE_B64: ${{ secrets.SILO_RELEASE_KEYSTORE_B64 }}
+          SILO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.SILO_RELEASE_KEYSTORE_PASSWORD }}
+          SILO_RELEASE_KEY_ALIAS: ${{ secrets.SILO_RELEASE_KEY_ALIAS }}
+          SILO_GOOGLE_SERVICES_JSON_B64: ${{ secrets.SILO_GOOGLE_SERVICES_JSON_B64 }}
+        run: ./scripts/decode-release-secrets.sh
+
+      - name: Lint and build the release APKs
+        env:
+          SILO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.SILO_RELEASE_KEYSTORE_PASSWORD }}
+          SILO_RELEASE_KEY_ALIAS: ${{ secrets.SILO_RELEASE_KEY_ALIAS }}
+          SILO_RELEASE_KEY_PASSWORD: ${{ secrets.SILO_RELEASE_KEY_PASSWORD }}
+        run: |
+          ./gradlew \
+            :androidApp:lintRelease :androidTvApp:lintRelease \
+            :androidApp:assembleRelease :androidTvApp:assembleRelease \
+            -Pandroid.r8.maxWorkers=1 --max-workers=2 --no-parallel --console=plain
+
+      - name: Verify and package both APKs
+        env:
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          UPSTREAM_SHA: ${{ needs.prepare.outputs.upstream_sha }}
+          PUBLISH: ${{ inputs.publish }}
+          SILO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.SILO_RELEASE_KEYSTORE_PASSWORD }}
+          SILO_RELEASE_KEY_ALIAS: ${{ secrets.SILO_RELEASE_KEY_ALIAS }}
+        run: |
+          python3 scripts/automation-release.py verify
+          python3 scripts/fork-release.py package
+          python3 scripts/automation-release.py receipt
+          test -s androidApp/build/outputs/mapping/release/mapping.txt
+          test -s androidTvApp/build/outputs/mapping/release/mapping.txt
+
+      - name: Keep matching R8 mappings
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: silora-automation-mappings
+          path: |
+            androidApp/build/outputs/mapping/release/mapping.txt
+            androidTvApp/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Keep the verified release files
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: silora-automation-release
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Keep failure reports
+        if: failure()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: silora-failure-reports
+          path: |
+            **/build/reports/tests/
+            **/build/reports/lint-results*.html
+            **/build/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Remove the decoded key
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/silo-release.jks"
+
+  publish:
+    needs: [prepare, build]
+    if: inputs.publish && needs.prepare.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the trusted publication tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download the verified release files
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: silora-automation-release
+          path: dist
+
+      - name: Publish and confirm the exact verified source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          UPSTREAM_SHA: ${{ needs.prepare.outputs.upstream_sha }}
+          TAG: ${{ needs.build.outputs.tag }}
+          TITLE: ${{ needs.build.outputs.title }}
+          PUBLISH: ${{ inputs.publish }}
+        run: python3 scripts/automation-release.py publish
+
+  result:
+    needs: [prepare, build, publish]
+    if: always() && github.repository == 'SiloraOSS/silora-android' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record the final outcome
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          UPSTREAM_SHA: ${{ inputs.upstream_sha }}
+          PUBLISH: ${{ inputs.publish }}
+          PREPARE: ${{ needs.prepare.result }}
+          BUILD: ${{ needs.build.result }}
+          PUBLICATION: ${{ needs.publish.result }}
+          SHOULD_BUILD: ${{ needs.prepare.outputs.should_build }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          jobs = {name: os.environ[name] for name in ('PREPARE', 'BUILD', 'PUBLICATION')}
+          if any(value in ('failure', 'cancelled') for value in jobs.values()) or jobs['PREPARE'] != 'success':
+              status = 'failed_or_cancelled'
+          elif os.environ['SHOULD_BUILD'] == 'false':
+              status = 'already_published'
+          elif jobs['BUILD'] == 'success' and os.environ['PUBLISH'] == 'false':
+              status = 'validated_without_publication'
+          elif jobs['BUILD'] == 'success' and jobs['PUBLICATION'] == 'success':
+              status = 'published'
+          else:
+              status = 'incomplete'
+          record = dict(status=status, source_sha=os.environ['SOURCE_SHA'], upstream_sha=os.environ['UPSTREAM_SHA'],
+                        publication_requested=os.environ['PUBLISH'] == 'true', jobs=jobs,
+                        run_id=os.environ['GITHUB_RUN_ID'], run_attempt=os.environ['GITHUB_RUN_ATTEMPT'],
+                        run_url=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}")
+          Path('run-result.json').write_text(json.dumps(record, indent=2) + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream:
+              stream.write(f"Outcome: **{status}**\n\nSource: `{record['source_sha']}`\n\nRun: {record['run_url']}\n")
+          PYTHON
+
+      - name: Keep the outcome receipt
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: silora-automation-result
+          path: run-result.json
+          if-no-files-found: error
+          retention-days: 90

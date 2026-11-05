@@ -4,6 +4,29 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-04 — separate automation release workflow
+
+Added **Silora Automation Release** beside the existing daily and manual
+workflows. It accepts the exact validated source and included upstream SHAs,
+defaults to validation without publication, requires tests and full release
+lint, and verifies both signed APKs against the persistent signing certificate,
+application ID, and version. Publishing reserves the source tag, verifies
+uploaded files by downloading them, and confirms the completed public release.
+
+Added duplicate checks, private dispatch receipts and reconciliation, explicit
+reviewed retries, build/publication receipts, and retained R8 mappings. A
+separate notification listener uses the existing verified Discord transport
+and distinguishes validation, publication, and already published sources.
+The original workflows, their shared scripts, and the saved local automation
+are unchanged. Setup and rollback: `docs/automation-releases.md`.
+
+Validation: 100 release-tooling tests passed, covering the new handoff/recovery
+logic and existing release, local-build, version, and notification tooling.
+Actionlint, the build supply-chain check, Python compilation, and whitespace
+checks passed. These are local checks with fake external responses; no new
+GitHub run, APK build, release, or device test was performed. GitHub validation
+and the automation switchover remain pending.
+
 ## 2026-11-04 01:17 PST — upstream 64ae5f08c
 
 Merged upstream `main` into Silora's `main`. Phone and TV calendars now show

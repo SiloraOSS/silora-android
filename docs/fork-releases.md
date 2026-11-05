@@ -26,6 +26,11 @@ The release workflow publishes optimized, signed phone and TV APKs on
 
 ## Schedule and manual builds
 
+A separate [local-automation release workflow](automation-releases.md) accepts
+an exact validated merge SHA and defaults to validation without publication.
+It is developed alongside the existing workflows; adding it does not change
+the saved local automation's dispatch target.
+
 The **Silora Daily** workflow runs every day at 15:37 UTC:
 08:37 Pacific during daylight saving time and 07:37 during standard time.
 GitHub can delay scheduled jobs. The workflow must stay on the default branch,
