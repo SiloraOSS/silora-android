@@ -6,33 +6,39 @@ decisions, and validation results. Entries appear newest first.
 
 ## 2026-11-04 — separate automation release workflow
 
-The first GitHub validation run exposed a notification guard that compared the
-custom run name with the workflow name. The handler now verifies the workflow
-ID and path, accepts custom run names, and has a regression test. The rejected
-event stopped before any Discord call. Repeated events are serialized and
-reconciled through intent/delivery artifacts before sending. An uncertain send
-stops for inspection. All 102 release-tooling tests passed.
-
 Added **Silora Automation Release** beside the existing daily and manual
-workflows. It accepts the exact validated source and included upstream SHAs,
-defaults to validation without publication, requires tests and full release
-lint, and verifies both signed APKs against the persistent signing certificate,
-application ID, and version. Publishing reserves the source tag, verifies
-uploaded files by downloading them, and confirms the completed public release.
+workflows and switched the saved local automation to its exact-commit handoff.
+The original workflows and shared scripts are unchanged. The local schedule,
+model, project paths, execution setting, merge skill, pre-push release
+validation, push safeguards, and no-change policy are preserved.
 
-Added duplicate checks, private dispatch receipts and reconciliation, explicit
-reviewed retries, build/publication receipts, and retained R8 mappings. A
-separate notification listener uses the existing verified Discord transport
-and distinguishes validation, publication, and already published sources.
-The original workflows, their shared scripts, and the saved local automation
-are unchanged. Setup and rollback: `docs/automation-releases.md`.
+The new workflow accepts the validated source and included upstream SHAs,
+defaults to validation without publication, and requires tests, full release
+lint, and signed phone/TV builds. APK verification checks the persistent signing
+certificate, application ID, version, and non-debuggable flag. Publishing
+reserves the source tag, downloads and verifies uploaded files, and confirms
+the completed public release. Private dispatch receipts, reviewed retries,
+build/publication receipts, and retained R8 mappings support recovery.
 
-Validation: 100 release-tooling tests passed, covering the new handoff/recovery
-logic and existing release, local-build, version, and notification tooling.
-Actionlint, the build supply-chain check, Python compilation, and whitespace
-checks passed. These are local checks with fake external responses; no new
-GitHub run, APK build, release, or device test was performed. GitHub validation
-and the automation switchover remain pending.
+A separate notification listener uses the existing verified Discord transport.
+GitHub validation exposed a guard that compared the custom run name with the
+workflow name; it now verifies workflow ID and path, with a regression test.
+Rejected events stopped before Discord calls. Intent/delivery artifacts and
+per-event concurrency suppress repeated events and stop uncertain sends for
+inspection. Setup and rollback: `docs/automation-releases.md`.
+
+Validation: all 102 release-tooling tests passed, along with Actionlint, the
+build supply-chain check, Python compilation, and whitespace checks.
+[GitHub run 41973021671](https://github.com/SiloraOSS/silora-android/actions/runs/41973021671)
+passed on source `91dc233ba`: full Gradle tests, release lint, both signed APK
+builds, APK verification, and artifact/result uploads. Downloaded checksums
+passed, both R8 mappings are present, and the signing fingerprint matches the
+local persistent release keystore. Start and completion notifications were
+delivered and read back; repeated start events skipped the saved delivery.
+The earlier [run 41971674039](https://github.com/SiloraOSS/silora-android/actions/runs/41971674039)
+passed the same build checks. Both runs disabled publication and created no
+release tag or public release. No device testing was performed. Publication
+will first run after the next eligible, validated upstream merge.
 
 ## 2026-11-04 01:17 PST — upstream 64ae5f08c
 
