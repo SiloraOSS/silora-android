@@ -10,12 +10,15 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.siloserver.silo.model.server.ServerEntry
+import org.siloserver.silo.model.server.AccountEntry
+import org.siloserver.silo.common.store.AccountScopedKeys
 
-/** Local preferences partitioned by server/profile, with no server writes. */
+/** Local preferences partitioned by server/account/profile, with no server writes. */
 internal class TvProfilePreferences(
     private val prefs: SharedPreferences,
     private val activeServer: StateFlow<ServerEntry?>,
     private val legacyKeys: Set<String>,
+    private val accounts: StateFlow<List<AccountEntry>>? = null,
 ) {
     fun <T> read(default: T, value: (SharedPreferences, String) -> T): T = synchronized(prefs) {
         val prefix = currentPrefix() ?: return@synchronized default
@@ -50,12 +53,34 @@ internal class TvProfilePreferences(
         val hash = MessageDigest.getInstance("SHA-256")
             .digest(identity.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
-        return "profile_$hash."
+        val legacyPrefix = "profile_$hash."
+        val accountId = server.accountId?.takeIf(String::isNotBlank) ?: return legacyPrefix
+        val prefix = "${AccountScopedKeys.token(accountId)}.$legacyPrefix"
+        if (adoptsLegacyData(accountId)) {
+            prefs.edit {
+                legacyKeys.forEach { key ->
+                    val oldKey = legacyPrefix + key
+                    if (!prefs.contains(prefix + key)) {
+                        when (val value = prefs.all[oldKey]) {
+                            is String -> putString(prefix + key, value)
+                            is Boolean -> putBoolean(prefix + key, value)
+                        }
+                    }
+                    remove(oldKey)
+                }
+            }
+        }
+        return prefix
     }
 
-    /** Only the first active profile inherits the old TV-wide values. */
+    private fun adoptsLegacyData(accountId: String): Boolean =
+        accounts?.value?.any { it.localAccountId == accountId && it.adoptsLegacyData } == true
+
+    /** Only the first active profile of the adopting account inherits TV-wide values. */
     private fun migrateLegacy(prefix: String) {
         if (prefs.getBoolean(MIGRATED, false)) return
+        val accountId = activeServer.value?.accountId
+        if (!accountId.isNullOrBlank() && !adoptsLegacyData(accountId)) return
         val legacy = prefs.all.filterKeys { it in legacyKeys }
         prefs.edit {
             legacy.forEach { (key, value) ->

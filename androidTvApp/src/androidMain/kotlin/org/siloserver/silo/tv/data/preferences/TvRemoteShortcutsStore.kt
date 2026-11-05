@@ -3,6 +3,7 @@ package org.siloserver.silo.tv.data.preferences
 import android.content.SharedPreferences
 import kotlinx.coroutines.flow.StateFlow
 import org.siloserver.silo.model.server.ServerEntry
+import org.siloserver.silo.model.server.AccountEntry
 
 internal enum class TvRemoteButton(val id: String, val label: String) {
     Left("left", "Long press Left"),
@@ -35,10 +36,14 @@ internal enum class TvRemoteShortcutAction(val id: String, val label: String, va
     }
 }
 
-/** Remote mappings belong to the active server/profile on this TV. */
-internal class TvRemoteShortcutsStore(prefs: SharedPreferences, activeServer: StateFlow<ServerEntry?>) {
+/** Remote mappings belong to the active server/account/profile on this TV. */
+internal class TvRemoteShortcutsStore(
+    prefs: SharedPreferences,
+    activeServer: StateFlow<ServerEntry?>,
+    accounts: StateFlow<List<AccountEntry>>? = null,
+) {
     private val preferences = TvProfilePreferences(
-        prefs, activeServer, legacyKeys = TvRemoteButton.entries.map { it.id }.toSet(),
+        prefs, activeServer, legacyKeys = TvRemoteButton.entries.map { it.id }.toSet(), accounts = accounts,
     )
     private val defaults = TvRemoteButton.entries.associateWith { TvRemoteShortcutAction.Default }
     private val readMappings: (SharedPreferences, String) -> Map<TvRemoteButton, TvRemoteShortcutAction> = { stored, prefix ->

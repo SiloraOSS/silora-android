@@ -42,6 +42,7 @@ import org.siloserver.silo.android.ui.navigation.SiloBottomNavBar
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import org.siloserver.silo.android.ui.navigation.Route
+import org.siloserver.silo.android.ui.navigation.routeAfterSignOut
 import org.siloserver.silo.android.ui.navigation.Tab
 import org.siloserver.silo.android.ui.navigation.tabForRoute
 import org.siloserver.silo.android.ui.navigation.tabSwitchNavOptions
@@ -56,6 +57,7 @@ import org.siloserver.silo.android.ui.screens.calendar.CalendarScreen
 import org.siloserver.silo.android.ui.screens.home.HomeScreen
 import org.siloserver.silo.android.cast.SiloCastController
 import org.siloserver.silo.android.ui.screens.cast.SiloCastMiniBar
+import org.siloserver.silo.android.ui.screens.cast.rememberSiloCastArtwork
 import org.siloserver.silo.android.ui.screens.cast.SiloCastTargetPickerSheet
 import org.siloserver.silo.android.ui.screens.libraries.LibrariesScreen
 import org.siloserver.silo.android.ui.screens.libraries.LibrariesSelectorSheet
@@ -170,10 +172,10 @@ fun MainScreen(
     val requestsEnabled by requestsFeatureStore.isEnabled.collectAsState()
     val reachabilityScope = rememberCoroutineScope()
     val activeEntry by serverRegistry.activeEntry.collectAsState()
-    // Drives the initial load and every re-load. Keyed on the active server
-    // and its profile, so switching either re-fetches the avatar rather than
-    // leaving the previous profile's (or none) in the header.
-    LaunchedEffect(activeEntry?.id, activeEntry?.profileId) {
+    // Drives the initial load and every re-load. Keyed on the active server,
+    // account and profile, so switching any of them re-fetches the avatar
+    // rather than leaving the previous profile's (or none) in the header.
+    LaunchedEffect(activeEntry?.id, activeEntry?.accountId, activeEntry?.profileId) {
         headerViewModel.refresh()
     }
     // An access change can add or remove whole libraries: re-derive the tabs
@@ -206,12 +208,14 @@ fun MainScreen(
         initialValue = 0L,
         downloadRecords,
         activeEntry?.id,
+        activeEntry?.accountId,
         activeEntry?.profileId,
         headerState.activeProfile?.id,
     ) {
         value = scopedLocalDownloadBytes(
             storage = downloadStorage,
             serverId = activeEntry?.id,
+            accountId = activeEntry?.accountId,
             profileId = activeEntry?.profileId ?: headerState.activeProfile?.id,
         )
     }
@@ -286,7 +290,7 @@ fun MainScreen(
         navController.clearBackStack(vanished.route)
     }
 
-    LaunchedEffect(activeEntry?.id, activeEntry?.profileId, headerState.activeProfile?.id) {
+    LaunchedEffect(activeEntry?.id, activeEntry?.accountId, activeEntry?.profileId, headerState.activeProfile?.id) {
         requestsFeatureStore.reset()
         requestsFeatureStore.refresh()
         metadataAiFeatureStore.reset()
@@ -295,13 +299,15 @@ fun MainScreen(
         shuffleFeatureStore.refresh()
     }
 
-    fun signOutFromProfileMenu() {
+    fun signOutFromProfileMenu(removeServer: Boolean) {
         reachabilityScope.launch {
             // Same teardown as the Settings sign-out: otherwise the next
             // user's shell renders (and can write back) the previous
             // profile's overlays and card presentation.
-            if (!signOutTeardown.signOut()) return@launch
-            navController.navigate(Route.Login.route) {
+            val signedOut = if (removeServer) signOutTeardown.signOutAndRemoveServer() else signOutTeardown.signOut()
+            if (!signedOut) return@launch
+            // Change Account while another account has a session, else sign-in.
+            navController.navigate(serverRegistry.routeAfterSignOut()) {
                 popUpTo(0) { inclusive = true }
                 launchSingleTop = true
             }
@@ -315,6 +321,11 @@ fun MainScreen(
      * Runs in the navigation host's scope ([org.siloserver.silo.android.ui.navigation.LocalProfileSwitch]).
      */
     fun switchProfileFromMenu() = switchProfile()
+
+    /** Profile-menu "Change account": every saved server's accounts, over the shell so Back returns. */
+    fun changeAccountFromMenu() {
+        navController.navigate(Route.ChangeAccount().route) { launchSingleTop = true }
+    }
     val requestsMenuAction: (() -> Unit)? = if (requestsEnabled) {
         { navController.navigate(Route.Requests.route) }
     } else {
@@ -339,42 +350,51 @@ fun MainScreen(
     // Instantiate with the shell, not when the lazy tab is first opened, so
     // Discover and taste-profile requests run alongside profile/header setup.
     val recommendationsViewModel = koinViewModel<RecommendationsViewModel>()
+    // Resolved here, above both cast-bar placements, so the bar keeps its
+    // title and poster while it moves between them.
+    val siloCastArtwork = rememberSiloCastArtwork(
+        siloCastState.launch?.contentId ?: siloCastState.playbackState?.contentId,
+    )
     Scaffold(
         bottomBar = {
             // The cast bar rests above the nav menu (iOS tabViewBottomAccessory
-            // placement); the Scaffold then pads tab content past both.
-            Column {
-                SiloCastMiniBar(
-                    controller = siloCastController,
-                    onOpenRemote = {
-                        navController.navigate(Route.SiloCastRemote.route) { launchSingleTop = true }
-                    },
-                )
-                SiloBottomNavBar(
-                    currentTab = currentTab,
-                    minimizedToCurrentTab = currentTab == Tab.Home && homeBottomNavMinimized,
-                    onTabSelected = { tab ->
-                        if (tab == Tab.Home && currentTab == Tab.Home) {
-                            // The minimized Home control remains tappable. A
-                            // repeat tap expands the full capsule without
-                            // disturbing the user's feed position.
-                            homeBottomNavMinimized = false
-                        } else {
-                            navController.navigate(tab.route) {
-                                // Pop to the tab stack's live anchor, not a
-                                // hard-coded Home and not the graph's declared
-                                // start (which can name a tab that has since
-                                // been removed). Popping to a route that is not
-                                // on the stack pops nothing — every tab then
-                                // stacked, so Back walked back through
-                                // previously visited tabs instead of leaving.
-                                tabSwitchNavOptions(navController.bottomMostTabRoute())
-                            }
+            // placement) and moves inline beside the minimized Home control;
+            // the Scaffold pads tab content past the whole chrome.
+            SiloBottomNavBar(
+                currentTab = currentTab,
+                minimizedToCurrentTab = currentTab == Tab.Home && homeBottomNavMinimized,
+                onTabSelected = { tab ->
+                    if (tab == Tab.Home && currentTab == Tab.Home) {
+                        // The minimized Home control remains tappable. A
+                        // repeat tap expands the full capsule without
+                        // disturbing the user's feed position.
+                        homeBottomNavMinimized = false
+                    } else {
+                        navController.navigate(tab.route) {
+                            // Pop to the tab stack's live anchor, not a
+                            // hard-coded Home and not the graph's declared
+                            // start (which can name a tab that has since
+                            // been removed). Popping to a route that is not
+                            // on the stack pops nothing — every tab then
+                            // stacked, so Back walked back through
+                            // previously visited tabs instead of leaving.
+                            tabSwitchNavOptions(navController.bottomMostTabRoute())
                         }
-                    },
-                    tabs = visibleTabs,
-                )
-            }
+                    }
+                },
+                tabs = visibleTabs,
+                accessory = { inline, barModifier ->
+                    SiloCastMiniBar(
+                        controller = siloCastController,
+                        onOpenRemote = {
+                            navController.navigate(Route.SiloCastRemote.route) { launchSingleTop = true }
+                        },
+                        inline = inline,
+                        barModifier = barModifier,
+                        sharedArtwork = siloCastArtwork,
+                    )
+                },
+            )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
@@ -437,9 +457,7 @@ fun MainScreen(
                             onWatchPartyClick = watchPartyMenuAction,
                             onSettingsClick = { navController.navigate(Route.Settings.route) },
                             onSwitchProfileClick = ::switchProfileFromMenu,
-                            onSwitchServerClick = {
-                                navController.navigate(Route.ServerList.route)
-                            },
+                            onChangeAccountClick = ::changeAccountFromMenu,
                             onSignOutClick = ::signOutFromProfileMenu,
                         )
                     }
@@ -475,9 +493,7 @@ fun MainScreen(
                             onWatchPartyClick = watchPartyMenuAction,
                             onSettingsClick = { navController.navigate(Route.Settings.route) },
                             onSwitchProfileClick = ::switchProfileFromMenu,
-                            onSwitchServerClick = {
-                                navController.navigate(Route.ServerList.route)
-                            },
+                            onChangeAccountClick = ::changeAccountFromMenu,
                             onSignOutClick = ::signOutFromProfileMenu,
                         )
                     }
@@ -508,9 +524,7 @@ fun MainScreen(
                                     onWatchPartyClick = watchPartyMenuAction,
                                     onSettingsClick = { navController.navigate(Route.Settings.route) },
                                     onSwitchProfileClick = ::switchProfileFromMenu,
-                                    onSwitchServerClick = {
-                                        navController.navigate(Route.ServerList.route)
-                                    },
+                                    onChangeAccountClick = ::changeAccountFromMenu,
                                     onSignOutClick = ::signOutFromProfileMenu,
                                 )
                             },
@@ -569,9 +583,7 @@ fun MainScreen(
                     onWatchPartyClick = watchPartyMenuAction,
                     onSettingsClick = { navController.navigate(Route.Settings.route) },
                     onSwitchProfileClick = ::switchProfileFromMenu,
-                    onSwitchServerClick = {
-                        navController.navigate(Route.ServerList.route)
-                    },
+                    onChangeAccountClick = ::changeAccountFromMenu,
                     onSignOutClick = ::signOutFromProfileMenu,
                     leadingContent = {
                         if (title != null) {

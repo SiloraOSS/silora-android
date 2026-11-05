@@ -30,8 +30,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
@@ -120,6 +120,7 @@ import org.siloserver.silo.model.feature.RequestsFeatureStore
 import org.siloserver.silo.model.personal.UserLibrary
 import org.siloserver.silo.network.ApiResult
 import org.siloserver.silo.network.ServerRegistry
+import org.siloserver.silo.network.accountsOn
 import org.siloserver.silo.repository.AuthRepository
 import org.siloserver.silo.repository.PersonalDataRepository
 import org.siloserver.silo.repository.ProfileRepository
@@ -207,8 +208,10 @@ fun TvMainShell(
     onOpenSectionBrowse: (sectionId: String, title: String, libraryId: Int?, mediaScope: String?) -> Unit,
     /** Runs the sign-out the user chose in [TvSignOutDialog]. */
     onSignOut: (removeServer: Boolean) -> Unit,
+    /** Opens the open account's picker. */
     onSwitchProfile: () -> Unit,
-    onSwitchServer: () -> Unit,
+    /** Opens Change Account: the saved servers and their accounts. */
+    onChangeAccount: () -> Unit,
     onPairDevice: () -> Unit,
     onPlayItem: (contentId: String, type: String?, resumePositionSeconds: Double?) -> Unit,
     /** Open the Watch Party hub. */
@@ -383,7 +386,7 @@ fun TvMainShell(
         mutableStateOf(currentRoute == TvMainRoute.Requests.route)
     }
 
-    LaunchedEffect(activeServerEntry?.id, activeServerEntry?.profileId) {
+    LaunchedEffect(activeServerEntry?.id, activeServerEntry?.accountId, activeServerEntry?.profileId) {
         requestsFeatureStore.reset()
         requestsFeatureStore.refresh()
         metadataAiFeatureStore.reset()
@@ -665,7 +668,16 @@ fun TvMainShell(
         //
         // Nothing hangs on it — it is a caption, not a permission — but it is
         // the part that misleads.
-        val subtitle = if (activeProfile?.isPrimary == true) {
+        // With several accounts on this server, "profile · server" alone
+        // doesn't say whose profile it is: add the account's username
+        // (multi-account spec §4.3). It replaces the role, which belongs to
+        // the same account.
+        val serverId = activeServerEntry?.id
+        val severalAccounts = serverId != null && serverRegistry.accountsOn(serverId).size > 1
+        val subtitle = if (severalAccounts) {
+            serverRegistry.activeAccount.value?.username?.takeIf { it.isNotBlank() }
+                ?: user?.username.orEmpty()
+        } else if (activeProfile?.isPrimary == true) {
             user?.role?.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
                 ?: user?.username.orEmpty()
         } else {
@@ -1792,6 +1804,7 @@ fun TvMainShell(
                 entersMenu = focusState.profileMenuEntered,
                 focusEntryToken = focusState.profileMenuFocusEntryToken,
                 onSwitchProfile = closeMenuAnd(onSwitchProfile),
+                onChangeAccount = closeMenuAnd(onChangeAccount),
                 onHistory = closeMenuAnd {
                     navigateToSecondary(TvMainRoute.History.route)
                     moveFocusToContent(TvMainRoute.History.route)
@@ -1805,7 +1818,6 @@ fun TvMainShell(
                     // the Home row restored by the shared content container.
                     navigateToRoute(TvMainRoute.Settings.route)
                 },
-                onSwitchServer = closeMenuAnd(onSwitchServer),
                 onSignOut = closeMenuAnd { showSignOutDialog = true },
                 onDismiss = { focusState.dismissProfileMenu() },
                 modifier = Modifier
@@ -2017,8 +2029,10 @@ private fun cascadePanelOffset(
  * returns focus to the avatar via [onDismiss].
  *
  * Row set + order: Switch Profile · History · Watch Party (Settings →
- * Experimental) · Settings · Switch Server · Sign Out. Watchlist and Favorites
+ * Experimental) · Settings · Change Account · Sign Out. Watchlist and Favorites
  * live under For You only. Calendar and Requests remain top-level tabs.
+ * Change Account lists saved servers and their accounts; Switch Profile opens
+ * the active account's picker, and Sign Out leaves the active account.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -2027,11 +2041,11 @@ private fun TvProfileDropdown(
     entersMenu: Boolean,
     focusEntryToken: Int,
     onSwitchProfile: () -> Unit,
+    onChangeAccount: () -> Unit,
     onHistory: () -> Unit,
     showWatchParty: Boolean,
     onWatchParty: () -> Unit,
     onSettings: () -> Unit,
-    onSwitchServer: () -> Unit,
     onSignOut: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -2084,7 +2098,7 @@ private fun TvProfileDropdown(
         ProfileDropdownDivider()
 
         ProfileDropdownRow(label = "Settings", icon = Icons.Filled.Settings, onClick = onSettings)
-        ProfileDropdownRow(label = "Switch Server", icon = Icons.Filled.Dns, onClick = onSwitchServer)
+        ProfileDropdownRow(label = "Change Account", icon = Icons.Filled.SwitchAccount, onClick = onChangeAccount)
         ProfileDropdownRow(
             label = "Sign Out",
             icon = Icons.AutoMirrored.Filled.Logout,
