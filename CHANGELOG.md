@@ -4,6 +4,27 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-05 — local automation progress notifications
+
+Added local start, merge-preparation/validation, and validated merge/GitHub
+handoff updates to the existing SiloraOSS webhook in #📋・mod-log. Unchanged or
+stopped runs receive a closing status. The handoff includes the actual summary,
+SHAs, checks, recovery ref, changelog link at the merge commit, and verified
+GitHub run link/state. Local updates suppress mentions; existing GitHub
+notifications continue handling remote build and release results.
+
+The sender records private intents, saves confirmed message IDs before
+read-back, skips delivered events, and reconciles interrupted sends without
+posting again. Its installed runtime and private webhook configuration live
+outside the checkout so it works with development branches and merge worktrees.
+The automation's schedule, model, merge/release checks, and push safeguards are
+preserved. GitHub workflows and shared notification scripts are unchanged.
+
+Validation: 17 focused local-notification tests, 33 automation-release tests,
+and 10 existing notification tests passed, along with supply-chain and
+whitespace checks. A read-only live webhook check and a handoff preview using
+real GitHub run metadata passed. No Android application code changed.
+
 ## 2026-11-05 13:05 PST — upstream fee491916
 
 Merged upstream `main` into Silora `main` to keep TV focus on a Continue Watching
