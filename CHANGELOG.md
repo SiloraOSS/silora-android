@@ -4,6 +4,170 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-05 — local automation progress notifications
+
+Added local start, merge-preparation/validation, and validated merge/GitHub
+handoff updates to the existing SiloraOSS webhook in #📋・mod-log. Unchanged or
+stopped runs receive a closing status. The handoff includes the actual summary,
+SHAs, checks, recovery ref, changelog link at the merge commit, and verified
+GitHub run link/state. Local updates suppress mentions; existing GitHub
+notifications continue handling remote build and release results.
+
+The sender records private intents, saves confirmed message IDs before
+read-back, skips delivered events, and reconciles interrupted sends without
+posting again. Its installed runtime and private webhook configuration live
+outside the checkout so it works with development branches and merge worktrees.
+The automation's schedule, model, merge/release checks, and push safeguards are
+preserved. GitHub workflows and shared notification scripts are unchanged.
+
+Validation: 17 focused local-notification tests, 33 automation-release tests,
+and 10 existing notification tests passed, along with supply-chain and
+whitespace checks. A read-only live webhook check and a handoff preview using
+real GitHub run metadata passed. No Android application code changed.
+
+## 2026-11-05 13:05 PST — upstream fee491916
+
+Merged upstream `main` into Silora `main` to keep TV focus on a Continue Watching
+show after its episode advances, and align phone headers and first content rows.
+
+### Merge inputs
+
+- Branch: `main`
+- Fork before: `73c46323fe70f4e2f65b286bdb5ac5de2b9daca4`
+- Upstream tip: `fee491916c593ee36d2a6d6c655d109622e6e622`
+- Recovery ref: `refs/codex/upstream-merge/20261105T205830Z`
+
+### Upstream commits added
+
+- `1c9f4bfd1` fix(tv): return focus to a Continue Watching show after its episode advances (#814)
+- `fee491916` fix(phone): give every tab the same header and first-row position (#815)
+
+### Silora merge decisions
+
+- The merge had no conflicts. Reviewed the automatically merged phone header;
+  retained Silora's wordmark width, aspect ratio, artwork and accessibility
+  label while adopting upstream's shared header geometry, remote-control
+  actions, scroll-responsive glass, and content alignment.
+- Adopted upstream's TV focus restoration keyed by show identity for progress
+  rows. Episode identities remain distinct when a show has multiple cards and
+  outside progress rows. Included upstream's two regression tests.
+- Compared all 207 fork paths outside the incoming changes with the pre-merge
+  tree, including deletions; they match. Retained HEVC defaults and recovery,
+  Night Mode tuning and controls, independent display matching, Extra small
+  subtitles, account/profile-scoped keyboard and remote preferences, voice
+  input, embedded trailers, AI subtitle fixes, and the three Up Next modes.
+- Preserved current navigation and product exposure, Requests and experimental
+  Watch Party gates, Silora application IDs and Kotlin namespaces, README
+  separation, and release/signing/dependency-verification tooling. No fork
+  workaround was superseded.
+
+### Validation
+
+- Passed the mandatory signed release build for both apps using JDK 21, the
+  existing Android SDK, and the persistent release key:
+  `./build.sh --release=both --tests --lint --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing`.
+- Passed the full configured Gradle unit-test suite: 12,450 executions with
+  zero failures, errors, or skips, including 1,432 TV debug JVM tests. TV's
+  release unit-test task remains disabled by the existing configuration.
+- Passed full phone and TV release lint using existing baselines; existing
+  warnings, baseline notices, and Gradle deprecations remain. Both R8-optimized
+  APKs passed persistent-signature, application-ID, version, and non-debuggable
+  verification. Packaged matching R8 mappings and verified all output checksums.
+- Passed 31 fork-release tests, eight local-build tests, 33 automation-release
+  tests, the build supply-chain check, whitespace checks, and inspection for
+  unmerged entries. Reviewed the staged result against both pinned inputs and
+  verified the 207 unaffected fork paths against the pre-merge tree.
+- Used a temporary local 12 GiB Gradle heap for the existing parallel release
+  validation. No persistent build configuration or checks were weakened.
+- No device, UI, or hardware playback validation was performed. Build outputs,
+  private receipts, signing material, and logs remain outside the source commit.
+  Release publication is a separate authorized exact-commit workflow step.
+
+## 2026-11-04 22:40 PST — upstream 670f5ba0a
+
+Merged upstream `main` into Silora `main`, adding multiple saved accounts per
+server, phone-assisted TV sign-in across servers/accounts, combined poster
+badges, and playback, navigation, and focus fixes.
+
+### Merge inputs
+
+- Branch: `main`
+- Fork before: `f1c84b8bc4e352fbccf88c1e927011378320ddf3`
+- Upstream tip: `670f5ba0ae2ed8065bb3d6a23c7317a09b5bc666`
+- Recovery ref: `refs/codex/upstream-merge/20261105T062318Z`
+
+### Upstream commits added
+
+- `1df14386a` fix(tv): keep the marquee detail line whole while it fades (#805)
+- `45a869871` fix(tv): keep focus on a Continue Watching card when its next episode replaces it (#803)
+- `623bb3513` feat(accounts): sign in to more than one account per server (#795)
+- `e727c9af5` fix(tv): move the series page to the next episode after you finish one (#802)
+- `61e4d3254` fix(playback): allow audio passthrough on Android 9 and older HDMI devices (#778)
+- `64208824c` test(tv): wait for view model work to stop before resetting Main (#806)
+- `969c0a812` fix(tv): make the remote's Stop key leave the player (#809)
+- `d65b27cec` refactor(phone): show Watchlist, Favorites and History in the library gr (#808)
+- `2b2af2794` feat(pairing): sign an Android TV in to several servers and accounts from a phone (#810)
+- `44d313854` fix(phone): move the cast bar beside the minimized Home control (#811)
+- `e57fbf3f6` fix(tv): stop Home flashing the text title before its logo (#813)
+- `670f5ba0a` feat(overlays): draw the combined resolution, HDR and audio poster badge (#816)
+
+### Silora merge decisions
+
+- Resolved the settings import conflict by keeping Night Mode parameters and
+  upstream's account-scoped keys. The existing local playback preferences now
+  use upstream's account-specific settings files and adoption lifecycle.
+- Resolved the TV profile-menu conflict by adopting Change Account while
+  retaining the existing server-enabled Requests top-bar tab. Preserved the
+  existing Watch Party Experimental toggle and server capability checks;
+  this merge adds no new toggle or product-exposure rule.
+- Adapted Silora's TV keyboard and remote preferences to isolate accounts
+  sharing a server/profile ID. Only the account adopting pre-account data
+  inherits saved choices; account removal purges its tokenized keys. Kept
+  System keyboard and automatic opening off as defaults, saved choices,
+  reactive switching, and the older TV-wide preference migration.
+- Updated fork settings test factories for upstream's account/profile
+  signature. Added two focused TV tests covering account isolation, observers,
+  legacy adoption, and reset isolation. Kept Silora's accessibility label on
+  the new TV Change Account wordmark.
+- Reviewed all overlapping fork paths. Before this changelog entry, 178
+  unaffected fork paths matched the pre-merge tree; four fork-only TV
+  preference/test paths were adapted for account isolation. Retained HEVC
+  defaults, integer-key compatibility and read recovery; Night Mode tuning,
+  PCM restrictions and controls; independent display matching; Extra small
+  subtitles; keyboard, voice and remote shortcuts; embedded trailers; AI
+  subtitle fixes; and the three Up Next modes with their saved keys.
+- Preserved Silora branding/application IDs, Kotlin namespaces, current phone
+  and TV product exposure, release/signing tooling, dependency verification,
+  and the upstream-aligned README plus its Silora link. No fork workaround
+  was superseded by these upstream changes.
+- Accepted upstream's HDMI passthrough evidence handling for older Android,
+  multi-account/pairing changes, combined poster badge, personal-list grid and
+  cast-bar updates, and TV focus, Stop-key, series-return, and title-logo fixes.
+
+### Validation
+
+- Passed the mandatory signed build for both apps with JDK 21 and the existing
+  Android SDK and persistent signing key:
+  `./build.sh --release=both --tests --lint --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing`.
+- Passed all configured Gradle unit tests: 12,448 executions, zero failures,
+  errors, or skips, including 1,430 TV debug JVM tests and all eight TV input
+  preference tests. The project's TV release unit-test task remains disabled.
+- Passed full phone and TV release lint, both R8-optimized release APK builds,
+  signature/application-ID/version/non-debuggable verification, and packaging
+  of both matching R8 mappings with checksums.
+- Passed 31 fork-release tests, eight local-build tests, 33 automation-release
+  tests, the build supply-chain check, staged whitespace checks, and inspection
+  for unmerged entries. Reviewed the staged result against both pinned inputs.
+- The first build attempt could not write the sandboxed Gradle cache. With
+  cache access, a new test assertion incorrectly matched the migration marker;
+  it was corrected to check account switching/reset behavior. Parallel lint
+  also exhausted the existing 4 GiB Gradle heap. The complete retry passed
+  with a temporary local 12 GiB heap; no persistent build configuration,
+  dependency checks, signing, tests, lint, or R8 settings were weakened.
+- No device, UI, or hardware playback validation was performed. Local build
+  outputs and logs remain outside the source commit. Release publication is
+  handled separately by the authorized exact-commit workflow.
+
 ## 2026-11-04 — separate automation release workflow
 
 Added **Silora Automation Release** beside the existing daily and manual

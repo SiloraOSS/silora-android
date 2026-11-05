@@ -100,6 +100,10 @@ failed publish; do not dispatch a new release automatically.
 
 ## Receipts and notifications
 
+The [local automation milestones](local-automation-notifications.md) report the
+start, merge preparation/validation, and validated merge handoff to the existing
+staff log webhook. Unchanged or stopped runs receive a closing local status.
+
 - The private local handoff receipt records both SHAs, dispatch intent, run ID,
   run URL, and the last observed status. It stays outside the source repository.
 - `release-receipt.json` records the source and upstream SHAs, source tag, build
