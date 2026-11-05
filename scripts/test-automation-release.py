@@ -368,6 +368,7 @@ class NotificationTest(unittest.TestCase):
                     mock.patch.dict(os.environ, GITHUB_EVENT_PATH="event.json", DISCORD_FAILURE_USER_IDS="111111111111111111"), \
                     mock.patch.object(self.notify.common.subprocess, "run", return_value=subprocess.CompletedProcess(
                         ["gh", "api"], 0, stdout=json.dumps({"path": workflow_path}))), \
+                    mock.patch.object(self.notify.Path, "write_text"), \
                     mock.patch.object(self.notify.common, "deliver", return_value="555555555555555555") as send:
                 if workflow_path == self.notify.WORKFLOW_PATH:
                     self.notify.main()
@@ -377,6 +378,23 @@ class NotificationTest(unittest.TestCase):
                     with self.assertRaises(self.notify.common.NotificationError):
                         self.notify.main()
                     send.assert_not_called()
+
+    def test_repeated_notification_skips_and_uncertain_intent_blocks_sending(self):
+        trigger = {"action": "in_progress", "workflow_run": {"id": 42, "run_attempt": 1}}
+        for existing, needed in (([True], False), ([False, False], True), ([False, True], None)):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as tmp, \
+                    mock.patch.object(self.notify, "trigger", return_value=trigger), \
+                    mock.patch.object(self.notify, "previous_marker", side_effect=existing), \
+                    mock.patch.object(self.notify.Path, "write_text"), \
+                    mock.patch.dict(os.environ, GITHUB_OUTPUT=str(Path(tmp) / "output"), GITHUB_RUN_ID="999"), \
+                    mock.patch.object(self.notify.common, "deliver") as send:
+                if needed is None:
+                    with self.assertRaisesRegex(self.notify.common.NotificationError, "prior send intent"):
+                        self.notify.prepare()
+                else:
+                    self.notify.prepare()
+                    self.assertIn(f"should_notify={str(needed).lower()}", (Path(tmp) / "output").read_text())
+                send.assert_not_called()
 
 
 if __name__ == "__main__":

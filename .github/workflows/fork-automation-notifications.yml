@@ -10,6 +10,11 @@ permissions:
   contents: read
   actions: read
 
+# GitHub may emit repeated transitions while a multi-job workflow runs.
+concurrency:
+  group: silora-notify-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-${{ github.event.action }}
+  cancel-in-progress: false
+
 jobs:
   notify:
     if: >-
@@ -25,10 +30,35 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Reconcile the notification receipt
+        id: receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/notify-fork-automation.py prepare
+
+      - name: Record intent before sending
+        if: steps.receipt.outputs.should_notify == 'true'
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: silora-notification-intent-${{ steps.receipt.outputs.key }}
+          path: notification-intent.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Notify Discord
+        if: steps.receipt.outputs.should_notify == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           DISCORD_WEBHOOK_URL: ${{ secrets.SILORA_DAILY_DISCORD_WEBHOOK_URL }}
           DISCORD_CHANNEL_ID: ${{ vars.SILORA_DAILY_DISCORD_CHANNEL_ID }}
           DISCORD_FAILURE_USER_IDS: ${{ vars.SILORA_DAILY_FAILURE_USER_IDS }}
         run: python3 scripts/notify-fork-automation.py
+
+      - name: Keep the verified delivery receipt
+        if: steps.receipt.outputs.should_notify == 'true'
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: silora-notification-delivered-${{ steps.receipt.outputs.key }}
+          path: notification-delivery.json
+          if-no-files-found: error
+          retention-days: 90

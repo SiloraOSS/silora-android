@@ -9,7 +9,9 @@ decisions, and validation results. Entries appear newest first.
 The first GitHub validation run exposed a notification guard that compared the
 custom run name with the workflow name. The handler now verifies the workflow
 ID and path, accepts custom run names, and has a regression test. The rejected
-event stopped before any Discord call. All 101 release-tooling tests passed.
+event stopped before any Discord call. Repeated events are serialized and
+reconciled through intent/delivery artifacts before sending. An uncertain send
+stops for inspection. All 102 release-tooling tests passed.
 
 Added **Silora Automation Release** beside the existing daily and manual
 workflows. It accepts the exact validated source and included upstream SHAs,

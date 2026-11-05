@@ -117,6 +117,12 @@ configured users. Existing daily/manual listeners and handlers are unchanged.
 Validation-only GitHub runs will still generate their configured staff status
 notifications. No notification is sent by local checks.
 
+The new listener serializes each triggering run/attempt/event and keeps intent
+and delivery artifacts for 90 days. Repeated events skip a verified delivery.
+An intent without a delivery receipt stops the listener for inspection instead
+of sending again. This also covers an interrupted Discord read-back or receipt
+upload. Do not remove an intent to bypass reconciliation.
+
 ## Activation and rollback
 
 1. Finish local checks and publish these new files to `SiloraOSS/silora-android`
