@@ -56,7 +56,7 @@ def notification(event, jobs, recipients):
     }
 
 
-def main():
+def trigger():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     run = event["workflow_run"]
     if (event.get("action") not in ("in_progress", "completed")
@@ -74,6 +74,42 @@ def main():
         raise common.NotificationError("Could not verify the triggering workflow; nothing was sent.") from None
     if workflow.get("path") != WORKFLOW_PATH:
         raise common.NotificationError("Unexpected triggering workflow; nothing was sent.")
+    print(f"Verified workflow event: run {run.get('id')}, attempt {run.get('run_attempt', 1)}, action {event['action']}.")
+    return event
+
+
+def previous_marker(name):
+    try:
+        result = common.subprocess.run(
+            ["gh", "api", f"repos/SiloraOSS/silora-android/actions/artifacts?name={name}&per_page=100",
+             "--paginate", "--slurp"], capture_output=True, text=True, timeout=30, check=True)
+        return any(artifact["name"] == name for page in json.loads(result.stdout) for artifact in page["artifacts"])
+    except (common.subprocess.CalledProcessError, common.subprocess.TimeoutExpired, KeyError, ValueError):
+        raise common.NotificationError("Could not reconcile prior notification receipts; nothing was sent.") from None
+
+
+def prepare():
+    event = trigger()
+    run = event["workflow_run"]
+    key = f"{int(run['id'])}-{int(run.get('run_attempt', 1))}-{event['action']}"
+    if previous_marker(f"silora-notification-delivered-{key}"):
+        needed = False
+        print("This notification was already delivered and verified; skipping the repeated event.")
+    elif previous_marker(f"silora-notification-intent-{key}"):
+        raise common.NotificationError("A prior send intent has no delivery confirmation. Inspect Discord before retrying; nothing was sent.")
+    else:
+        needed = True
+        Path("notification-intent.json").write_text(json.dumps({
+            "trigger_run_id": run["id"], "trigger_attempt": run.get("run_attempt", 1),
+            "action": event["action"], "notification_run_id": os.environ["GITHUB_RUN_ID"],
+        }) + "\n")
+    with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+        print(f"should_notify={str(needed).lower()}\nkey={key}", file=stream)
+
+
+def main():
+    event = trigger()
+    run = event["workflow_run"]
     recipients = common.user_ids(os.environ.get("DISCORD_FAILURE_USER_IDS", ""))
     jobs = []
     if event["action"] == "completed":
@@ -83,12 +119,21 @@ def main():
             print("::warning::Job details unavailable; sending the known result with its run link.")
     payload = notification(event, jobs, recipients)
     message = common.deliver(os.environ.get("DISCORD_WEBHOOK_URL", ""), os.environ.get("DISCORD_CHANNEL_ID", ""), payload)
+    Path("notification-delivery.json").write_text(json.dumps({
+        "message_id": message, "trigger_run_id": run.get("id"),
+        "trigger_attempt": run.get("run_attempt", 1), "action": event["action"],
+    }) + "\n")
     print(f"Discord notification delivered and verified (message {message}).")
 
 
 if __name__ == "__main__":
     try:
-        main()
+        if sys.argv[1:] == ["prepare"]:
+            prepare()
+        elif not sys.argv[1:]:
+            main()
+        else:
+            raise common.NotificationError("usage: notify-fork-automation.py [prepare]")
     except common.NotificationError as error:
         print(f"::error::{error}", file=sys.stderr)
         sys.exit(1)
