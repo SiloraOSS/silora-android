@@ -357,6 +357,27 @@ class NotificationTest(unittest.TestCase):
         self.assertEqual(payload["allowed_mentions"]["users"], ["123"])
         self.assertEqual(payload["allowed_mentions"]["parse"], [])
 
+    def test_custom_run_name_uses_verified_workflow_identity_before_sending(self):
+        trigger = {"action": "in_progress", "workflow_run": {
+            "name": f"Silora release {SOURCE} upstream {UPSTREAM}", "workflow_id": 123,
+            "head_branch": "main", "event": "workflow_dispatch", "run_number": 4,
+            "head_repository": {"full_name": release.REPO}, "html_url": "https://github.com/example/run/4"}}
+        for workflow_path in (self.notify.WORKFLOW_PATH, ".github/workflows/unrelated.yml"):
+            with self.subTest(path=workflow_path), \
+                    mock.patch.object(self.notify.Path, "read_text", return_value=json.dumps(trigger)), \
+                    mock.patch.dict(os.environ, GITHUB_EVENT_PATH="event.json", DISCORD_FAILURE_USER_IDS="111111111111111111"), \
+                    mock.patch.object(self.notify.common.subprocess, "run", return_value=subprocess.CompletedProcess(
+                        ["gh", "api"], 0, stdout=json.dumps({"path": workflow_path}))), \
+                    mock.patch.object(self.notify.common, "deliver", return_value="555555555555555555") as send:
+                if workflow_path == self.notify.WORKFLOW_PATH:
+                    self.notify.main()
+                    send.assert_called_once()
+                    self.assertIn("automated release started", send.call_args.args[2]["embeds"][0]["title"])
+                else:
+                    with self.assertRaises(self.notify.common.NotificationError):
+                        self.notify.main()
+                    send.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

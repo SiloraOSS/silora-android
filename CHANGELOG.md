@@ -6,6 +6,11 @@ decisions, and validation results. Entries appear newest first.
 
 ## 2026-11-04 — separate automation release workflow
 
+The first GitHub validation run exposed a notification guard that compared the
+custom run name with the workflow name. The handler now verifies the workflow
+ID and path, accepts custom run names, and has a regression test. The rejected
+event stopped before any Discord call. All 101 release-tooling tests passed.
+
 Added **Silora Automation Release** beside the existing daily and manual
 workflows. It accepts the exact validated source and included upstream SHAs,
 defaults to validation without publication, requires tests and full release

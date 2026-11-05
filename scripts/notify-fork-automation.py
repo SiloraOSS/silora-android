@@ -10,11 +10,12 @@ spec = importlib.util.spec_from_file_location("notifications", Path(__file__).wi
 common = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(common)
 WORKFLOW = "Silora Automation Release"
+WORKFLOW_PATH = ".github/workflows/fork-automation-release.yml"
 
 
 def notification(event, jobs, recipients):
     run = event["workflow_run"]
-    publishing = run.get("display_title", "").startswith("Silora release ")
+    publishing = (run.get("display_title") or run.get("name", "")).startswith("Silora release ")
     mode = "release" if publishing else "validation"
     conclusion = run.get("conclusion")
     ping = False
@@ -58,10 +59,21 @@ def notification(event, jobs, recipients):
 def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     run = event["workflow_run"]
-    if (event.get("action") not in ("in_progress", "completed") or run.get("name") != WORKFLOW
+    if (event.get("action") not in ("in_progress", "completed")
             or run.get("head_branch") != "main" or run.get("event") != "workflow_dispatch"
             or run.get("head_repository", {}).get("full_name") != "SiloraOSS/silora-android"):
         raise common.NotificationError("Unexpected workflow event; nothing was sent.")
+    # GitHub can put the custom run-name (including SHAs) in workflow_run.name.
+    # Verify the stable workflow identity instead of comparing display names.
+    try:
+        result = common.subprocess.run(
+            ["gh", "api", f"repos/SiloraOSS/silora-android/actions/workflows/{int(run['workflow_id'])}"],
+            capture_output=True, text=True, timeout=30, check=True)
+        workflow = json.loads(result.stdout)
+    except (common.subprocess.CalledProcessError, common.subprocess.TimeoutExpired, KeyError, ValueError):
+        raise common.NotificationError("Could not verify the triggering workflow; nothing was sent.") from None
+    if workflow.get("path") != WORKFLOW_PATH:
+        raise common.NotificationError("Unexpected triggering workflow; nothing was sent.")
     recipients = common.user_ids(os.environ.get("DISCORD_FAILURE_USER_IDS", ""))
     jobs = []
     if event["action"] == "completed":
@@ -77,7 +89,10 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (common.NotificationError, KeyError, ValueError, OSError):
+    except common.NotificationError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        sys.exit(1)
+    except (KeyError, ValueError, OSError):
         # Keep webhook URLs and tokens out of tracebacks and logs.
         print("::error::Could not confirm the notification. Inspect the channel before retrying.", file=sys.stderr)
         sys.exit(1)
