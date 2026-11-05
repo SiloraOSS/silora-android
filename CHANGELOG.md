@@ -4,6 +4,64 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-05 13:05 PST — upstream fee491916
+
+Merged upstream `main` into Silora `main` to keep TV focus on a Continue Watching
+show after its episode advances, and align phone headers and first content rows.
+
+### Merge inputs
+
+- Branch: `main`
+- Fork before: `73c46323fe70f4e2f65b286bdb5ac5de2b9daca4`
+- Upstream tip: `fee491916c593ee36d2a6d6c655d109622e6e622`
+- Recovery ref: `refs/codex/upstream-merge/20261105T205830Z`
+
+### Upstream commits added
+
+- `1c9f4bfd1` fix(tv): return focus to a Continue Watching show after its episode advances (#814)
+- `fee491916` fix(phone): give every tab the same header and first-row position (#815)
+
+### Silora merge decisions
+
+- The merge had no conflicts. Reviewed the automatically merged phone header;
+  retained Silora's wordmark width, aspect ratio, artwork and accessibility
+  label while adopting upstream's shared header geometry, remote-control
+  actions, scroll-responsive glass, and content alignment.
+- Adopted upstream's TV focus restoration keyed by show identity for progress
+  rows. Episode identities remain distinct when a show has multiple cards and
+  outside progress rows. Included upstream's two regression tests.
+- Compared all 207 fork paths outside the incoming changes with the pre-merge
+  tree, including deletions; they match. Retained HEVC defaults and recovery,
+  Night Mode tuning and controls, independent display matching, Extra small
+  subtitles, account/profile-scoped keyboard and remote preferences, voice
+  input, embedded trailers, AI subtitle fixes, and the three Up Next modes.
+- Preserved current navigation and product exposure, Requests and experimental
+  Watch Party gates, Silora application IDs and Kotlin namespaces, README
+  separation, and release/signing/dependency-verification tooling. No fork
+  workaround was superseded.
+
+### Validation
+
+- Passed the mandatory signed release build for both apps using JDK 21, the
+  existing Android SDK, and the persistent release key:
+  `./build.sh --release=both --tests --lint --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing`.
+- Passed the full configured Gradle unit-test suite: 12,450 executions with
+  zero failures, errors, or skips, including 1,432 TV debug JVM tests. TV's
+  release unit-test task remains disabled by the existing configuration.
+- Passed full phone and TV release lint using existing baselines; existing
+  warnings, baseline notices, and Gradle deprecations remain. Both R8-optimized
+  APKs passed persistent-signature, application-ID, version, and non-debuggable
+  verification. Packaged matching R8 mappings and verified all output checksums.
+- Passed 31 fork-release tests, eight local-build tests, 33 automation-release
+  tests, the build supply-chain check, whitespace checks, and inspection for
+  unmerged entries. Reviewed the staged result against both pinned inputs and
+  verified the 207 unaffected fork paths against the pre-merge tree.
+- Used a temporary local 12 GiB Gradle heap for the existing parallel release
+  validation. No persistent build configuration or checks were weakened.
+- No device, UI, or hardware playback validation was performed. Build outputs,
+  private receipts, signing material, and logs remain outside the source commit.
+  Release publication is a separate authorized exact-commit workflow step.
+
 ## 2026-11-04 22:40 PST — upstream 670f5ba0a
 
 Merged upstream `main` into Silora `main`, adding multiple saved accounts per
