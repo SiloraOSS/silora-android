@@ -1937,14 +1937,15 @@ class TvPlayerViewModel(
     /** False when the server is known to discard subtitle text opacity. */
     val subtitleTextOpacitySupported: StateFlow<Boolean> = playerSettingsStore.subtitleTextOpacitySupportedFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    /** The AudioTrack's real output path, for the HUD's Mode row and delay gating. */
-    val audioOutputPath: StateFlow<AudioOutputPath?> get() = playbackAnalytics.audioOutputPath
     val audioNormalizationEnabled: StateFlow<Boolean> = playerSettingsStore.audioNormalizationEnabledFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun setAudioNormalizationEnabled(value: Boolean) {
         viewModelScope.launch { playerSettingsStore.setAudioNormalizationEnabled(value) }
     }
+
+    /** The AudioTrack's real output path, for the HUD's Mode row and delay gating. */
+    val audioOutputPath: StateFlow<AudioOutputPath?> get() = playbackAnalytics.audioOutputPath
 
     /**
      * Per-profile audio delay in ms, ±500 clamp. Sourced from
@@ -4823,9 +4824,9 @@ class TvPlayerViewModel(
         pendingInitialSubtitleAttempts = 0
         autoTextSubtitleSelectionAttempted = false
         autoAdvanceHandled = false
-        reachedCreditsOrEnd = false
         preEndDismissal.reset()
         manualNextUp = false
+        reachedCreditsOrEnd = false
         pendingApproachingEndVideoEnded = null
         episodeSelectionHandoffSlot.invalidate()
         _uiState.update { it.copy(contentId = newContentId, nextEpisode = null) }
@@ -5589,9 +5590,9 @@ class TvPlayerViewModel(
             autoTextSubtitleSelectionAttempted = false
             autoAdvanceCount = nextAutoAdvanceCount
             autoAdvanceHandled = false
-            reachedCreditsOrEnd = false
             preEndDismissal.reset()
             manualNextUp = false
+            reachedCreditsOrEnd = false
             pendingApproachingEndVideoEnded = null
             shuffleNextPartFileId = null
             shuffleRefreshedForPostRoll = false

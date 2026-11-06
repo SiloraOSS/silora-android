@@ -2676,8 +2676,12 @@ fun TvPlayerScreen(
                             audioNormalizationEnabled = audioNormalizationEnabled,
                             onAudioNormalizationChanged = viewModel::setAudioNormalizationEnabled,
                             audioDelayMs = audioDelayMs,
-                            audioDelayEnabled = audioNormalizationEnabled || audioOutputPath.allowsAudioDelay(
-                                planClaimsPassthrough = state.playbackPlan?.claims?.audio?.passthrough,
+                            audioDelayEnabled = audioOutputPath.allowsAudioDelay(
+                                planClaimsPassthrough = if (audioNormalizationEnabled) {
+                                    false
+                                } else {
+                                    state.playbackPlan?.claims?.audio?.passthrough
+                                },
                             ),
                             audioOutputPath = audioOutputPath,
                             onAudioDelayChanged = viewModel::onAudioDelayChanged,

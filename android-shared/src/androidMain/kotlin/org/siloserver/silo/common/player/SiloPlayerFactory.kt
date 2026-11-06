@@ -89,13 +89,13 @@ class SiloPlayerFactory(
     private val playbackAnalytics: PlaybackAnalyticsListener,
     /** Times the video's requests for each plan's `throughput_kbps`. */
     throughputMeter: PlaybackThroughputMeter,
+    private val audioNormalization: org.siloserver.silo.common.player.audio.AudioNormalizationController,
     /**
      * Transport for sidecar subtitles, which waits longer for data than the
      * video's ([withSidecarSubtitleTimeouts]): a cold server extraction is
      * slow to send its first cue.
      */
     sidecarSubtitleHttpDataSourceFactory: HttpDataSource.Factory = httpDataSourceFactory,
-    private val audioNormalization: org.siloserver.silo.common.player.audio.AudioNormalizationController,
 ) {
     val isTv: Boolean = TvModeDetector.isTv(context)
 

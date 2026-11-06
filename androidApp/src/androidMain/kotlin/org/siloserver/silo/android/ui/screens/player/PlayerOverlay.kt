@@ -828,9 +828,12 @@ fun PlayerOverlay(
             audioNormalizationEnabled = viewModel.audioNormalizationEnabled.collectAsState().value,
             onSetAudioNormalizationEnabled = viewModel::setAudioNormalizationEnabled,
             audioDelayMs = viewModel.audioDelayMs.collectAsState().value,
-            audioDelayEnabled = viewModel.audioNormalizationEnabled.collectAsState().value ||
-                viewModel.audioOutputPath.collectAsState().value.allowsAudioDelay(
-                planClaimsPassthrough = state.playbackPlan?.claims?.audio?.passthrough,
+            audioDelayEnabled = viewModel.audioOutputPath.collectAsState().value.allowsAudioDelay(
+                planClaimsPassthrough = if (viewModel.audioNormalizationEnabled.collectAsState().value) {
+                    false
+                } else {
+                    state.playbackPlan?.claims?.audio?.passthrough
+                },
             ),
             onSetAudioDelay = viewModel::onSetAudioDelay,
             subtitleDelayMs = viewModel.subtitleDelayMs.collectAsState().value,
