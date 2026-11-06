@@ -4,6 +4,55 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-06 — rebuild the fork as a clean patch series
+
+Prepared local branch `rebase-2026-11-06` on upstream
+`f13a2652a12ad59680708aa50b7d19aed23a67e8` at Matt's request. The fork's
+53 carried-forward commits follow upstream directly, with no merge commits in
+that range. This changelog record is a separate documentation commit.
+The previous local `main` (`78a9ec27d`) and `rebase-2026-11-05` (`f91330a2f`)
+remain intact, with recovery refs under `refs/codex/rebase/`.
+
+Upstream changes since the previous rebase base (`ee178d887`):
+
+- `095079433` — fix(phone): tell TalkBack which For You list pill is chosen (#834)
+- `f13a2652a` — fix(phone): stop sort and filter pills looking switched on (#835)
+
+Rebuilt the search-keyboard integration around upstream's native voice helper
+from the start. The retired local voice controller, overlay and recording
+permission never enter this new fork series. Folded the later search-clearing
+and focus corrections into their corresponding keyboard commits, omitted a
+canceling test-fix/revert pair, and retained the maintained changelog instead of
+the old experiment entry. Up Next Trigger and PR #2's timing/dismissal fixes
+remain. Requests follows upstream, without the disowned top-bar override.
+The reviewed manifest retains 14 active IDs and marks `tv-voice` superseded.
+
+Compared the final source with an independent integration of the previously
+validated rebase and the pinned upstream commit. Only comments and the order of
+independent shell state declarations differ; there is no additional runtime
+change. Scanned every commit in the new fork range for the retired voice code
+and permission, and verified the voice helper matches upstream byte for byte.
+Existing settings keys, profile/account isolation and release workflows remain.
+
+Validation on source commit `cf20fb92f`: all 12,484 configured unit-test
+executions passed (shared: 4,700; Android shared: 4,464; phone: 1,894; TV: 1,426),
+with zero failures, errors or skips. The shared and phone totals include debug
+and release variants; TV's configured host tests use the debug variant. The 39
+release-script tests and full phone/TV release lint passed with existing
+warnings and baselines. Signed phone and TV release builds
+passed persistent-signature, application-ID, version and non-debuggable checks.
+APK/R8 mapping pairs, metadata and checksums are archived under
+`dist/local-2026-11-06.185758/`; all packaged checksums were rechecked. The TV APK
+retains the system-recognition activity query. Its upstream voice path delegates
+audio capture to the recognizer and has no app-owned recording permission.
+The APK metadata records the clean tested source commit; this subsequent commit
+changes only the changelog. A local old-to-new commit map and the validation log
+are stored beside the APKs.
+
+Neither `main` nor any remote branch was updated. No release was published.
+Device playback, native voice capture/focus return and visual checks were not
+performed.
+
 ## 2026-11-06 — adopt upstream TV voice search
 
 Retired the fork's `tv-voice` implementation at Matt's request after reviewing
