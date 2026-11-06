@@ -30,10 +30,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
@@ -122,6 +120,7 @@ import org.siloserver.silo.model.feature.RequestsFeatureStore
 import org.siloserver.silo.model.personal.UserLibrary
 import org.siloserver.silo.network.ApiResult
 import org.siloserver.silo.network.ServerRegistry
+import org.siloserver.silo.network.accountsOn
 import org.siloserver.silo.repository.AuthRepository
 import org.siloserver.silo.repository.PersonalDataRepository
 import org.siloserver.silo.repository.ProfileRepository
@@ -209,8 +208,10 @@ fun TvMainShell(
     onOpenSectionBrowse: (sectionId: String, title: String, libraryId: Int?, mediaScope: String?) -> Unit,
     /** Runs the sign-out the user chose in [TvSignOutDialog]. */
     onSignOut: (removeServer: Boolean) -> Unit,
+    /** Opens the open account's picker. */
     onSwitchProfile: () -> Unit,
-    onSwitchServer: () -> Unit,
+    /** Opens Change Account: the saved servers and their accounts. */
+    onChangeAccount: () -> Unit,
     onPairDevice: () -> Unit,
     onPlayItem: (contentId: String, type: String?, resumePositionSeconds: Double?) -> Unit,
     /** Open the Watch Party hub. */
@@ -385,7 +386,7 @@ fun TvMainShell(
         mutableStateOf(currentRoute == TvMainRoute.Requests.route)
     }
 
-    LaunchedEffect(activeServerEntry?.id, activeServerEntry?.profileId) {
+    LaunchedEffect(activeServerEntry?.id, activeServerEntry?.accountId, activeServerEntry?.profileId) {
         requestsFeatureStore.reset()
         requestsFeatureStore.refresh()
         metadataAiFeatureStore.reset()
@@ -536,11 +537,6 @@ fun TvMainShell(
         detailReturnRoot = null
         onOpenLibraryItemDetail(contentId, libraryId)
     }
-    val openBoxSet: (CatalogBoxSet) -> Unit = { boxSet ->
-        restoreContentAfterDetail = true
-        detailReturnRoot = null
-        onOpenBoxSet(boxSet)
-    }
     // Collections open outer routes too, so they need the same hand-back:
     // without it the return resume left focus to Compose's default search
     // (the top bar), which then visibly hopped to the grid a beat later.
@@ -672,7 +668,16 @@ fun TvMainShell(
         //
         // Nothing hangs on it — it is a caption, not a permission — but it is
         // the part that misleads.
-        val subtitle = if (activeProfile?.isPrimary == true) {
+        // With several accounts on this server, "profile · server" alone
+        // doesn't say whose profile it is: add the account's username
+        // (multi-account spec §4.3). It replaces the role, which belongs to
+        // the same account.
+        val serverId = activeServerEntry?.id
+        val severalAccounts = serverId != null && serverRegistry.accountsOn(serverId).size > 1
+        val subtitle = if (severalAccounts) {
+            serverRegistry.activeAccount.value?.username?.takeIf { it.isNotBlank() }
+                ?: user?.username.orEmpty()
+        } else if (activeProfile?.isPrimary == true) {
             user?.role?.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
                 ?: user?.username.orEmpty()
         } else {
@@ -1370,7 +1375,6 @@ fun TvMainShell(
                     TvLibrariesScreen(
                         onItemClick = openLibraryItemDetail,
                         onExploreSection = { section, libraryId -> openLibrarySection(section, libraryId, null) },
-                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onInitialContentFocus = { focusState.closeProfileMenuForContent() },
@@ -1381,7 +1385,6 @@ fun TvMainShell(
                     TvLibrariesScreen(
                         onItemClick = openLibraryItemDetail,
                         onExploreSection = { section, libraryId -> openLibrarySection(section, libraryId, null) },
-                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onInitialContentFocus = { focusState.closeProfileMenuForContent() },
@@ -1404,7 +1407,6 @@ fun TvMainShell(
                         onItemClick = { contentId ->
                             openLibraryItemDetail(contentId, activeLibrary(TvLibraryTabType.Movies)?.id)
                         },
-                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onExploreSection = openLibrarySection,
@@ -1424,7 +1426,6 @@ fun TvMainShell(
                         onItemClick = { contentId ->
                             openLibraryItemDetail(contentId, activeLibrary(TvLibraryTabType.Series)?.id)
                         },
-                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onExploreSection = openLibrarySection,
@@ -1444,7 +1445,6 @@ fun TvMainShell(
                         onItemClick = { contentId ->
                             openLibraryItemDetail(contentId, activeLibrary(TvLibraryTabType.Music)?.id)
                         },
-                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onExploreSection = openLibrarySection,
@@ -1464,7 +1464,6 @@ fun TvMainShell(
                         onItemClick = { contentId ->
                             openLibraryItemDetail(contentId, activeLibrary(TvLibraryTabType.Audiobooks)?.id)
                         },
-                        onBoxSetClick = openBoxSet,
                         onLibraryCollectionClick = openLibraryCollectionDetail,
                         onUserCollectionClick = openCollectionDetail,
                         onExploreSection = openLibrarySection,
@@ -1805,14 +1804,7 @@ fun TvMainShell(
                 entersMenu = focusState.profileMenuEntered,
                 focusEntryToken = focusState.profileMenuFocusEntryToken,
                 onSwitchProfile = closeMenuAnd(onSwitchProfile),
-                onWatchlist = closeMenuAnd {
-                    navigateToSecondary(TvMainRoute.Watchlist.route)
-                    moveFocusToContent(TvMainRoute.Watchlist.route)
-                },
-                onFavorites = closeMenuAnd {
-                    navigateToSecondary(TvMainRoute.Favorites.route)
-                    moveFocusToContent(TvMainRoute.Favorites.route)
-                },
+                onChangeAccount = closeMenuAnd(onChangeAccount),
                 onHistory = closeMenuAnd {
                     navigateToSecondary(TvMainRoute.History.route)
                     moveFocusToContent(TvMainRoute.History.route)
@@ -1826,7 +1818,6 @@ fun TvMainShell(
                     // the Home row restored by the shared content container.
                     navigateToRoute(TvMainRoute.Settings.route)
                 },
-                onSwitchServer = closeMenuAnd(onSwitchServer),
                 onSignOut = closeMenuAnd { showSignOutDialog = true },
                 onDismiss = { focusState.dismissProfileMenu() },
                 modifier = Modifier
@@ -1860,7 +1851,6 @@ private fun TvLibraryTypeContent(
     selectedPill: TvLibraryPill,
     sectionRequestNonce: Int,
     onItemClick: (contentId: String) -> Unit,
-    onBoxSetClick: (CatalogBoxSet) -> Unit,
     onLibraryCollectionClick: (
         libraryId: Int,
         collectionId: String,
@@ -1904,9 +1894,7 @@ private fun TvLibraryTypeContent(
             libraryTitle = library.name,
             libraryType = library.type,
             mediaScope = type.mediaScope(library),
-            boxSetsEnabled = library.boxSetsEnabled,
             onItemClick = onItemClick,
-            onBoxSetClick = onBoxSetClick,
             onCollectionClick = { collectionId, title, isUserCollection ->
                 val scope = type.mediaScope(library)
                 if (scope != null) {
@@ -2040,9 +2028,11 @@ private fun cascadePanelOffset(
  * consumes input and focuses its first row on open; Back/Menu closes it and
  * returns focus to the avatar via [onDismiss].
  *
- * Row set + order mirrors tvOS: Switch Profile · Watchlist · Favorites ·
- * History · Watch Party (Settings → Experimental) · Settings · Switch Server ·
- * Sign Out. Calendar and Requests are top-level tabs.
+ * Row set + order: Switch Profile · History · Watch Party (Settings →
+ * Experimental) · Settings · Change Account · Sign Out. Watchlist and Favorites
+ * live under For You only. Calendar and Requests remain top-level tabs.
+ * Change Account lists saved servers and their accounts; Switch Profile opens
+ * the active account's picker, and Sign Out leaves the active account.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -2051,13 +2041,11 @@ private fun TvProfileDropdown(
     entersMenu: Boolean,
     focusEntryToken: Int,
     onSwitchProfile: () -> Unit,
-    onWatchlist: () -> Unit,
-    onFavorites: () -> Unit,
+    onChangeAccount: () -> Unit,
     onHistory: () -> Unit,
     showWatchParty: Boolean,
     onWatchParty: () -> Unit,
     onSettings: () -> Unit,
-    onSwitchServer: () -> Unit,
     onSignOut: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -2098,8 +2086,6 @@ private fun TvProfileDropdown(
             focusRequester = firstFocus,
             onClick = onSwitchProfile,
         )
-        ProfileDropdownRow(label = "Watchlist", icon = Icons.Filled.Bookmark, onClick = onWatchlist)
-        ProfileDropdownRow(label = "Favorites", icon = Icons.Filled.Favorite, onClick = onFavorites)
         ProfileDropdownRow(label = "History", icon = Icons.Filled.History, onClick = onHistory)
         if (showWatchParty) {
             ProfileDropdownRow(
@@ -2112,7 +2098,7 @@ private fun TvProfileDropdown(
         ProfileDropdownDivider()
 
         ProfileDropdownRow(label = "Settings", icon = Icons.Filled.Settings, onClick = onSettings)
-        ProfileDropdownRow(label = "Switch Server", icon = Icons.Filled.Dns, onClick = onSwitchServer)
+        ProfileDropdownRow(label = "Change Account", icon = Icons.Filled.SwitchAccount, onClick = onChangeAccount)
         ProfileDropdownRow(
             label = "Sign Out",
             icon = Icons.AutoMirrored.Filled.Logout,

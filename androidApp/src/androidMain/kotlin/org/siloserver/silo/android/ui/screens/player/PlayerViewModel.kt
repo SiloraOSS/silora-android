@@ -3,6 +3,7 @@ package org.siloserver.silo.android.ui.screens.player
 import org.siloserver.silo.common.settings.overlayPendingChoice
 import org.siloserver.silo.common.diagnostics.DiagnosticsPlaybackLogger
 import org.siloserver.silo.common.diagnostics.DiagnosticsSeekEvent
+import org.siloserver.silo.common.player.AudioOutputPath
 import org.siloserver.silo.common.player.dolbyVisionTransformClassification
 import org.siloserver.silo.common.player.failedRendererTrackType
 import org.siloserver.silo.common.player.failureDiagnostics
@@ -1134,6 +1135,9 @@ class PlayerViewModel(
     fun setAudioNormalizationEnabled(value: Boolean) {
         viewModelScope.launch { playerSettingsStore.setAudioNormalizationEnabled(value) }
     }
+
+    /** The AudioTrack's real output path, for the audio delay row's gating. */
+    val audioOutputPath: StateFlow<AudioOutputPath?> get() = playbackAnalytics.audioOutputPath
 
     /**
      * Per-device audio/subtitle delay in ms. Mirrors iOS phone's `audioSyncMs` /
@@ -6823,17 +6827,24 @@ class PlayerViewModel(
     ): Boolean {
         val watchOwner = catalogRepository.captureWatchAuthority()
         if (!ownsLoad(loadOwner)) return false
+        // Server and account read together, before the profile read and the
+        // lookup suspend; a switch meanwhile drops the result.
+        val lookupServerId = serverRegistry.activeServerId.value
+        val lookupAccountId = serverRegistry.activeAccountId.value
         val media = withContext(Dispatchers.IO) {
             val (serverId, profileId) = resolveDownloadScope()
             offlineMediaResolver.findLocalMedia(
                 serverId = serverId,
+                accountId = lookupAccountId.orEmpty(),
                 profileId = profileId,
                 contentId = contentId,
                 requestedFileId = preferredFileId,
             )
         }
         if (!ownsLoad(loadOwner)) return false
+        if (serverRegistry.activeServerId.value != lookupServerId || serverRegistry.activeAccountId.value != lookupAccountId) return false
         media ?: return false
+        if ((profileRepository.getActiveProfileId() ?: DownloadEnqueuer.DEFAULT_PROFILE_ID) != media.profileId) return false
         val localTrackChoiceOwner = watchOwner?.takeIf { it.serverId == media.serverId && it.profileId == media.profileId }
         val sidecar = media.sidecar
         val fileId = media.fileId

@@ -83,6 +83,13 @@ import kotlinx.coroutines.sync.withPermit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
+import org.siloserver.silo.android.ui.components.TabContentGap
+import org.siloserver.silo.android.ui.components.TabHeaderPillGap
+import org.siloserver.silo.android.ui.components.TabHeaderRowHeight
+import org.siloserver.silo.android.ui.components.TabPillRowHeight
+import org.siloserver.silo.android.ui.components.TopBarEdgeMargin
+import org.siloserver.silo.android.ui.components.TopBarGlassFadeDistance
+import org.siloserver.silo.android.ui.components.TopBarRemoteControl
 import org.siloserver.silo.android.ui.components.TopBarRowTopInset
 import org.siloserver.silo.android.ui.theme.siloPageBackdrop
 import org.siloserver.silo.android.ui.components.EmptyStateView
@@ -120,8 +127,6 @@ import org.siloserver.silo.common.ui.components.DeferImagePresentationWhileScrol
 import org.siloserver.silo.common.diagnostics.DiagnosticsListLogger
 import org.siloserver.silo.common.diagnostics.DiagnosticsListSnapshot
 import org.siloserver.silo.common.diagnostics.DiagnosticsListSurface
-import org.siloserver.silo.model.catalog.BOX_SET_GROUP
-import org.siloserver.silo.model.catalog.CatalogBoxSet
 import org.siloserver.silo.model.catalog.CatalogFiltersResponse
 import org.siloserver.silo.model.catalog.isAudiobookItemType
 import org.siloserver.silo.android.ui.screens.home.HomeSectionRow
@@ -368,12 +373,7 @@ class LibrariesViewModel(
                     ?.let(::defaultMediaScope)
                     ?.let { default -> if (selectedLibraryId == previousLibraryId) previousScope ?: default else default }
                 val selectionChanged = selectedLibraryId != previousLibraryId || mediaScope != previousScope
-                // Box sets turning on or off changes how the open library's
-                // browse groups, so it starts again from its first page.
-                val groupingChanged = !selectionChanged && !recovering &&
-                    _uiState.value.libraries.browseGroup(selectedLibraryId) != libraries.browseGroup(selectedLibraryId)
                 if (selectionChanged) resetForLibrary(selectedLibraryId, mediaScope)
-                if (groupingChanged) browseLoadedLibraryId = null
                 _uiState.update {
                     it.copy(
                         isLoadingLibraries = false,
@@ -384,8 +384,6 @@ class LibrariesViewModel(
 
                 if (selectedLibraryId != null && (reload || selectionChanged || recovering)) {
                     loadCurrentTab(selectedLibraryId, force = true)
-                } else if (selectedLibraryId != null && groupingChanged && _uiState.value.selectedTab == LibrariesSubtab.Browse) {
-                    loadCatalog(selectedLibraryId, reset = true, force = true)
                 }
             }
             is ApiResult.Error -> {
@@ -724,10 +722,8 @@ class LibrariesViewModel(
         }
         browseLoadedLibraryId = libraryId
         val requestState = _uiState.value
-        val group = requestState.libraries.browseGroup(libraryId)
         val requestIdentity = CatalogRequestIdentity(
             libraryId = libraryId,
-            group = group,
             mediaScope = requestState.mediaScope,
             browseSort = requestState.browseSort,
             selectedNamePrefix = requestState.selectedNamePrefix,
@@ -782,8 +778,6 @@ class LibrariesViewModel(
                     continuation = if (reset) null else catalogContinuation,
                     limit = pageSize,
                     namePrefix = requestState.selectedNamePrefix,
-                    // The server groups before paging, so the grid never regroups.
-                    group = group,
                     // Full facet filtering (genre/decade/rating/studio/language/...)
                     // via the shared query builder — replaces the single-genre param.
                     queryGroups = CatalogFilterQueryBuilder.buildGroups(requestState.filterState),
@@ -974,7 +968,6 @@ class LibrariesViewModel(
 
     private fun CatalogRequestIdentity.matches(state: LibrariesUiState): Boolean =
         state.selectedLibraryId == libraryId &&
-            state.libraries.browseGroup(libraryId) == group &&
             state.mediaScope == mediaScope &&
             state.browseSort == browseSort &&
             state.selectedNamePrefix == selectedNamePrefix &&
@@ -987,14 +980,8 @@ class LibrariesViewModel(
     ): Boolean =
         generation == collectionsRequestGeneration && state.selectedLibraryId == libraryId
 
-    /** A library with box sets on browses them grouped ([BOX_SET_GROUP]). */
-    private fun List<UserLibrary>.browseGroup(libraryId: Int?): String? =
-        BOX_SET_GROUP.takeIf { firstOrNull { it.id == libraryId }?.boxSetsEnabled == true }
-
     private data class CatalogRequestIdentity(
         val libraryId: Int,
-        /** Pages of one browse share a grouping; a page in another one is dropped. */
-        val group: String?,
         val mediaScope: String?,
         val browseSort: LibraryBrowseSort,
         val selectedNamePrefix: String?,
@@ -1002,27 +989,23 @@ class LibrariesViewModel(
     )
 }
 
-// Distance the Recommended tab must scroll for the chrome scrim to fully
-// fade in. Mirrors `chromeScrimFadeDistance` on iOS.
-private const val ChromeFadeDistanceDp = 80f
-
 @Composable
 fun LibrariesScreen(
     onItemClick: (String, Int?) -> Unit,
-    onBoxSetClick: (CatalogBoxSet) -> Unit,
     onCollectionClick: (LibraryCollection, Int, String?) -> Unit,
     /** Opens a Recommended row's full page: the row, its library, and the Movies/Series scope. */
     onExploreSection: ((ResolvedSection, Int, String?) -> Unit)? = null,
     viewModel: LibrariesViewModel,
     activeProfile: Profile?,
+    remoteControl: TopBarRemoteControl,
     onLibrarySelectorClick: () -> Unit,
     onSearchClick: () -> Unit,
     onRequestsClick: (() -> Unit)?,
     onWatchPartyClick: (() -> Unit)?,
     onSettingsClick: () -> Unit,
     onSwitchProfileClick: () -> Unit,
-    onSwitchServerClick: () -> Unit,
-    onSignOutClick: () -> Unit,
+    onChangeAccountClick: () -> Unit,
+    onSignOutClick: (removeServer: Boolean) -> Unit,
     shuffleLauncher: org.siloserver.silo.common.ui.ShuffleLauncher? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -1068,7 +1051,7 @@ fun LibrariesScreen(
     LaunchedEffect(state.selectedLibraryId, state.mediaScope) { recommendedListState.scrollToItem(0) }
     val density = LocalDensity.current
     val chromeFadePx = remember(density) {
-        with(density) { ChromeFadeDistanceDp.dp.toPx() }
+        with(density) { TopBarGlassFadeDistance.toPx() }
     }
     val recommendedScrollProgress by remember(chromeFadePx) {
         derivedStateOf {
@@ -1151,7 +1134,6 @@ fun LibrariesScreen(
                             state = state,
                             topInset = topInset,
                             onItemClick = { onItemClick(it, state.selectedLibraryId) },
-                            onBoxSetClick = onBoxSetClick,
                             onRetry = viewModel::retryCurrentTab,
                             onLoadMore = viewModel::loadMoreCatalog,
                             onSortChanged = viewModel::selectBrowseSort,
@@ -1183,6 +1165,7 @@ fun LibrariesScreen(
             selectedLibrary = selectedLibrary,
             canSwitch = state.libraries.size > 1,
             activeProfile = activeProfile,
+            remoteControl = remoteControl,
             selectedTab = state.selectedTab,
             mediaScope = state.mediaScope,
             onMediaScopeSelected = viewModel::selectMediaScope,
@@ -1193,7 +1176,7 @@ fun LibrariesScreen(
             onWatchPartyClick = onWatchPartyClick,
             onSettingsClick = onSettingsClick,
             onSwitchProfileClick = onSwitchProfileClick,
-            onSwitchServerClick = onSwitchServerClick,
+            onChangeAccountClick = onChangeAccountClick,
             onSignOutClick = onSignOutClick,
             onShuffleClick = onShuffle,
             shuffleEnabled = shuffleLauncher?.isStarting != true,
@@ -1267,7 +1250,9 @@ private fun RecommendedTabContent(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 // Rows start below the floating chrome and scroll up under it.
-                contentPadding = PaddingValues(top = topInset + 16.dp),
+                // The chrome already ends at TabContentTop, where Home's first
+                // row sits.
+                contentPadding = PaddingValues(top = topInset),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
 
@@ -1304,7 +1289,6 @@ private fun BrowseTabContent(
     state: LibrariesUiState,
     topInset: Dp,
     onItemClick: (String) -> Unit,
-    onBoxSetClick: (CatalogBoxSet) -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
     onSortChanged: (LibraryBrowseSort) -> Unit,
@@ -1404,7 +1388,6 @@ private fun BrowseTabContent(
                     isLoadingMore = state.isLoadingMoreCatalog,
                     hasMore = state.catalogHasMore,
                     onItemClick = onItemClick,
-                    onBoxSetClick = onBoxSetClick,
                     onLoadMore = onLoadMore,
                     // Date sorts surface the sorted-by date under each card
                     // (mirrors the standalone BrowseScreen), Jim QA 2026-07-09.
@@ -1521,7 +1504,7 @@ private fun CollectionsTabContent(
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
-                    top = topInset + 16.dp,
+                    top = topInset,
                     bottom = 24.dp + LocalBottomChromeInset.current,
                 ),
             ) {
@@ -1606,6 +1589,7 @@ private fun LibrariesFloatingChrome(
     selectedLibrary: UserLibrary?,
     canSwitch: Boolean,
     activeProfile: Profile?,
+    remoteControl: TopBarRemoteControl,
     selectedTab: LibrariesSubtab,
     mediaScope: String?,
     onMediaScopeSelected: (String) -> Unit,
@@ -1616,8 +1600,8 @@ private fun LibrariesFloatingChrome(
     onWatchPartyClick: (() -> Unit)?,
     onSettingsClick: () -> Unit,
     onSwitchProfileClick: () -> Unit,
-    onSwitchServerClick: () -> Unit,
-    onSignOutClick: () -> Unit,
+    onChangeAccountClick: () -> Unit,
+    onSignOutClick: (removeServer: Boolean) -> Unit,
     onShuffleClick: (() -> Unit)? = null,
     shuffleEnabled: Boolean = true,
     modifier: Modifier = Modifier,
@@ -1647,7 +1631,8 @@ private fun LibrariesFloatingChrome(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .height(TabHeaderRowHeight)
+                .padding(horizontal = TopBarEdgeMargin),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             LibrarySelectorButton(
@@ -1659,18 +1644,18 @@ private fun LibrariesFloatingChrome(
 
             TabTopBarActions(
                 activeProfile = activeProfile,
+                remoteControl = remoteControl,
                 onSearchClick = onSearchClick,
                 onRequestsClick = onRequestsClick,
                 onWatchPartyClick = onWatchPartyClick,
                 onSettingsClick = onSettingsClick,
                 onSwitchProfileClick = onSwitchProfileClick,
-                onSwitchServerClick = onSwitchServerClick,
+                onChangeAccountClick = onChangeAccountClick,
                 onSignOutClick = onSignOutClick,
             )
         }
 
-        // iOS: top bar bottom inset = smallPadding (8).
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(TabHeaderPillGap))
 
         if (mediaScope != null) {
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1679,18 +1664,22 @@ private fun LibrariesFloatingChrome(
             }
         }
 
-        LibrarySubtabRow(
-            selectedTab = selectedTab,
-            onRecommendedClick = { onTabSelected(LibrariesSubtab.Recommended) },
-            onBrowseClick = { onTabSelected(LibrariesSubtab.Browse) },
-            onCollectionsClick = { onTabSelected(LibrariesSubtab.Collections) },
-            onShuffleClick = onShuffleClick,
-            shuffleEnabled = shuffleEnabled,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
+        Box(
+            modifier = Modifier.height(TabPillRowHeight),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            LibrarySubtabRow(
+                selectedTab = selectedTab,
+                onRecommendedClick = { onTabSelected(LibrariesSubtab.Recommended) },
+                onBrowseClick = { onTabSelected(LibrariesSubtab.Browse) },
+                onCollectionsClick = { onTabSelected(LibrariesSubtab.Collections) },
+                onShuffleClick = onShuffleClick,
+                shuffleEnabled = shuffleEnabled,
+                modifier = Modifier.padding(horizontal = TopBarEdgeMargin),
+            )
+        }
 
-            // iOS: tab selector bottom inset = padding (16).
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(TabContentGap))
         }
     }
 }

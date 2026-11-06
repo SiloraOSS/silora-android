@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import org.siloserver.silo.common.player.audio.NightModeParameters
+import org.siloserver.silo.common.store.AccountScopedKeys
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
 import org.siloserver.silo.domain.player.NextUpPromptMode
@@ -60,9 +61,11 @@ class AndroidPlayerSettingsStore(
     private val getAuthScope: suspend () -> org.siloserver.silo.network.AuthScopeSnapshot? = { null },
     /** Null in tests that never reach a server; text opacity then counts as supported. */
     private val contractRevision: SettingsContractRevision? = null,
-    private val dataStoreFactory: (profileId: String) -> DataStore<Preferences> = { profileId ->
+    /** The active saved account; each account's profiles keep their own files. */
+    private val getActiveAccountId: suspend () -> String? = { null },
+    private val dataStoreFactory: (accountId: String?, profileId: String) -> DataStore<Preferences> = { accountId, profileId ->
         PreferenceDataStoreFactory.create(
-            produceFile = { context.preferencesDataStoreFile(fileNameFor(profileId)) },
+            produceFile = { context.preferencesDataStoreFile(fileNameFor(accountId, profileId)) },
         )
     },
 ) : PlayerSettingsStore {
@@ -72,7 +75,9 @@ class AndroidPlayerSettingsStore(
 
     /**
      * Tuple identifying which device-scope settings file applies right now.
-     * Mirrors iOS `currentScopeIdentifier` (server | profile | device).
+     * Mirrors iOS `currentScopeIdentifier` (server | profile | device). The
+     * account picks the file ([fileNameFor]), so [keyPrefix] needs no account
+     * and values adopted from the pre-account file keep their names.
      * When `serverUrl` or `deviceId` is blank, we fall back to legacy
      * per-profile-only keys (no prefix), preserving compatibility with
      * existing installs.
@@ -82,6 +87,7 @@ class AndroidPlayerSettingsStore(
         val serverUrl: String,
         val deviceId: String,
         val authority: org.siloserver.silo.network.AuthScopeSnapshot?,
+        val accountId: String? = null,
     ) {
         val keyPrefix: String =
             if (serverUrl.isBlank() || deviceId.isBlank()) {
@@ -99,6 +105,9 @@ class AndroidPlayerSettingsStore(
          * orphaned pre-rename values.
          */
         val renameSentinel: String = "migration_rename_v1_$keyPrefix"
+
+        /** Which file [migrationDone] tokens belong to. */
+        val storeName: String get() = fileNameFor(accountId, profileId)
     }
 
     // Re-derive scope on every (profile or server) change.
@@ -110,20 +119,21 @@ class AndroidPlayerSettingsStore(
         scopeChangeSignal.collect { emit(currentScope()) }
     }.distinctUntilChanged()
 
-    private suspend fun currentScope(): Scope? {
+    private suspend fun currentScope(): Scope? = AccountScopedKeys.readStable(getActiveAccountId) { accountId ->
         val authority = getAuthScope()
-        val profileId = getActiveProfileId() ?: return null
-        return Scope(
+        val profileId = getActiveProfileId() ?: return@readStable null
+        Scope(
             profileId = profileId,
             serverUrl = getServerUrl().orEmpty(),
             deviceId = getDeviceId().orEmpty(),
             authority = authority,
+            accountId = accountId,
         )
     }
 
-    private fun storeFor(profileId: String): DataStore<Preferences> =
+    private fun storeFor(scope: Scope): DataStore<Preferences> =
         synchronized(storeCache) {
-            storeCache.getOrPut(profileId) { dataStoreFactory(profileId) }
+            storeCache.getOrPut(scope.storeName) { dataStoreFactory(scope.accountId, scope.profileId) }
         }
 
     private suspend fun ensureMigrated(scope: Scope, store: DataStore<Preferences>, isCurrent: suspend () -> Boolean = { true }) {
@@ -132,7 +142,7 @@ class AndroidPlayerSettingsStore(
     }
 
     private suspend fun migrateLegacyCache(scope: Scope, store: DataStore<Preferences>, isCurrent: suspend () -> Boolean) {
-        val token = scope.profileId + "/" + scope.migrationSentinel
+        val token = scope.storeName + "/" + scope.migrationSentinel
         if (synchronized(migrationDone) { token in migrationDone }) return
         val sentinelKey = booleanPreferencesKey(scope.migrationSentinel)
         val current = store.data.first()
@@ -166,7 +176,7 @@ class AndroidPlayerSettingsStore(
      * the user set until a canonical refresh happens to land.
      */
     private suspend fun migrateRenamedKeys(scope: Scope, store: DataStore<Preferences>, isCurrent: suspend () -> Boolean) {
-        val token = scope.profileId + "/" + scope.renameSentinel
+        val token = scope.storeName + "/" + scope.renameSentinel
         if (synchronized(migrationDone) { token in migrationDone }) return
         val sentinelKey = booleanPreferencesKey(scope.renameSentinel)
         val current = store.data.first()
@@ -229,7 +239,7 @@ class AndroidPlayerSettingsStore(
             if (scope == null) {
                 flowOf(default)
             } else {
-                val store = storeFor(scope.profileId)
+                val store = storeFor(scope)
                 flow {
                     ensureMigrated(scope, store)
                     emitAll(store.data.map { read(it, scope) })
@@ -914,7 +924,7 @@ class AndroidPlayerSettingsStore(
         }
         runCatching { serverSettingsFlusher.flushNow() }
         if (pinned != null) {
-            return applyServerEffective(repo, pinned, storeFor(pinned.profileId), pinned.authority) { isStillCurrent(pinned) }
+            return applyServerEffective(repo, pinned, storeFor(pinned), pinned.authority) { isStillCurrent(pinned) }
         }
         var applied = false
         withScope { scope, store -> applied = applyServerEffective(repo, scope, store, authority = null) { true } }
@@ -956,7 +966,9 @@ class AndroidPlayerSettingsStore(
      */
     private suspend fun isStillCurrent(captured: Scope): Boolean {
         val now = currentScope() ?: return false
-        if (now.profileId != captured.profileId || now.serverUrl != captured.serverUrl || now.deviceId != captured.deviceId) {
+        if (now.profileId != captured.profileId || now.serverUrl != captured.serverUrl ||
+            now.deviceId != captured.deviceId || now.accountId != captured.accountId
+        ) {
             return false
         }
         val owner = captured.authority ?: return now.authority == null
@@ -1361,8 +1373,8 @@ class AndroidPlayerSettingsStore(
         if (!current()) return false
         val profileId = authority.profileId ?: return false
         val deviceId = getDeviceId()?.takeIf { it.isNotBlank() } ?: return false
-        val scope = Scope(profileId, authority.serverUrl, deviceId, authority)
-        val store = storeFor(profileId)
+        val scope = Scope(profileId, authority.serverUrl, deviceId, authority, authority.accountId)
+        val store = storeFor(scope)
         if (!current()) return false
         ensureMigrated(scope, store, ::current)
         for ((key, raw) in values) {
@@ -1426,7 +1438,7 @@ class AndroidPlayerSettingsStore(
         block: (scope: Scope, store: DataStore<Preferences>) -> Unit,
     ) {
         val scope = currentScope() ?: return
-        val store = storeFor(scope.profileId)
+        val store = storeFor(scope)
         ensureMigrated(scope, store)
         block(scope, store)
     }
@@ -1555,8 +1567,11 @@ class AndroidPlayerSettingsStore(
         fun isIntKey(key: String): Boolean = key in INT_KEYS
         fun isDoubleKey(key: String): Boolean = key in DOUBLE_KEYS
 
-        fun fileNameFor(profileId: String): String =
-            "silo_player_settings_${profileHash(profileId)}"
+        /** Per (account, profile); `AccountLocalData` adopts and purges these files. */
+        const val FILE_BASE = "silo_player_settings"
+
+        fun fileNameFor(accountId: String?, profileId: String): String =
+            AccountScopedKeys.profileFileName(FILE_BASE, accountId, profileHash(profileId))
 
         fun profileHash(profileId: String): String =
             sha256Hex(profileId).take(16)

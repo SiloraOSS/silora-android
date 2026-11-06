@@ -3,16 +3,21 @@ package org.siloserver.silo.tv.data.preferences
 import android.content.SharedPreferences
 import kotlinx.coroutines.flow.StateFlow
 import org.siloserver.silo.model.server.ServerEntry
+import org.siloserver.silo.model.server.AccountEntry
 
 internal enum class TvSearchKeyboardMode(val id: String, val label: String) {
     App("app", "App keyboard"),
     System("system", "System keyboard"),
 }
 
-/** Search input belongs to the active server/profile on this TV. */
-internal class TvSearchKeyboardStore(prefs: SharedPreferences, activeServer: StateFlow<ServerEntry?>) {
+/** Search input belongs to the active server/account/profile on this TV. */
+internal class TvSearchKeyboardStore(
+    prefs: SharedPreferences,
+    activeServer: StateFlow<ServerEntry?>,
+    accounts: StateFlow<List<AccountEntry>>? = null,
+) {
     private val preferences = TvProfilePreferences(
-        prefs, activeServer, legacyKeys = setOf("mode", "auto_open_keyboard"),
+        prefs, activeServer, legacyKeys = setOf("mode", "auto_open_keyboard"), accounts = accounts,
     )
     private val readMode: (SharedPreferences, String) -> TvSearchKeyboardMode = { stored, prefix ->
         TvSearchKeyboardMode.entries.firstOrNull { it.id == stored.getString(prefix + "mode", null) }

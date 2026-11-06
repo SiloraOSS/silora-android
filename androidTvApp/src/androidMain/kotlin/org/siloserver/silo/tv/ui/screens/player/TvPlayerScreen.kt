@@ -127,6 +127,7 @@ import org.siloserver.silo.cast.SiloCastTrack
 import org.siloserver.silo.common.pip.SiloPictureInPictureCoordinator
 import org.siloserver.silo.common.pip.SiloPictureInPicturePlaybackState
 import org.siloserver.silo.common.pip.SiloPictureInPictureSurface
+import org.siloserver.silo.common.player.allowsAudioDelay
 import org.siloserver.silo.common.player.videoPlayerViewport
 import org.siloserver.silo.common.player.videoViewportBounds
 import org.siloserver.silo.common.player.ActivePlayerHolder
@@ -406,6 +407,7 @@ fun TvPlayerScreen(
     val autoPlayNextEnabled by viewModel.autoPlayNextEnabled.collectAsState()
     val audioNormalizationEnabled by viewModel.audioNormalizationEnabled.collectAsState()
     val audioDelayMs by viewModel.audioDelayMs.collectAsState()
+    val audioOutputPath by viewModel.audioOutputPath.collectAsState()
     val subtitleDelayMs by viewModel.subtitleDelayMs.collectAsState()
     val hdrEnabled by viewModel.hdrEnabled.collectAsState()
     val dolbyVisionEnabled by viewModel.dolbyVisionEnabled.collectAsState()
@@ -1123,6 +1125,17 @@ fun TvPlayerScreen(
                     return@handler true
                 }
             }
+            // Stop leaves the player from every state, overlays and loading
+            // included, so no Stop press can reach the Media3 session, whose
+            // Player.stop() idles the player and leaves Play unable to resume.
+            // In a party it opens the party panel, like Back: a local stop
+            // would desync the room.
+            if (event.keyCode == KeyEvent.KEYCODE_MEDIA_STOP) {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    if (watchParty != null) showPartyPanel = true else stopPlaybackAndExit()
+                }
+                return@handler true
+            }
             // Until the item's first frame there are no controls to drive, so
             // the remote does nothing but Back (the BackHandler), as during the
             // session request.
@@ -1451,7 +1464,10 @@ fun TvPlayerScreen(
                     viewModel.openHUD()
                     true
                 }
-                TvPlayerRemoteKeyAction.ConsumeOnly -> true
+                // Handled above, before the overlay and loading guards.
+                TvPlayerRemoteKeyAction.Stop,
+                TvPlayerRemoteKeyAction.ConsumeOnly,
+                -> true
                 null -> {
                     if (
                         event.action == KeyEvent.ACTION_DOWN &&
@@ -2660,7 +2676,14 @@ fun TvPlayerScreen(
                             audioNormalizationEnabled = audioNormalizationEnabled,
                             onAudioNormalizationChanged = viewModel::setAudioNormalizationEnabled,
                             audioDelayMs = audioDelayMs,
-                            audioDelayEnabled = audioNormalizationEnabled || state.playbackPlan?.claims?.audio?.passthrough != true,
+                            audioDelayEnabled = audioOutputPath.allowsAudioDelay(
+                                planClaimsPassthrough = if (audioNormalizationEnabled) {
+                                    false
+                                } else {
+                                    state.playbackPlan?.claims?.audio?.passthrough
+                                },
+                            ),
+                            audioOutputPath = audioOutputPath,
                             onAudioDelayChanged = viewModel::onAudioDelayChanged,
                             subtitleDelayMs = subtitleDelayMs,
                             subtitleDelayEnabled =
@@ -3336,7 +3359,11 @@ private fun TvPlayerIdleOverlay(
                         onOpenHUD()
                         true
                     }
-                    TvPlayerRemoteKeyAction.ConsumeOnly -> true
+                    // The activity-level remote key bridge acts on Stop before
+                    // Compose sees it; consume any copy that gets here.
+                    TvPlayerRemoteKeyAction.Stop,
+                    TvPlayerRemoteKeyAction.ConsumeOnly,
+                    -> true
                     null -> false
                 }
             },

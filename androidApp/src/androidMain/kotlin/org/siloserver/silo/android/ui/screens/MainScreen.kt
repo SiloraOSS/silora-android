@@ -22,6 +22,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -33,15 +34,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import org.siloserver.silo.android.ui.components.MainAppHeaderBodyHeight
 import org.siloserver.silo.android.ui.components.MainAppTopBar
+import org.siloserver.silo.android.ui.components.TabContentTop
+import org.siloserver.silo.android.ui.components.LocalTabHeaderScrim
+import org.siloserver.silo.android.ui.components.TopBarRemoteControl
 import org.siloserver.silo.android.ui.components.TabTopBarActions
 import org.siloserver.silo.android.ui.navigation.LocalBottomChromeInset
 import org.siloserver.silo.android.ui.navigation.SiloBottomNavBar
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import org.siloserver.silo.android.ui.navigation.Route
+import org.siloserver.silo.android.ui.navigation.routeAfterSignOut
 import org.siloserver.silo.android.ui.navigation.Tab
 import org.siloserver.silo.android.ui.navigation.tabForRoute
 import org.siloserver.silo.android.ui.navigation.tabSwitchNavOptions
@@ -56,6 +62,7 @@ import org.siloserver.silo.android.ui.screens.calendar.CalendarScreen
 import org.siloserver.silo.android.ui.screens.home.HomeScreen
 import org.siloserver.silo.android.cast.SiloCastController
 import org.siloserver.silo.android.ui.screens.cast.SiloCastMiniBar
+import org.siloserver.silo.android.ui.screens.cast.rememberSiloCastArtwork
 import org.siloserver.silo.android.ui.screens.cast.SiloCastTargetPickerSheet
 import org.siloserver.silo.android.ui.screens.libraries.LibrariesScreen
 import org.siloserver.silo.android.ui.screens.libraries.LibrariesSelectorSheet
@@ -170,10 +177,10 @@ fun MainScreen(
     val requestsEnabled by requestsFeatureStore.isEnabled.collectAsState()
     val reachabilityScope = rememberCoroutineScope()
     val activeEntry by serverRegistry.activeEntry.collectAsState()
-    // Drives the initial load and every re-load. Keyed on the active server
-    // and its profile, so switching either re-fetches the avatar rather than
-    // leaving the previous profile's (or none) in the header.
-    LaunchedEffect(activeEntry?.id, activeEntry?.profileId) {
+    // Drives the initial load and every re-load. Keyed on the active server,
+    // account and profile, so switching any of them re-fetches the avatar
+    // rather than leaving the previous profile's (or none) in the header.
+    LaunchedEffect(activeEntry?.id, activeEntry?.accountId, activeEntry?.profileId) {
         headerViewModel.refresh()
     }
     // An access change can add or remove whole libraries: re-derive the tabs
@@ -206,12 +213,14 @@ fun MainScreen(
         initialValue = 0L,
         downloadRecords,
         activeEntry?.id,
+        activeEntry?.accountId,
         activeEntry?.profileId,
         headerState.activeProfile?.id,
     ) {
         value = scopedLocalDownloadBytes(
             storage = downloadStorage,
             serverId = activeEntry?.id,
+            accountId = activeEntry?.accountId,
             profileId = activeEntry?.profileId ?: headerState.activeProfile?.id,
         )
     }
@@ -228,9 +237,11 @@ fun MainScreen(
 
     // The shared top bar floats over content; its real height is the status-bar
     // inset plus the fixed bar body. Offset tab content by that so the bar can't
-    // overlap content on tall-cutout / large-display devices.
-    val headerContentTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
-        MainAppHeaderBodyHeight
+    // overlap content on tall-cutout / large-display devices. Tabs without a
+    // pill row (Downloads) start at the first-row line instead.
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val headerContentTop = statusBarTop + MainAppHeaderBodyHeight
+    val tabContentTop = statusBarTop + TabContentTop
 
     // If the user is on a tab no longer supported by their libraries (or
     // Downloads disappears), move them to the nearest visible media tab.
@@ -286,7 +297,7 @@ fun MainScreen(
         navController.clearBackStack(vanished.route)
     }
 
-    LaunchedEffect(activeEntry?.id, activeEntry?.profileId, headerState.activeProfile?.id) {
+    LaunchedEffect(activeEntry?.id, activeEntry?.accountId, activeEntry?.profileId, headerState.activeProfile?.id) {
         requestsFeatureStore.reset()
         requestsFeatureStore.refresh()
         metadataAiFeatureStore.reset()
@@ -295,13 +306,15 @@ fun MainScreen(
         shuffleFeatureStore.refresh()
     }
 
-    fun signOutFromProfileMenu() {
+    fun signOutFromProfileMenu(removeServer: Boolean) {
         reachabilityScope.launch {
             // Same teardown as the Settings sign-out: otherwise the next
             // user's shell renders (and can write back) the previous
             // profile's overlays and card presentation.
-            if (!signOutTeardown.signOut()) return@launch
-            navController.navigate(Route.Login.route) {
+            val signedOut = if (removeServer) signOutTeardown.signOutAndRemoveServer() else signOutTeardown.signOut()
+            if (!signedOut) return@launch
+            // Change Account while another account has a session, else sign-in.
+            navController.navigate(serverRegistry.routeAfterSignOut()) {
                 popUpTo(0) { inclusive = true }
                 launchSingleTop = true
             }
@@ -315,6 +328,11 @@ fun MainScreen(
      * Runs in the navigation host's scope ([org.siloserver.silo.android.ui.navigation.LocalProfileSwitch]).
      */
     fun switchProfileFromMenu() = switchProfile()
+
+    /** Profile-menu "Change account": every saved server's accounts, over the shell so Back returns. */
+    fun changeAccountFromMenu() {
+        navController.navigate(Route.ChangeAccount().route) { launchSingleTop = true }
+    }
     val requestsMenuAction: (() -> Unit)? = if (requestsEnabled) {
         { navController.navigate(Route.Requests.route) }
     } else {
@@ -336,45 +354,70 @@ fun MainScreen(
     // What For You is actually showing (the empty-feed fallback shows the
     // Watchlist without making it an explicit selection); drives the title.
     var forYouDisplayed by remember { mutableStateOf<ForYouList?>(null) }
+    // How far For You / Downloads content sits under the shared header; the
+    // tab's own list reports it (see ReportTabHeaderScrim).
+    val headerScrim = remember { mutableFloatStateOf(0f) }
     // Instantiate with the shell, not when the lazy tab is first opened, so
     // Discover and taste-profile requests run alongside profile/header setup.
     val recommendationsViewModel = koinViewModel<RecommendationsViewModel>()
+    // Every tab header shows the remote-control button beside search.
+    val remoteControl = TopBarRemoteControl(
+        isActive = siloCastState.hasActiveSession,
+        onOpen = {
+            if (siloCastState.hasActiveSession) {
+                navController.navigate(Route.SiloCastRemote.route)
+            } else {
+                showSiloCastTargetPicker = true
+            }
+        },
+        onChooseTv = { showSiloCastTargetPicker = true },
+        onDisconnect = { siloCastController.disconnect() },
+    )
+    // Resolved here, above both cast-bar placements, so the bar keeps its
+    // title and poster while it moves between them.
+    val siloCastArtwork = rememberSiloCastArtwork(
+        siloCastState.launch?.contentId ?: siloCastState.playbackState?.contentId,
+    )
     Scaffold(
         bottomBar = {
             // The cast bar rests above the nav menu (iOS tabViewBottomAccessory
-            // placement); the Scaffold then pads tab content past both.
-            Column {
-                SiloCastMiniBar(
-                    controller = siloCastController,
-                    onOpenRemote = {
-                        navController.navigate(Route.SiloCastRemote.route) { launchSingleTop = true }
-                    },
-                )
-                SiloBottomNavBar(
-                    currentTab = currentTab,
-                    minimizedToCurrentTab = currentTab == Tab.Home && homeBottomNavMinimized,
-                    onTabSelected = { tab ->
-                        if (tab == Tab.Home && currentTab == Tab.Home) {
-                            // The minimized Home control remains tappable. A
-                            // repeat tap expands the full capsule without
-                            // disturbing the user's feed position.
-                            homeBottomNavMinimized = false
-                        } else {
-                            navController.navigate(tab.route) {
-                                // Pop to the tab stack's live anchor, not a
-                                // hard-coded Home and not the graph's declared
-                                // start (which can name a tab that has since
-                                // been removed). Popping to a route that is not
-                                // on the stack pops nothing — every tab then
-                                // stacked, so Back walked back through
-                                // previously visited tabs instead of leaving.
-                                tabSwitchNavOptions(navController.bottomMostTabRoute())
-                            }
+            // placement) and moves inline beside the minimized Home control;
+            // the Scaffold pads tab content past the whole chrome.
+            SiloBottomNavBar(
+                currentTab = currentTab,
+                minimizedToCurrentTab = currentTab == Tab.Home && homeBottomNavMinimized,
+                onTabSelected = { tab ->
+                    if (tab == Tab.Home && currentTab == Tab.Home) {
+                        // The minimized Home control remains tappable. A
+                        // repeat tap expands the full capsule without
+                        // disturbing the user's feed position.
+                        homeBottomNavMinimized = false
+                    } else {
+                        navController.navigate(tab.route) {
+                            // Pop to the tab stack's live anchor, not a
+                            // hard-coded Home and not the graph's declared
+                            // start (which can name a tab that has since
+                            // been removed). Popping to a route that is not
+                            // on the stack pops nothing — every tab then
+                            // stacked, so Back walked back through
+                            // previously visited tabs instead of leaving.
+                            tabSwitchNavOptions(navController.bottomMostTabRoute())
                         }
-                    },
-                    tabs = visibleTabs,
-                )
-            }
+                    }
+                },
+                tabs = visibleTabs,
+                accessory = { inline, barModifier ->
+                    SiloCastMiniBar(
+                        controller = siloCastController,
+                        onOpenRemote = {
+                            navController.navigate(Route.SiloCastRemote.route) { launchSingleTop = true }
+                        },
+                        inline = inline,
+                        barModifier = barModifier,
+                        sharedArtwork = siloCastArtwork,
+                    )
+                },
+            )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
@@ -423,23 +466,12 @@ fun MainScreen(
                             viewModel = homeViewModel,
                             activeProfile = headerState.activeProfile,
                             onSearchClick = { navController.navigate(Route.Search().route) },
-                            onRemoteControlClick = {
-                                if (siloCastState.hasActiveSession) {
-                                    navController.navigate(Route.SiloCastRemote.route)
-                                } else {
-                                    showSiloCastTargetPicker = true
-                                }
-                            },
-                            onRemoteChooseTvClick = { showSiloCastTargetPicker = true },
-                            onRemoteDisconnectClick = { siloCastController.disconnect() },
-                            isRemoteControlActive = siloCastState.hasActiveSession,
+                            remoteControl = remoteControl,
                             onRequestsClick = requestsMenuAction,
                             onWatchPartyClick = watchPartyMenuAction,
                             onSettingsClick = { navController.navigate(Route.Settings.route) },
                             onSwitchProfileClick = ::switchProfileFromMenu,
-                            onSwitchServerClick = {
-                                navController.navigate(Route.ServerList.route)
-                            },
+                            onChangeAccountClick = ::changeAccountFromMenu,
                             onSignOutClick = ::signOutFromProfileMenu,
                         )
                     }
@@ -457,9 +489,6 @@ fun MainScreen(
                             onItemClick = { contentId, libraryId ->
                                 navController.navigate(Route.ItemDetail(contentId, libraryId = libraryId).route)
                             },
-                            onBoxSetClick = { boxSet ->
-                                navController.navigate(Route.BoxSet(boxSet.id, boxSet.libraryId).route)
-                            },
                             onCollectionClick = { collection, libraryId, mediaScope ->
                                 navController.navigate(
                                     libraryCollectionDetailRoute(collection, libraryId, mediaScope),
@@ -472,19 +501,18 @@ fun MainScreen(
                             },
                             viewModel = requireNotNull(librariesViewModel),
                             activeProfile = headerState.activeProfile,
+                            remoteControl = remoteControl,
                             onLibrarySelectorClick = { showLibrarySelector = true },
                             onSearchClick = { navController.navigate(Route.Search().route) },
                             onRequestsClick = requestsMenuAction,
                             onWatchPartyClick = watchPartyMenuAction,
                             onSettingsClick = { navController.navigate(Route.Settings.route) },
                             onSwitchProfileClick = ::switchProfileFromMenu,
-                            onSwitchServerClick = {
-                                navController.navigate(Route.ServerList.route)
-                            },
+                            onChangeAccountClick = ::changeAccountFromMenu,
                             onSignOutClick = ::signOutFromProfileMenu,
                         )
                     }
-                    Tab.ForYou -> {
+                    Tab.ForYou -> CompositionLocalProvider(LocalTabHeaderScrim provides headerScrim) {
                         RecommendationsScreen(
                             onItemClick = { contentId ->
                                 navController.navigate(Route.ItemDetail(contentId).route)
@@ -506,20 +534,19 @@ fun MainScreen(
                             headerActions = {
                                 TabTopBarActions(
                                     activeProfile = headerState.activeProfile,
+                                    remoteControl = remoteControl,
                                     onSearchClick = { navController.navigate(Route.Search().route) },
                                     onRequestsClick = requestsMenuAction,
                                     onWatchPartyClick = watchPartyMenuAction,
                                     onSettingsClick = { navController.navigate(Route.Settings.route) },
                                     onSwitchProfileClick = ::switchProfileFromMenu,
-                                    onSwitchServerClick = {
-                                        navController.navigate(Route.ServerList.route)
-                                    },
+                                    onChangeAccountClick = ::changeAccountFromMenu,
                                     onSignOutClick = ::signOutFromProfileMenu,
                                 )
                             },
                         )
                     }
-                    Tab.Downloads -> {
+                    Tab.Downloads -> CompositionLocalProvider(LocalTabHeaderScrim provides headerScrim) {
                         org.siloserver.silo.android.ui.screens.downloads.DownloadsScreen(
                             // Tap on a downloaded row goes directly to the right
                             // player so it works offline (ItemDetail needs the
@@ -548,7 +575,9 @@ fun MainScreen(
                             onReadEbook = { contentId, fileId ->
                                 navController.navigate(Route.BookReader(contentId, fileId).route)
                             },
-                            contentTopPadding = headerContentTop,
+                            // Downloads has no pill row; its list still starts
+                            // where every other tab's first row does.
+                            contentTopPadding = tabContentTop,
                         )
                     }
                 }
@@ -565,22 +594,23 @@ fun MainScreen(
                 }
                 MainAppTopBar(
                     activeProfile = headerState.activeProfile,
+                    remoteControl = remoteControl,
                     isProfileLoading = headerState.isLoading,
                     hazeState = hazeState,
+                    scrimProgress = headerScrim.floatValue,
                     onSearchClick = { navController.navigate(Route.Search().route) },
                     onRequestsClick = requestsMenuAction,
                     onWatchPartyClick = watchPartyMenuAction,
                     onSettingsClick = { navController.navigate(Route.Settings.route) },
                     onSwitchProfileClick = ::switchProfileFromMenu,
-                    onSwitchServerClick = {
-                        navController.navigate(Route.ServerList.route)
-                    },
+                    onChangeAccountClick = ::changeAccountFromMenu,
                     onSignOutClick = ::signOutFromProfileMenu,
                     leadingContent = {
                         if (title != null) {
+                            // Same type as Libraries' selector title.
                             Text(
                                 text = title,
-                                style = MaterialTheme.typography.titleLarge,
+                                fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )

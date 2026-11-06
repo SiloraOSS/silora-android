@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.CircularProgressIndicator
@@ -114,6 +115,7 @@ import org.siloserver.silo.model.request.withoutLibraryTitles
 import org.siloserver.silo.tv.ui.components.TvHideStockImeOnDispose
 import org.siloserver.silo.tv.ui.components.TvCatalogGrid
 import org.siloserver.silo.tv.ui.components.TvFilterChip
+import org.siloserver.silo.tv.ui.components.TvHeroToggleIconButton
 import org.siloserver.silo.tv.ui.components.TvSectionHeader
 import org.siloserver.silo.tv.ui.components.tvOutlinedTextFieldColors
 import org.siloserver.silo.tv.ui.screens.requests.TvRequestCard
@@ -842,6 +844,17 @@ fun TvSearchScreen(
                     },
                     inputValue = inputValue,
                     onInputChanged = ::updateInput,
+                    onClearQuery = {
+                        // Move focus before clearing removes the button. The
+                        // selected keyboard opens for the next query.
+                        pendingSearchFocus = false
+                        activeSearchFieldFocusRequester.claimFocusOrReport(
+                            target = "search_field",
+                            action = "query_cleared",
+                        )
+                        updateInput(TextFieldValue(""))
+                        setKeyboardOpen(true)
+                    },
                     onSearch = ::submitCurrentSearch,
                     appKeyboardMode = keyboardMode == TvSearchKeyboardMode.App,
                     firstKeyboardKeyFocusRequester = firstKeyboardKeyFocusRequester,
@@ -1175,6 +1188,7 @@ private fun SearchStage(
     onChipsFocusChanged: (Boolean) -> Unit,
     inputValue: TextFieldValue,
     onInputChanged: (TextFieldValue) -> Unit,
+    onClearQuery: () -> Unit,
     onSearch: () -> Unit,
     appKeyboardMode: Boolean,
     firstKeyboardKeyFocusRequester: FocusRequester,
@@ -1189,6 +1203,8 @@ private fun SearchStage(
     val keyboardController = LocalSoftwareKeyboardController.current
     val mediaTypes = availableMediaTypes
     val fieldShape = RoundedCornerShape(14.dp)
+    val clearButtonFocusRequester = remember { FocusRequester() }
+    val canClear = query.isNotEmpty()
     var selectArmed by remember { mutableStateOf(false) }
 
     // Wait for the editable field to compose before asking the system IME
@@ -1295,9 +1311,13 @@ private fun SearchStage(
                         }
                         appKeyboardMode && event.key == Key.DirectionUp && isKeyboardOpen -> true
                         event.key == Key.DirectionRight && (!isKeyboardOpen || appKeyboardMode) -> {
-                            if (event.type == KeyEventType.KeyDown) microphoneFocusRequester.claimFocusOrReport(
-                                target = "search_microphone", action = "field_right",
-                            )
+                            if (event.type == KeyEventType.KeyDown) {
+                                val target = if (canClear) clearButtonFocusRequester else microphoneFocusRequester
+                                target.claimFocusOrReport(
+                                    target = if (canClear) "search_clear_button" else "search_microphone",
+                                    action = "field_right",
+                                )
+                            }
                             true
                         }
                         // DOWN has to be taken from the field. With the
@@ -1321,7 +1341,7 @@ private fun SearchStage(
                 }
                 .focusProperties {
                     down = if (appKeyboardMode && isKeyboardOpen) firstKeyboardKeyFocusRequester else firstFilterChipFocusRequester
-                    right = microphoneFocusRequester
+                    right = if (canClear) clearButtonFocusRequester else microphoneFocusRequester
                     if (appKeyboardMode && isKeyboardOpen) up = FocusRequester.Cancel
                 },
             colors = tvOutlinedTextFieldColors(
@@ -1331,12 +1351,30 @@ private fun SearchStage(
                 unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
             ),
         )
+        if (canClear) {
+            TvHeroToggleIconButton(
+                selected = false,
+                selectedContainerColor = Color.Transparent,
+                selectedContentColor = Color.White,
+                icon = Icons.Filled.Close,
+                contentDescription = "Clear search",
+                onClick = onClearQuery,
+                modifier = Modifier
+                    .focusRequester(clearButtonFocusRequester)
+                    .focusProperties {
+                        left = searchFieldFocusRequester
+                        right = microphoneFocusRequester
+                        if (appKeyboardMode && isKeyboardOpen) up = FocusRequester.Cancel
+                    },
+                downFocusRequester = if (appKeyboardMode && isKeyboardOpen) firstKeyboardKeyFocusRequester else firstFilterChipFocusRequester,
+            )
+        }
         Button(
             onClick = onVoiceSearch,
             modifier = Modifier.size(52.dp).focusRequester(microphoneFocusRequester)
                 .onFocusChanged { onMicrophoneFocusChanged(it.isFocused) }
                 .focusProperties {
-                    left = searchFieldFocusRequester
+                    left = if (canClear) clearButtonFocusRequester else searchFieldFocusRequester
                     right = FocusRequester.Cancel
                     down = if (appKeyboardMode && isKeyboardOpen) firstKeyboardKeyFocusRequester else firstFilterChipFocusRequester
                     if (appKeyboardMode && isKeyboardOpen) up = FocusRequester.Cancel
