@@ -7,7 +7,8 @@
 **Your media, after dark.**
 
 Keep Silora-specific documentation in this file. [README.md](README.md) tracks the
-upstream README with only a link here to reduce merge conflicts.
+upstream README with only a link here to reduce merge conflicts. The maintained
+list of intentional customizations is [FORK_DIFFERENCES.md](FORK_DIFFERENCES.md).
 
 Silora is an unofficial fork of the [Silo Android clients](https://github.com/Silo-Server/silo-android)
 for Android phones and Android TV, with an OLED-focused visual identity and an
@@ -44,8 +45,9 @@ the [in-app player](https://github.com/edrock200/silo-android/commit/76be6ebbcc6
 [distinct icon](https://github.com/edrock200/silo-android/commit/80988e2c8266faa65c6706f3d7a77bbd3eec2625),
 and [playback and phone-layout fixes](https://github.com/edrock200/silo-android/commit/f81adc7d3f674112cc0e8abcbbcb166a3a25de8d).
 
-The visual identity, HEVC patch, and trailer playback are Silora's fork changes.
-The broader app features described below are inherited from Silo. Silora is
+[FORK_DIFFERENCES.md](FORK_DIFFERENCES.md) records the full maintained set of
+Silora customizations, including playback, TV input, and build tooling. The
+broader feature overview below includes inherited Silo features. Silora is
 independently maintained and is not an official Silo release.
 
 ---

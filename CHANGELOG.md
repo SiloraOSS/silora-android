@@ -4,6 +4,40 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-06 — record intentional fork differences
+
+Added `FORK_DIFFERENCES.md` as the maintained baseline authorized by Matt in
+this chat. Its stable IDs describe required behavior and implementation
+references; they do not attribute every historical change to him. Requests has
+no fork override and follows upstream as it evolves.
+
+Updated the upstream-merge skill to use active manifest IDs and the current
+request when resolving conflicts. Removed its rule that froze AGENTS.md product
+exposure descriptions as fork requirements. Repository instructions still
+apply; inherited descriptions, old merge logs and passing tests are not proof
+that a difference was intentional. Meaningful decisions now identify upstream
+behavior, the applicable fork ID or authorization, and the resulting choice.
+Unexplained product differences are surfaced rather than silently preserved,
+discarded or added to the approved list.
+
+The technical checklist now maps those IDs to source, migrations and tests,
+including Up Next and account-isolated input preferences. Normal fork-development
+instructions and the feature overview point to the manifest. New intentional
+work updates it in the same change; verified upstream replacements are recorded
+as superseded so old workarounds are not reintroduced. Merge mode, schedules,
+models, push boundaries, signing and publication permissions are unchanged.
+
+Validation: skill frontmatter validation, relative-link/feature-ID checks,
+whitespace review, and review against the Requests move, a known-feature API
+adaptation, an unexplained merge-only difference and an upstream replacement.
+These are instruction/source checks, not an independent agent execution test.
+The Requests code in `03e76a364` passed all 1,432 TV host tests, full TV release
+lint, release compilation and the signed TV build. The APK passed persistent
+signature, app-ID, version and non-debuggable verification; matching R8 mapping
+and checksums were archived. The existing untracked release helper was left
+unchanged. Phone/shared source did not change; device playback and visual
+captures remain unverified. Nothing was pushed or published.
+
 ## 2026-11-06 — follow upstream Requests navigation
 
 Restored upstream's server-gated TV Requests entry in the profile menu. Removed

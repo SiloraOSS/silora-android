@@ -1,8 +1,10 @@
 # Silora fork preservation checklist
 
-Source-reviewed on 2026-10-31 at `7d7b9bb72`. Recheck current source and history
-on every merge. This is a map of known differences, not a fixed patch series
-or a reason to resurrect code removed from the active branch.
+Updated November 6, 2026. This is the source/test map for active IDs in
+[FORK_DIFFERENCES.md](../../../../FORK_DIFFERENCES.md), not a separate approval
+list. Required behavior and status belong in that manifest. Recheck these
+pointers against current code when integrating upstream; do not use an old
+implementation or merge log to create a new product requirement.
 
 For Kotlin paths below:
 
@@ -11,7 +13,7 @@ For Kotlin paths below:
 - Phone UI: `androidApp/src/androidMain/kotlin/org/siloserver/silo/android/`.
 - TV UI: `androidTvApp/src/androidMain/kotlin/org/siloserver/silo/tv/`.
 
-## HEVC level limits, phone and TV
+## HEVC level limits (`hevc-levels`)
 
 Preserve **Ignore HEVC Level Limits** as an On/Off setting, enabled by default.
 On omits HEVC level bounds in capability reports; Off reports the decoder's
@@ -29,7 +31,7 @@ The binder retains the last applied value and resubscribes after transient
 `IOException`s with exponential delay capped at 30 seconds. Preserve that
 recovery behavior from `ec68d4ecd`, including later preference/profile changes.
 
-## Night Mode, phone and TV
+## Night Mode (`night-mode`)
 
 Preserve the local per-server/profile preference, player and settings controls,
 and compressor/limiter tuning. Disabled tuning rows must be visibly disabled
@@ -41,11 +43,12 @@ The effect follows the audio session and channel count, releases its resources,
 and falls back on devices without `DynamicsProcessing`. While enabled, it uses
 decoded PCM and blocks passthrough, offload, and tunneling; turning it off
 restores current output preferences. Preserve the source attribution and
-`THIRD_PARTY_NOTICES.md`. Read `docs/playback/night-mode.md` for behavior, but
+`THIRD_PARTY_NOTICES.md`. Use the observed sink path for audio delay, with the
+existing Night Mode PCM fallback before that path is available. Read `docs/playback/night-mode.md` for behavior, but
 verify referenced guard scripts exist before trying to run them: at this
 snapshot it mentions `scripts/check-night-mode.py`, which is absent.
 
-## TV display matching and subtitle sizing
+## TV display and subtitle sizing (`tv-display`, `tv-subtitle-size`)
 
 - Keep separate **Match resolution** and **Match frame rate** settings and
   runtime handling in `DisplayModeSelector.kt`, `HdrDisplayController.kt`,
@@ -59,7 +62,7 @@ snapshot it mentions `scripts/check-night-mode.py`, which is absent.
   disabled Night Mode controls. Review `TvPlayerHud.kt` and related settings
   controls when upstream changes focus or layout.
 
-## TV remote, keyboard, and voice controls
+## TV input (`tv-remote`, `tv-keyboard`, `tv-voice`, `input-scope`)
 
 Keep customizable long-press shortcuts and ordinary short-press behavior,
 including contextual limits on actions such as Next Episode. Follow
@@ -72,11 +75,13 @@ integration. Follow `TvSearchKeyboardStore.kt`, `TvSearchKeyboard.kt`,
 `TvSearchScreen.kt`, `TvSearchTextEditing.kt`, `TvSearchVoiceController.kt`, and
 `TvSearchVoiceOverlay.kt` plus shell/settings integration.
 
-Keyboard and remote preferences are local per-server/profile values.
-`TvProfilePreferences.kt` migrates old TV-wide values to the first active
-profile only and responds to profile switches. Preserve that isolation.
+Keyboard and remote preferences are local per-server/account/profile values.
+`TvProfilePreferences.kt` migrates old TV-wide/profile values only to the
+adopting account and responds to identity switches. Follow its account-token
+integration in `AndroidTvModule.kt` and `AccountLocalData.kt`; retain the account
+isolation/adoption cases in `TvProfileInputPreferencesTest.kt`.
 
-## Trailers, phone and TV
+## Trailers (`trailers`)
 
 Keep embedded YouTube playback, external fallback, and the detail-page Trailer
 action. Follow `YoutubeTrailerActivity.kt`, `YoutubeTrailerLauncher.kt`, both
@@ -88,7 +93,7 @@ handoff behavior, local-trailer playback, TV remote controls, close-on-end,
 and the phone's More-menu placement when the action row is full. Keep Edrock's
 attribution. Use an upstream equivalent if it preserves these behaviors.
 
-## AI subtitle fixes
+## AI subtitles (`ai-subtitles`)
 
 Review `5536474b3` and current code before resolving these files. Prefer a
 verified upstream fix when it makes the local workaround unnecessary.
@@ -107,7 +112,26 @@ verified upstream fix when it makes the local workaround unnecessary.
   such as `eng`/`en` and avoids unnecessary same-language translation.
   Unknown language codes must not silently count as English.
 
-## Identity, documentation, and build tooling
+## Up Next (`up-next-setting`, `up-next-fixes`)
+
+Follow `NextUpPromptMode.kt`, `MarkerTimeline.kt`, `NextUpDismissal.kt`, both
+player ViewModels, phone `PlayerNextUpScreen.kt`, TV `TvPlayerScreen.kt`, settings
+stores, and phone/TV playback settings. `docs/playback/up-next.md` records the
+three trigger modes, eligible-credit filtering, fallback timing, saved wire
+values, and dismissal/end-countdown behavior.
+
+Retain profile/server/device trigger scope, existing timing overrides, startup
+settings readiness, skip controls, manual TV action, and Watch Party transition
+ownership. Reset dismissal/manual-card state for each item alongside upstream's
+completion state.
+
+Existing coverage includes `MarkerTimelineTest`, `NextUpPromptModeTest`,
+`NextUpDismissalTest`, `AndroidPlayerSettingsStoreTest`, and the phone
+`PlayerViewModelLoadOwnershipIntegrationTest`. Check TV host-task availability;
+the repository disables its release host tests. Device playback requires a real
+server/device run and cannot be inferred from source or unit tests.
+
+## Identity and builds (`identity`, `release-tooling`)
 
 Keep Silora's purple/charcoal artwork, launcher icons, TV banner, wordmarks,
 startup assets, visible labels, diagnostics/client identity, and
@@ -123,6 +147,15 @@ retain matching R8 mappings beside their APKs. Relevant files include
 Preserving these files does not authorize running a release or changing its
 schedule, destinations, secrets, or publishing behavior.
 
-Retain dependency-verification metadata and existing build/test fixes unless
-the incoming implementation demonstrably supersedes them. Use the current
-diff and tests to find less prominent fixes beyond this checklist.
+Retain dependency verification and test compatibility for the active features.
+For a difference outside these IDs or the current user request, establish its
+intent before choosing whether to preserve it; do not approve it here.
+
+## Merge maintenance (`fork-maintenance`)
+
+`FORK_DIFFERENCES.md` holds active behavior and its intent references; this file
+holds technical pointers. `AGENTS.md` links normal fork development to the
+manifest, and `SKILL.md` explains upstream integration decisions. Update the
+manifest with explicitly requested new fork work rather than inferring approval
+from a source diff, test, or old instruction paragraph. Keep existing automation
+schedules, publication permissions, and push boundaries unchanged.
