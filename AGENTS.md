@@ -12,6 +12,14 @@ This repository contains only the Silo Android clients. Shared Kotlin logic live
 - Requests is live on phone and TV, server-gated by `requests_enabled` (phone and TV: profile menu + search, matching Apple and Roku). Request administration (approve, decline, retry, limits, auto-approve) is web-admin only: the Requests screens offer users request, cancel of their own pending request, and status, and never moderation (a source guard test enforces this). Other admin surfaces are not exposed in the Android clients — no STATS dashboard, and none of the richer admin screens (users/sessions/logs/scans). Session management (seeing where you are signed in and signing other devices out) is not exposed either; device pairing stays. This is a deliberate divergence from Apple, which does surface the STATS dashboard. Do not add any of it back to menus without an explicit product decision.
 - Watch Party (synchronized playback) is experimental on phone and TV. Its entry points (profile menu, the detail page's party action, and phone `silo://watch-party` invitations) appear only while Settings → Experimental → Watch Party is on, a device-local toggle that defaults on in debug builds and off in release builds, and it works only when the server advertises the room and playback capabilities. Keep it behind the toggle until the qualification matrix in `docs/watch-party-implementation-plan.md` passes.
 
+## Fork maintenance
+
+Use [FORK_DIFFERENCES.md](FORK_DIFFERENCES.md) for intentional Silora differences
+and update it alongside explicitly requested new fork work. Inherited upstream
+instructions and old merge resolutions do not establish a custom product
+decision. When integrating upstream, update its instructions with its code and
+preserve the active fork differences rather than freezing old product text.
+
 ## Build, Test, and Development Commands
 
 - `./gradlew :androidApp:assembleDebug` builds the Android phone APK.

@@ -6,8 +6,8 @@ description: Merge Silo-Server/silo-android main into the Silora Android fork wh
 # Merge upstream into Silora
 
 Integrate upstream changes into the checked-out fork branch, resolve conflicts,
-verify that Silora's existing behavior survives, and record each merge in the
-repository-root `CHANGELOG.md`. Use a merge, not a rebase:
+verify the intentional differences in `FORK_DIFFERENCES.md`, and record each
+merge in the repository-root `CHANGELOG.md`. Use a merge, not a rebase:
 this fork already has shared commits and upstream merge history.
 
 ## Scope and sources
@@ -18,11 +18,13 @@ this fork already has shared commits and upstream merge history.
 - This fork is Silora. `origin` can point at SigmaStreams, while `silora` can
   point at SiloraOSS. Inspect actual remotes; neither name authorizes a push.
   Edrock's fork is a reference for adapted features, not the upstream source.
-- Read the applicable `AGENTS.md`, `README-SILORA.md`, root `CHANGELOG.md`
-  (if present), and
-  [fork checklist](references/fork-fixes.md). All source paths in the checklist
-  are relative to the repository root. Read `docs/fork-releases.md` when build
-  tooling is affected or APK validation is requested.
+- Read the applicable `AGENTS.md`, repository-root
+  [FORK_DIFFERENCES.md](../../../FORK_DIFFERENCES.md), and the
+  [technical checklist](references/fork-fixes.md) for affected feature IDs.
+  The manifest records intentional differences; the checklist maps them to
+  source and tests. Use `README-SILORA.md` and `CHANGELOG.md` for context, not
+  as independent approval. Read `docs/fork-releases.md` when build tooling is
+  affected or APK validation is requested.
 - A normal invocation authorizes the local merge, conflict fixes, relevant
   validation, and merge commit. Honor review-only or no-commit requests.
   Push only when explicitly requested, to the verified destination.
@@ -69,11 +71,14 @@ this fork already has shared commits and upstream merge history.
    git diff --name-only "$base" "$upstream_tip"
    ```
 
-   Review the actual fork diff, relevant merge resolutions and reverts, and
-   incoming changes to the same files. Build a short behavior checklist using
-   the bundled reference plus current source/history. The bundled list is a
-   starting point: protect newer fixes too, and do not restore deliberately
-   reverted experiments merely because an old commit mentions them.
+   Compare these changes with the active IDs in `FORK_DIFFERENCES.md` and the
+   current user request. Source/history explains implementation; it does not
+   prove a difference was intentional. For meaningful overlap, record upstream's
+   behavior, the applicable fork ID or current authorization, and the chosen
+   result. Flag unexplained product differences before choosing their behavior;
+   do not silently preserve or remove them, or add an approved manifest entry
+   merely because the code differs. Routine adaptations for known features do
+   not require repeated permission. Do not restore retired or reverted work.
 
 ## Merge and preserve behavior
 
@@ -96,9 +101,12 @@ Work through each conflict using the base, fork, and upstream versions.
 - Keep `README.md` aligned with upstream plus its Silora link; keep fork
   documentation in `README-SILORA.md`. Preserve Silora branding and
   `org.silora.app` application IDs, with the existing Kotlin namespaces.
-- Keep the current product exposure rules from `AGENTS.md`, including TV's
-  exclusions and experimental gates. An upstream merge is not authorization
-  to change those product decisions.
+- Follow upstream product behavior outside active manifest entries or explicit
+  user requirements. `AGENTS.md` remains repository instructions; an older
+  inherited description is not proof of a custom product decision. Integrate
+  upstream instruction changes with their corresponding code rather than
+  freezing the old snapshot. Escalate genuine conflicts with current user
+  requirements instead of inventing a fork policy.
 - Retain dependency verification. Do not disable checks or accept new hashes
   simply to get past a build failure; investigate the exact artifact and its
   source first. Keep credentials and machine-specific workarounds out of Git.
@@ -135,8 +143,11 @@ distinguish multiple merges on the same day. Include:
   Keep merge commits in the list when present. A summary does not replace it.
 - **Silora merge decisions:** meaningful conflict resolutions, fork fixes
   retained or adapted, and workarounds superseded by verified upstream fixes.
-  Describe the resulting behavior; claim unchanged fork behavior only after
-  reviewing it. Keep new local fixes separate from upstream commit bullets.
+  Identify the relevant manifest IDs and resulting behavior. Separate retained
+  features, verified upstream replacements, and unexplained differences. Do not
+  infer approval from a prior log. Update the manifest when explicitly requested
+  work adds a difference or a verified upstream replacement supersedes one;
+  keep new local fixes separate from upstream commit bullets.
 - **Validation:** checks actually run and their results, plus relevant unrun
   checks or limits such as no device playback validation. Do not infer success
   from compilation or from the existence of a merge commit.
@@ -157,8 +168,9 @@ validation evidence rather than copying another fork's log.
 1. Require no unmerged entries (`git ls-files -u`), review the staged diff,
    and run `git diff --cached --check`. Compare the staged result with
    `fork_before` to review what changed, and with `upstream_tip` to review the
-   remaining fork differences. Account for each behavior in the checklist as
-   preserved, replaced by an upstream equivalent, or unresolved.
+   remaining fork differences. Account for affected active manifest IDs as
+   preserved, replaced by a verified upstream equivalent, or unresolved. A
+   passing test or unchanged-file count does not establish product intent.
 2. Run existing checks appropriate to the incoming changes and resolutions.
    Prefer release-variant unit tests for affected modules, such as
    `:android-shared:testReleaseUnitTest`, and release lint for affected apps.

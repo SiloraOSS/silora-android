@@ -4,6 +4,92 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-06 — adopt upstream TV voice search
+
+Retired the fork's `tv-voice` implementation at Matt's request after reviewing
+upstream PR #830 (`4fb8f1b59`). The TV mic now launches upstream's system
+recognizer and submits its result through the shared typed/spoken search path.
+The mic is hidden without a recognizer, an unavailable launch reports a message,
+and the row follows upstream's field/mic/clear order. App/System keyboard modes,
+automatic opening preferences, physical typing and keyboard focus gates remain.
+
+Copied upstream's `TvVoiceSearch.kt` helper without modification. Removed the
+fork's local recording controller, custom voice overlay, recording permission,
+recognition-service query and their eight dedicated controller tests. Retained
+the upstream recognition-activity query and in-flight request-search deduplication.
+This adopts PR #830's voice behavior without integrating unrelated newer upstream
+commits into main.
+
+Moved `tv-voice` to the manifest's superseded section and updated the technical
+checklist so future integrations do not resurrect the old implementation.
+Clarified `input-scope`: it is storage for App/System keyboard choice, automatic
+keyboard opening and remote long-press mappings per server/login/profile, not
+a standalone setting. Its implementation and eight existing migration/isolation
+tests were not changed. The inventory introduction records ongoing user review
+without claiming personal authorship of every historical change.
+
+Validation on local main: all 1,424 remaining TV host tests passed with zero failures, errors
+or skips, including all eight preference-scope tests. Full TV release lint and
+release Kotlin compilation passed with existing warnings/baselines. Verified
+the helper matches upstream byte for byte and that input preference source/test
+files are unchanged. The legacy controller-only tests were removed with their
+implementation. Skill validation and manifest/whitespace checks passed.
+Device voice capture, native recognizer focus return and visual verification
+remain unperformed. Nothing was pushed or published.
+
+## 2026-11-06 — record intentional fork differences
+
+Added `FORK_DIFFERENCES.md` as the maintained baseline authorized by Matt in
+this chat. Its stable IDs describe required behavior and implementation
+references; they do not attribute every historical change to him. Requests has
+no fork override and follows upstream as it evolves.
+
+Updated the upstream-merge skill to use active manifest IDs and the current
+request when resolving conflicts. Removed its rule that froze AGENTS.md product
+exposure descriptions as fork requirements. Repository instructions still
+apply; inherited descriptions, old merge logs and passing tests are not proof
+that a difference was intentional. Meaningful decisions now identify upstream
+behavior, the applicable fork ID or authorization, and the resulting choice.
+Unexplained product differences are surfaced rather than silently preserved,
+discarded or added to the approved list.
+
+The technical checklist now maps those IDs to source, migrations and tests,
+including Up Next and account-isolated input preferences. Normal fork-development
+instructions and the feature overview point to the manifest. New intentional
+work updates it in the same change; verified upstream replacements are recorded
+as superseded so old workarounds are not reintroduced. Merge mode, schedules,
+models, push boundaries, signing and publication permissions are unchanged.
+
+Validation: skill frontmatter validation, relative-link/feature-ID checks,
+whitespace review, and review against the Requests move, a known-feature API
+adaptation, an unexplained merge-only difference and an upstream replacement.
+These are instruction/source checks, not an independent agent execution test.
+The Requests code in `03e76a364` passed all 1,432 TV host tests, full TV release
+lint, release compilation and the signed TV build. The APK passed persistent
+signature, app-ID, version and non-debuggable verification; matching R8 mapping
+and checksums were archived. The existing untracked release helper was left
+unchanged. Phone/shared source did not change; device playback and visual
+captures remain unverified. Nothing was pushed or published.
+
+## 2026-11-06 — follow upstream Requests navigation
+
+Restored upstream's server-gated TV Requests entry in the profile menu. Removed
+its fork-only top-bar destination and corresponding routing/focus and test
+expectations. Updated the inherited AGENTS.md navigation description with the
+code; no newer upstream commits were integrated in this correction.
+
+The old top-bar preservation in merge `020174afd` and subsequent records was
+an assistant interpretation, not a customization requested by Matt. Older log
+entries describe what happened, not authorization to restore that override.
+Requests navigation follows upstream as it evolves.
+
+Validation: all 1,432 TV host tests passed with zero failures, errors or skips;
+full TV release lint and release Kotlin compilation passed. Requests screens,
+roots and navigation guards match the included upstream snapshot `fee491916`.
+The repository disables TV release host tests, so its configured debug host
+suite was used. Device playback and visual captures were not performed. Nothing
+was pushed or published.
+
 ## 2026-11-05 — local automation progress notifications
 
 Added local start, merge-preparation/validation, and validated merge/GitHub

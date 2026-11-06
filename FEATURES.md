@@ -1,10 +1,11 @@
 # Silora — Feature List
 
 Silora is an unofficial fork of Silo's Android **phone** and **TV** clients.
-Its fork changes are the OLED-focused branding, the default-on HEVC level
+Its fork changes include the OLED-focused branding, the default-on HEVC level
 bypass for Shield setups, and in-app YouTube trailers adapted from edrock200's
-fork. The broader feature set below is inherited from Silo;
-see the [README](README.md#silora-changes) for the fork overview.
+fork. The feature list below includes inherited Silo behavior;
+see [FORK_DIFFERENCES.md](FORK_DIFFERENCES.md) for the maintained differences
+and required behavior.
 
 Legend:
 
