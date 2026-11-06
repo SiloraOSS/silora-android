@@ -1,10 +1,10 @@
 # Silora fork differences
 
-This is the record of intentional Silora differences from Silo Android. Matt
-adopted this baseline on November 6, 2026, when authorizing the audited inventory,
-Requests correction, and merge-skill update. Implementation references identify
-where behavior came from; they do not claim Matt personally authored or requested
-every historical commit.
+This is the maintained inventory of Silora differences from Silo Android. Matt
+authorized creating the inventory and updating the merge skill on November 6,
+2026. Entries remain subject to his review and corrections; implementation
+references identify the code, not proof that he personally authored or requested
+every historical change.
 
 ## Default and maintenance
 
@@ -30,7 +30,7 @@ updates with the corresponding code instead of preserving stale descriptions.
 - Formatting changes, test API adaptations, and inherited upstream features are
   not separate product customizations. Tests verify implementation, not intent.
 
-All entries below are **active**. Existing source/test pointers and migration
+Entries in the active section are the current preservation scope. Source/test pointers and migration
 contracts live in the [technical checklist](.agents/skills/silora-upstream-merge/references/fork-fixes.md),
 keyed by these IDs. Keep approval and required behavior here rather than adding
 competing product requirements to that checklist.
@@ -46,8 +46,7 @@ competing product requirements to that checklist.
 | `tv-subtitle-size` | TV has an Extra small subtitle choice. Preserve local persistence, server-compatible Small wire fallback and existing phone sizes. | `eae382b4b` |
 | `tv-remote` | Customizable long presses provide playback shortcuts while ordinary short presses and contextual action limits remain intact. Preserve playback-options focus handling; a Stats shortcut opens playback information, not an admin dashboard. | `04ef9c483`, `64a6d3b14` |
 | `tv-keyboard` | Search offers App/System keyboards with System as default and automatic opening off by default. Preserve physical typing, explicit keyboard opening, cursor state, clearing and focus handoffs. | `1d8fc7a5f`, `a42991501`, `660758013`, `bcf487826` |
-| `tv-voice` | Silora's managed local recognition session and overlay provide voice input. Preserve permission/lifecycle handling and microphone focus restoration. Evaluate upstream equivalents against these behaviors instead of retaining duplicate controls. | `dc03dfaa7`, `a42991501` |
-| `input-scope` | Keyboard and remote choices remain isolated by server/account/profile. Preserve legacy adoption, reactive switching and account-removal cleanup so accounts do not inherit each other's choices. | `a19729d21`; account integration in `73c46323f` |
+| `input-scope` | Supporting storage for `tv-keyboard` and `tv-remote`: save only App/System keyboard choice, automatic keyboard opening, and long-press mappings separately per server/login/profile. This adds no menu or standalone setting. Preserve migration, switching and account-removal cleanup. | `a19729d21`; account integration in `73c46323f` |
 | `trailers` | Embedded YouTube previews, external fallback and TV controls keep trailers accessible from movie/series details. Prefer local trailers and retain attribution. | `bac06a7c7` |
 | `ai-subtitles` | Preserve the four fixes for server audio ordinals, bounded uncertain-create fencing, missing-row replanning and language-alias normalization. Retire individual workarounds when a verified upstream replacement supplies the same behavior. | `5536474b3` |
 | `up-next-setting` | **Up Next Trigger** offers Credits markers, Time remaining and Disabled. Preserve local trigger scope, timing fallback, normal end screen, autoplay and manual TV action. Matt identified this setting as his addition in the November 5–6 chat. | `eb13f7033` |
@@ -57,6 +56,9 @@ competing product requirements to that checklist.
 
 ## Superseded or retired
 
-None recorded yet. Add the replacement/reason and validation when moving an
-active entry here. The disowned Requests top-bar override is not an active fork
-feature and must not be reintroduced from old merge logs or instruction text.
+| ID | Replacement and reason | Validation |
+| --- | --- | --- |
+| `tv-voice` | Superseded by [upstream PR #830](https://github.com/Silo-Server/silo-android/pull/830), commit `4fb8f1b59`. Matt requested retiring the fork implementation on November 6, 2026. Use upstream's system-recognizer mic button and result handling. Do not restore the fork's local recording controller, permission flow or voice overlay from old commits. | Exact upstream `TvVoiceSearch.kt` helper adopted; TV tests/build and on-device limits are recorded in `CHANGELOG.md`. |
+
+Requests navigation has no fork override and must not be reintroduced from old
+merge logs or instruction text.

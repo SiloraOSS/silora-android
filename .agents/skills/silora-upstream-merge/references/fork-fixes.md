@@ -62,24 +62,36 @@ snapshot it mentions `scripts/check-night-mode.py`, which is absent.
   disabled Night Mode controls. Review `TvPlayerHud.kt` and related settings
   controls when upstream changes focus or layout.
 
-## TV input (`tv-remote`, `tv-keyboard`, `tv-voice`, `input-scope`)
+## TV input settings (`tv-remote`, `tv-keyboard`, `input-scope`)
 
 Keep customizable long-press shortcuts and ordinary short-press behavior,
 including contextual limits on actions such as Next Episode. Follow
 `TvRemoteShortcutsStore.kt`, `TvRemoteShortcutPressHandler.kt`,
 `TvRemoteShortcutsSettingsPane.kt`, and player integration.
 
-Keep App/System search keyboard selection, System as the default, optional
-automatic keyboard opening (default off), and voice search/controller/overlay
-integration. Follow `TvSearchKeyboardStore.kt`, `TvSearchKeyboard.kt`,
-`TvSearchScreen.kt`, `TvSearchTextEditing.kt`, `TvSearchVoiceController.kt`, and
-`TvSearchVoiceOverlay.kt` plus shell/settings integration.
+Keep App/System search keyboard selection, System as the default, and optional
+automatic keyboard opening (default off). Follow `TvSearchKeyboardStore.kt`,
+`TvSearchKeyboard.kt`, `TvSearchScreen.kt`, `TvSearchTextEditing.kt`, and their
+shell/settings integration. Integrate upstream's voice affordance with those
+keyboard controls; the separate fork voice implementation is retired below.
 
-Keyboard and remote preferences are local per-server/account/profile values.
-`TvProfilePreferences.kt` migrates old TV-wide/profile values only to the
-adopting account and responds to identity switches. Follow its account-token
+`input-scope` is the storage detail for keyboard mode, automatic opening and
+remote mappings, not a separate product feature. These values are local per
+server/account/profile. `TvProfilePreferences.kt` migrates old TV-wide/profile
+values only to the adopting account and responds to identity switches. Follow its account-token
 integration in `AndroidTvModule.kt` and `AccountLocalData.kt`; retain the account
 isolation/adoption cases in `TvProfileInputPreferencesTest.kt`.
+
+## Retired voice implementation (`tv-voice`)
+
+Upstream PR #830 (`4fb8f1b59`) supplies the mic button and system recognizer.
+`TvVoiceSearch.kt` is upstream code. It handles recognizer selection, result
+return and availability; the manifest declares its recognition-activity query.
+The app does not record audio and needs no `RECORD_AUDIO` permission for this
+path. Keep normal keyboard-mode focus handling around the upstream affordance.
+Do not recreate the deleted fork controller, permission UI, voice overlay or
+controller-only tests from historical commits. See the manifest's retired entry
+for the user's retirement decision and the changelog for validation limits.
 
 ## Trailers (`trailers`)
 

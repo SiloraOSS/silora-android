@@ -4,6 +4,39 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-06 — adopt upstream TV voice search
+
+Retired the fork's `tv-voice` implementation at Matt's request after reviewing
+upstream PR #830 (`4fb8f1b59`). The TV mic now launches upstream's system
+recognizer and submits its result through the shared typed/spoken search path.
+The mic is hidden without a recognizer, an unavailable launch reports a message,
+and the row follows upstream's field/mic/clear order. App/System keyboard modes,
+automatic opening preferences, physical typing and keyboard focus gates remain.
+
+Copied upstream's `TvVoiceSearch.kt` helper without modification. Removed the
+fork's local recording controller, custom voice overlay, recording permission,
+recognition-service query and their eight dedicated controller tests. Retained
+the upstream recognition-activity query and in-flight request-search deduplication.
+This adopts PR #830's voice behavior without integrating unrelated newer upstream
+commits into main.
+
+Moved `tv-voice` to the manifest's superseded section and updated the technical
+checklist so future integrations do not resurrect the old implementation.
+Clarified `input-scope`: it is storage for App/System keyboard choice, automatic
+keyboard opening and remote long-press mappings per server/login/profile, not
+a standalone setting. Its implementation and eight existing migration/isolation
+tests were not changed. The inventory introduction records ongoing user review
+without claiming personal authorship of every historical change.
+
+Validation on local main: all 1,424 remaining TV host tests passed with zero failures, errors
+or skips, including all eight preference-scope tests. Full TV release lint and
+release Kotlin compilation passed with existing warnings/baselines. Verified
+the helper matches upstream byte for byte and that input preference source/test
+files are unchanged. The legacy controller-only tests were removed with their
+implementation. Skill validation and manifest/whitespace checks passed.
+Device voice capture, native recognizer focus return and visual verification
+remain unperformed. Nothing was pushed or published.
+
 ## 2026-11-06 — record intentional fork differences
 
 Added `FORK_DIFFERENCES.md` as the maintained baseline authorized by Matt in

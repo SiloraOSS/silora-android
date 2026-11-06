@@ -1072,7 +1072,7 @@ fun TvMainShell(
     }
 
     fun handleShellBack(): Boolean {
-        // Search owns Back while its app keyboard or voice overlay is open.
+        // Search owns Back while its app keyboard is open.
         if (currentRoute == TvMainRoute.Search.route && searchInputOverlayOpen) return false
         // Settings owns a two-stage Back model (detail pane -> selected rail
         // category -> Home), so its nested BackHandler must remain in charge.
