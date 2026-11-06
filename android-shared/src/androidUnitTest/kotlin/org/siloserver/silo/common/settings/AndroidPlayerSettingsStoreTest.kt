@@ -332,7 +332,7 @@ class AndroidPlayerSettingsStoreTest {
             context = mockContextStub(), legacyCache = fakeLegacyCache,
             getActiveProfileId = { profile }, getServerUrl = { server },
             getDeviceId = { device }, serverSettingsFlusher = fakeFlusher,
-            dataStoreFactory = { id -> stores.getOrPut(id) {
+            dataStoreFactory = { _, id -> stores.getOrPut(id) {
                 PreferenceDataStoreFactory.create(produceFile = { File(tempFolder.root, "up_next_$id.preferences_pb") })
             } },
         )
@@ -366,7 +366,7 @@ class AndroidPlayerSettingsStoreTest {
             context = mockContextStub(), legacyCache = fakeLegacyCache,
             getActiveProfileId = { profile }, getServerUrl = { server },
             getDeviceId = { "device" }, serverSettingsFlusher = fakeFlusher,
-            dataStoreFactory = { id -> stores.getOrPut(id) {
+            dataStoreFactory = { _, id -> stores.getOrPut(id) {
                 PreferenceDataStoreFactory.create(produceFile = { File(tempFolder.root, "resolution_$id.preferences_pb") })
             } },
         )
@@ -396,7 +396,7 @@ class AndroidPlayerSettingsStoreTest {
             context = mockContextStub(), legacyCache = fakeLegacyCache,
             getActiveProfileId = { profile }, getServerUrl = { server },
             getDeviceId = { "device" }, serverSettingsFlusher = fakeFlusher,
-            dataStoreFactory = { id -> stores.getOrPut(id) {
+            dataStoreFactory = { _, id -> stores.getOrPut(id) {
                 PreferenceDataStoreFactory.create(produceFile = { File(tempFolder.root, "night_$id.preferences_pb") })
             } },
         )
@@ -455,7 +455,7 @@ class AndroidPlayerSettingsStoreTest {
             context = mockContextStub(), legacyCache = fakeLegacyCache,
             getActiveProfileId = { profile }, getServerUrl = { server },
             getDeviceId = { device }, serverSettingsFlusher = fakeFlusher,
-            dataStoreFactory = { id -> stores.getOrPut(id) {
+            dataStoreFactory = { _, id -> stores.getOrPut(id) {
                 PreferenceDataStoreFactory.create(
                     produceFile = { File(tempFolder.root, "hevc_$id.preferences_pb") },
                 )
@@ -492,7 +492,7 @@ class AndroidPlayerSettingsStoreTest {
         val store = AndroidPlayerSettingsStore(
             context = mockContextStub(), legacyCache = fakeLegacyCache,
             getActiveProfileId = { activeProfileId }, getServerUrl = { serverUrl },
-            serverSettingsFlusher = fakeFlusher, dataStoreFactory = { dataStore },
+            serverSettingsFlusher = fakeFlusher, dataStoreFactory = { _, _ -> dataStore },
         )
         assertFalse(store.ignoreHevcLevelLimitsFlow.first())
         for (level in listOf(150, 153, 156, 180, 183, 186)) {
