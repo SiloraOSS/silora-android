@@ -18,6 +18,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.siloserver.silo.model.server.ServerEntry
+import org.siloserver.silo.model.server.AccountEntry
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -38,6 +39,67 @@ class TvProfileInputPreferencesTest {
     @Before fun clearPreferences() {
         keyboardPrefs.edit(commit = true) { clear() }
         shortcutPrefs.edit(commit = true) { clear() }
+    }
+
+    @Test fun matchingProfileIdsOnDifferentAccountsKeepChoicesAndObserversSeparate() = runTest {
+        val accountA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        val accountB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        val accounts = MutableStateFlow(listOf(
+            AccountEntry(accountA, profileA.id), AccountEntry(accountB, profileA.id),
+        ))
+        activeServer.value = profileA.copy(accountId = accountA)
+        val keyboard = TvSearchKeyboardStore(keyboardPrefs, activeServer, accounts)
+        val shortcuts = TvRemoteShortcutsStore(shortcutPrefs, activeServer, accounts)
+        val modes = mutableListOf<TvSearchKeyboardMode>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { keyboard.mode.collect { modes += it } }
+        keyboard.setMode(TvSearchKeyboardMode.App)
+        keyboard.setAutoOpenKeyboard(true)
+        shortcuts.setAction(TvRemoteButton.Select, TvRemoteShortcutAction.ToggleNightMode)
+        shadowOf(Looper.getMainLooper()).idle()
+        runCurrent()
+        assertEquals(TvSearchKeyboardMode.App, modes.last())
+
+        activeServer.value = profileA.copy(accountId = accountB)
+        runCurrent()
+        assertEquals(TvSearchKeyboardMode.System, modes.last())
+        assertFalse(keyboard.currentAutoOpenKeyboard)
+        assertEquals(TvRemoteShortcutAction.Default, shortcuts.actionFor(TvRemoteButton.Select))
+        shortcuts.setAction(TvRemoteButton.Select, TvRemoteShortcutAction.None)
+        activeServer.value = profileA.copy(accountId = accountA)
+        runCurrent()
+        assertEquals(TvSearchKeyboardMode.App, modes.last())
+        assertTrue(keyboard.currentAutoOpenKeyboard)
+        assertEquals(TvRemoteShortcutAction.ToggleNightMode, shortcuts.actionFor(TvRemoteButton.Select))
+    }
+
+    @Test fun onlyTheAdoptingAccountInheritsExistingProfileChoices() {
+        keyboard.setMode(TvSearchKeyboardMode.App)
+        keyboard.setAutoOpenKeyboard(true)
+        shortcuts.setAction(TvRemoteButton.Select, TvRemoteShortcutAction.PlayerStats)
+        val accountA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        val accountB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        val accounts = MutableStateFlow(listOf(
+            AccountEntry(accountA, profileA.id, adoptsLegacyData = true),
+            AccountEntry(accountB, profileA.id),
+        ))
+        val keyboard = TvSearchKeyboardStore(keyboardPrefs, activeServer, accounts)
+        val shortcuts = TvRemoteShortcutsStore(shortcutPrefs, activeServer, accounts)
+        activeServer.value = profileA.copy(accountId = accountB)
+        assertEquals(TvSearchKeyboardMode.System, keyboard.currentMode)
+        assertFalse(keyboard.currentAutoOpenKeyboard)
+        assertEquals(TvRemoteShortcutAction.Default, shortcuts.actionFor(TvRemoteButton.Select))
+        keyboard.setMode(TvSearchKeyboardMode.System)
+        activeServer.value = profileA.copy(accountId = accountA)
+        assertEquals(TvSearchKeyboardMode.App, keyboard.currentMode)
+        assertTrue(keyboard.currentAutoOpenKeyboard)
+        assertEquals(TvRemoteShortcutAction.PlayerStats, shortcuts.actionFor(TvRemoteButton.Select))
+        keyboard.setMode(TvSearchKeyboardMode.System)
+        assertEquals(TvSearchKeyboardMode.System, keyboard.currentMode)
+        activeServer.value = profileA.copy(accountId = accountB)
+        assertEquals(TvSearchKeyboardMode.System, keyboard.currentMode)
+        shortcuts.reset()
+        activeServer.value = profileA.copy(accountId = accountA)
+        assertEquals(TvRemoteShortcutAction.PlayerStats, shortcuts.actionFor(TvRemoteButton.Select))
     }
 
     @Test fun profilesKeepIndependentChoicesAfterSwitchingAndReloading() {

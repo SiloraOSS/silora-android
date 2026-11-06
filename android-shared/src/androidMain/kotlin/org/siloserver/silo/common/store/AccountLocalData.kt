@@ -249,6 +249,9 @@ class AccountLocalData(
             HOME_SECTIONS_PREFS,
             ONBOARDING_PREFS,
             SERIES_AUTO_RESET_PREFS,
+            // Silora's TV keyboard and remote choices carry the same account token.
+            "silo_tv_search_keyboard",
+            "silo_tv_remote_shortcuts",
         ) + HASHED_CACHE_PREFS
 
         /**
