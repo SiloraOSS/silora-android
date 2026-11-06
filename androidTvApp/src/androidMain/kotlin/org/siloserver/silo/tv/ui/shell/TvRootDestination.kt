@@ -2,9 +2,9 @@ package org.siloserver.silo.tv.ui.shell
 
 /**
  * Identifies which top-level destination the menu bar selects/highlights:
- * `Home`, one tab per visible [TvLibraryTabType], For You, then `Calendar`,
- * and Requests while the server enables it. Search and the profile avatar
- * sit outside the tabs.
+ * `Home`, one tab per visible [TvLibraryTabType], For You, then `Calendar`.
+ * Search and the profile avatar sit outside the tabs, and Requests lives in
+ * the profile menu. Mirrors tvOS `TVRootDestination`.
  */
 sealed class TvRootDestination {
     /** Curated landing surface. Always the first tab. */
@@ -18,10 +18,4 @@ sealed class TvRootDestination {
 
     /** Upcoming releases by week. */
     data object Calendar : TvRootDestination()
-
-    /**
-     * Media requests, tvOS `.requests`. Present only while the server has
-     * requests enabled for this profile; it trails the content tabs.
-     */
-    data object Requests : TvRootDestination()
 }

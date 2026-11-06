@@ -4,6 +4,25 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-06 — follow upstream Requests navigation
+
+Restored upstream's server-gated TV Requests entry in the profile menu. Removed
+its fork-only top-bar destination and corresponding routing/focus and test
+expectations. Updated the inherited AGENTS.md navigation description with the
+code; no newer upstream commits were integrated in this correction.
+
+The old top-bar preservation in merge `020174afd` and subsequent records was
+an assistant interpretation, not a customization requested by Matt. Older log
+entries describe what happened, not authorization to restore that override.
+Requests navigation follows upstream as it evolves.
+
+Validation: all 1,432 TV host tests passed with zero failures, errors or skips;
+full TV release lint and release Kotlin compilation passed. Requests screens,
+roots and navigation guards match the included upstream snapshot `fee491916`.
+The repository disables TV release host tests, so its configured debug host
+suite was used. Device playback and visual captures were not performed. Nothing
+was pushed or published.
+
 ## 2026-11-05 — local automation progress notifications
 
 Added local start, merge-preparation/validation, and validated merge/GitHub
