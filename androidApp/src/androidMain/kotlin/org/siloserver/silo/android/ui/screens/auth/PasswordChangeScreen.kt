@@ -85,7 +85,7 @@ fun PasswordChangeScreen(
             )
             is PasswordChangePhase.Unconfirmed -> Outcome(
                 title = "Password not confirmed",
-                lead = "Silo couldn't check whether your new password was saved. Try again in a moment.",
+                lead = "Silora couldn't check whether your new password was saved. Try again in a moment.",
                 action = if (phase.checking) "Checking…" else "Try again",
                 busy = phase.checking,
                 onAction = viewModel::confirmChange,

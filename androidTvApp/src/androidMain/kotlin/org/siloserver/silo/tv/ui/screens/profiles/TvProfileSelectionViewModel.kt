@@ -89,7 +89,7 @@ internal fun CachedProfile.asProfile(): Profile = Profile(
  * ends this TV's session, so Retry then leads to sign-in.
  */
 internal const val TV_PASSWORD_CHANGE_REQUIRED_MESSAGE =
-    "Your password needs to be reset. Use the Silo mobile app or website to set a new one, then come back."
+    "Your password needs to be reset. Use the Silora mobile app or your server's website to set a new one, then come back."
 
 /**
  * TV profile picker. PIN-protected profiles now work: selecting one opens a

@@ -213,7 +213,7 @@ fun TvChangeAccountScreen(
         ) {
             Image(
                 painter = painterResource(R.drawable.silo_wordmark),
-                contentDescription = "Silo",
+                contentDescription = "Silora",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.height(32.dp).width(63.dp),
             )
