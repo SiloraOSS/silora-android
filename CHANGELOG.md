@@ -4,6 +4,29 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-06 — confirm upstream-only TV voice failure
+
+Matt reproduced the missing voice-search text on his onn 4K Pro (Android 14)
+using the unchanged upstream comparison APK at `f13a2652a`. Its search screen,
+voice helper and manifest match PR #830 byte for byte, with no Silora source
+patches. He reports that the microphone works in other apps and with the prior
+Silora implementation. The failure therefore reproduces independently of our
+merge and keyboard adaptations. Its exact recognizer/provider cause remains
+undiagnosed.
+
+Verified that the prior controller, overlay and eight session tests are already
+restored byte for byte; the search-screen integration differs only by retained
+upstream request-search deduplication. Reworded the restoration commit with
+Matt’s permission to record this later evidence and verified an identical Git
+tree before and after. Updated the inventory, technical checklist and audit.
+No app source changed. Keep the fallback until an official build completes a
+spoken search on the affected device.
+
+Comparison-build validation: 1,395 TV host tests passed, release lint completed
+with zero errors and 93 warnings, and signed release assembly, source identity
+and artifact checks passed. Matt performed the device comparison. Per-build
+validation results accompany each APK.
+
 ## 2026-11-06 — restore in-app TV voice search
 
 Restored `tv-voice` at Matt’s request after repeat Shield testing opened the

@@ -98,9 +98,12 @@ The eight existing `TvSearchVoiceControllerTest` cases cover the session logic;
 they do not prove microphone capture on a real TV. Retain upstream’s identical
 in-flight request-search deduplication when voice submits immediately.
 
-The inventory records Matt’s November 6 fallback decision. Do not re-adopt the
-recognizer-activity helper merely because it is present upstream: revisit it
-after an official build completes a spoken search on the affected device.
+Matt reproduced the failure on his onn 4K Pro with unchanged upstream source
+at `f13a2652a` and reports that the prior Silora implementation works. Preserve
+the inventory’s fallback decision: the failure does not require fork patches.
+Do not re-adopt the recognizer-activity helper merely because it is present
+upstream; revisit it after an official build completes a spoken search on the
+affected device.
 
 ## Trailers (`trailers`)
 
