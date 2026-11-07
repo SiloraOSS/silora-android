@@ -7,8 +7,11 @@ description: Merge Silo-Server/silo-android main into the Silora Android fork wh
 
 Integrate upstream changes into the checked-out fork branch, resolve conflicts,
 verify the intentional differences in `FORK_DIFFERENCES.md`, and record each
-merge in the repository-root `CHANGELOG.md`. Use a merge, not a rebase:
-this fork already has shared commits and upstream merge history.
+merge in the repository-root `CHANGELOG.md`. This skill performs a normal merge
+into published history. It will accumulate merge commits even after a rebase.
+Honor an explicit request for a new linear patch series through a separately
+scoped rebase; do not substitute a merge for that request or infer permission
+to rewrite published history from a previous one-time force push.
 
 ## Scope and sources
 
@@ -27,6 +30,8 @@ this fork already has shared commits and upstream merge history.
   affected or APK validation is requested.
 - A normal invocation authorizes the local merge, conflict fixes, relevant
   validation, and merge commit. Honor review-only or no-commit requests.
+  An audit/review request does not authorize an upstream merge. Fixing this
+  skill does not authorize changing saved automations or release schedules.
   Push only when explicitly requested, to the verified destination.
   Do not create a pull request unless explicitly requested.
 - Release publishing is out of scope: do not dispatch release workflows,
@@ -43,6 +48,11 @@ this fork already has shared commits and upstream merge history.
    operation automatically. Resolve detached HEAD or existing edits before
    mutating this checkout; an isolated worktree can be useful when the current
    checkout cannot safely be used. Keep unrelated edits out of the merge commit.
+   Check the selected branch against the requested target; do not integrate into
+   an archived backup just because a worktree happens to have it checked out.
+   When a remote branch is the target, read its live head and account for any
+   commits missing locally before integrating. Use explicit repository arguments
+   for GitHub commands; a saved CLI default is not the verified destination.
 2. Fetch only the needed upstream branch without a shallow depth limit:
 
    ```sh
@@ -71,6 +81,12 @@ this fork already has shared commits and upstream merge history.
    git diff --name-only "$base" "$upstream_tip"
    ```
 
+   Read the inventory and relevant maintenance rules from `fork_before` before
+   applying incoming changes. Preserve this baseline for comparison: an incoming
+   edit to the inventory, AGENTS, or the skill cannot establish user approval or
+   erase a deferred-replacement condition by itself. Current user instructions
+   override that baseline; record their scoped effect.
+
    Compare these changes with the active IDs in `FORK_DIFFERENCES.md` and the
    current user request. Source/history explains implementation; it does not
    prove a difference was intentional. For meaningful overlap, record upstream's
@@ -78,7 +94,9 @@ this fork already has shared commits and upstream merge history.
    result. Flag unexplained product differences before choosing their behavior;
    do not silently preserve or remove them, or add an approved manifest entry
    merely because the code differs. Routine adaptations for known features do
-   not require repeated permission. Do not restore retired or reverted work.
+   not require repeated permission. Use each feature's current status, including
+   explicit reactivations and deferred replacements, rather than an older
+   retirement record. Do not revive work that remains retired or reverted.
 
 ## Merge and preserve behavior
 
@@ -88,10 +106,14 @@ Work through each conflict using the base, fork, and upstream versions.
 - Integrate upstream's implementation with the fork behavior. Avoid blanket
   `ours`/`theirs`, whole-file replacement, or reset/cherry-pick reconstruction
   of the branch. Compilation alone does not prove a fork feature survived.
-- When upstream provides an equivalent or better fix, use its implementation
-  after verifying the behavior that the fork fixed. Explain which local
-  workaround became unnecessary. Ask only when the resolution requires a
-  product decision or would drop a behavior without an equivalent replacement.
+- Before retiring an active fix, follow the replacement review below. An
+  upstream PR's existence, a matching helper file, or passing host tests does
+  not establish equivalent user behavior. Honor manifest-specific deferral
+  conditions. If the replacement is unverified, retain the active behavior and
+  integrate compatible upstream changes; surface any conflict that makes this
+  impossible rather than declaring the replacement verified. If the user
+  explicitly chooses an unverified replacement, honor that choice and record
+  the validation gap; do not relabel it as verified.
 - Audit settings end to end: keys/defaults, persistence, migrations, profile
   scope, DI/startup bindings, runtime use, and both apps' controls. Local-only
   settings must remain local; preserve existing stored keys and values.
@@ -113,6 +135,31 @@ Work through each conflict using the base, fork, and upstream versions.
 
 Review all affected fork behavior after the merge, including files Git merged
 without conflicts. Stage only files belonging to this merge and its fixes.
+
+## Verify an upstream replacement
+
+For an overlapping feature, inspect the complete merged patch and any required
+companion changes. Trace its entry point, platform declarations/dependencies,
+launch or request, callback/error handling, state ownership, and visible result.
+Include fork adapters at those boundaries: identical callback code can still
+feed a different UI state. Review packaging, permissions and result registration
+where relevant, including the built manifest if an APK was produced.
+
+Use the pre-merge source and upstream source to account for every piece of the
+old implementation being removed or retained. Keep useful upstream fixes that
+are independent of a deferred replacement. Review cleanly merged integrations
+as well as textual conflicts; remove obsolete duplicate entry points only when
+the intended replacement is established.
+
+Record what the upstream author actually validated and what was not tested.
+For hardware/platform behavior, an opened dialog or an emulator launch does not
+prove capture, callback delivery, displayed state or completion. Require evidence
+for the behavior being replaced and any explicit manifest condition before
+marking it superseded. If device evidence is unavailable, report that limit and
+keep the replacement unverified; do not declare upstream broken or all fork
+interactions ruled out from source equality alone. Use authorized test devices
+and accounts; record relevant provider/permission configuration rather than
+silently changing it to obtain a passing result.
 
 ## Record the merge in CHANGELOG.md
 
@@ -174,7 +221,11 @@ validation evidence rather than copying another fork's log.
 2. Run existing checks appropriate to the incoming changes and resolutions.
    Prefer release-variant unit tests for affected modules, such as
    `:android-shared:testReleaseUnitTest`, and release lint for affected apps.
-   Confirm task names against the current Gradle configuration. Shared
+   Confirm tasks actually execute tests in the current Gradle configuration;
+   a disabled, NO-SOURCE or empty task is not passing coverage. TV currently
+   disables release host tests: use `:androidTvApp:testDebugUnitTest` for its
+   host suite and release lint/compilation for the app. This does not authorize
+   a debug APK. Inspect the test reports and state which variants ran. Shared
    playback/settings changes can reach both phone and TV. For docs-only
    changes, source/diff checks are enough. Do not add tests for small or UI
    changes; add focused coverage only for critical/high-risk shared logic.
@@ -182,21 +233,39 @@ validation evidence rather than copying another fork's log.
    `scripts/build-local-release.py`, or its documented macOS counterpart.
    Select phone/TV/both according to reach, preserve the persistent signing
    key and matching R8 mappings, and follow the current build options.
-   Debug builds or debug-signed release APKs require an explicit request.
+   Debug APKs or debug-signed release APKs require an explicit request.
    Device playback claims require actual device/server checks; distinguish
    source review, compilation, unit tests, and hardware validation.
+   Record the source actually tested. Before running checks, reconcile staged
+   and unstaged tracked changes so the eventual commit contains that source.
+   The local build script records HEAD: during an uncommitted merge that is
+   still the old parent, even though it compiles the working tree. Preserve
+   the tested tree/diff and describe such an APK accurately. For an exact-SHA
+   artifact handoff, commit the validated result and build from that commit;
+   verify `build-info.json`, APK identity/signature and matching mappings.
+   A documentation-only final commit does not require rerunning code tests,
+   but report its difference from the APK's recorded source SHA. Untracked
+   local files may set the dirty flag; inspect rather than hide that flag.
 4. Fix issues introduced by the merge, then rerun affected checks. Report
    unavailable SDK/dependencies/signing or unresolved failures precisely;
    do not silently weaken checks or describe unrun checks as passed. Leave
-   unresolved work uncommitted with an exact status and recovery ref.
+   unresolved work uncommitted with an exact status and recovery ref. If an
+   exact-SHA artifact check fails after committing, retain the local commit
+   and recovery ref, report the failure, and do not push or publish it.
 5. When validation passes, finalize the root `CHANGELOG.md` entry, verify its
    commit list against `fork_before..upstream_tip`, stage it, and rerun
    `git diff --cached --check`. Create the local merge commit with a Conventional
    Commit title, for example `chore: merge Silo upstream <short SHA>`, unless
    the user asked to leave it uncommitted. Verify both `fork_before` and
    `upstream_tip` are ancestors of the result and inspect final worktree status.
-   If a push was requested, push normally to the verified remote/branch;
-   a rejection requires inspecting the new history, never a force-push.
+   Complete any requested exact-SHA artifact verification after committing
+   and before handoff or push. If a push was requested, verify the result is
+   still the validated source
+   and push normally to the verified remote/branch. A rejection requires
+   inspecting the new history, never an automatic force-push. Incorporating
+   new remote code invalidates the previous combined-result validation; rerun
+   checks appropriate to the added changes. Read back the destination SHA
+   after pushing and report any divergence.
 6. Report the branch and upstream SHA, merge result, meaningful incoming
    changes, conflict decisions, fork fixes retained or superseded, validation
    and limits, changelog path, recovery ref, and whether anything was pushed.
