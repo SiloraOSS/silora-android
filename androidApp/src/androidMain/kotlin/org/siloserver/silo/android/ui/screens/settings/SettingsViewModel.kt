@@ -19,6 +19,7 @@ import org.siloserver.silo.common.settings.SeekIntervalStore
 import org.siloserver.silo.common.player.AudiobookSettingsStore
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.CreditsSkipMode
 import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.settings.ProfileSettingsController
 import org.siloserver.silo.model.auth.User
@@ -106,7 +107,7 @@ data class SettingsUiState(
     val learnedLimit: PlaybackLearnedLimitV2? = null,
     /** True after a reset the server did not confirm, until the next attempt. */
     val learnedLimitResetFailed: Boolean = false,
-    val autoSkipCredits: Boolean = false,
+    val creditsSkipMode: CreditsSkipMode = CreditsSkipMode.Default,
     val pictureInPictureEnabled: Boolean = true,
     val dolbyVisionEnabled: Boolean = true,
     val dvProfile7HDR10Fallback: Boolean = false,
@@ -313,7 +314,7 @@ class SettingsViewModel(
         val maxBitrateKbps: Int?,
         val audioLanguage: String,
         val introSkipMode: IntroSkipMode,
-        val autoSkipCredits: Boolean,
+        val creditsSkipMode: CreditsSkipMode,
     )
 
     private fun observePlayerSettings() {
@@ -322,7 +323,7 @@ class SettingsViewModel(
             playerSettingsStore.maxBitrateKbpsFlow,
             playerSettingsStore.audioLanguageFlow,
             playerSettingsStore.introSkipModeFlow,
-            playerSettingsStore.autoSkipCreditsFlow,
+            playerSettingsStore.creditsSkipModeFlow,
             ::PlayerSettingsSnapshot,
         ).onEach { snap ->
             _uiState.update {
@@ -331,7 +332,7 @@ class SettingsViewModel(
                     maxBitrateKbps = snap.maxBitrateKbps,
                     audioLanguage = snap.audioLanguage,
                     introSkipMode = snap.introSkipMode,
-                    autoSkipCredits = snap.autoSkipCredits,
+                    creditsSkipMode = snap.creditsSkipMode,
                 )
             }
         }.launchIn(viewModelScope)
@@ -684,8 +685,8 @@ class SettingsViewModel(
         }
     }
 
-    fun setAutoSkipCredits(enabled: Boolean) {
-        viewModelScope.launch { playerSettingsStore.setAutoSkipCredits(enabled) }
+    fun setCreditsSkipMode(mode: CreditsSkipMode) {
+        viewModelScope.launch { playerSettingsStore.setCreditsSkipMode(mode) }
     }
 
     fun setPictureInPictureEnabled(enabled: Boolean) {

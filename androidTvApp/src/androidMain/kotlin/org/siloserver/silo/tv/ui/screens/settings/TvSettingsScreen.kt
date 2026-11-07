@@ -120,6 +120,7 @@ import org.siloserver.silo.model.settings.CardPresentation
 import org.siloserver.silo.model.settings.LanguageOptions
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.CreditsSkipMode
 import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.settings.ProfileSettingsController
 import org.siloserver.silo.model.settings.QualityChoices
@@ -311,7 +312,7 @@ fun TvSettingsScreen(
         onIntroSkipModeChanged = viewModel::onIntroSkipModeChanged,
         onBufferingQualityModeChanged = viewModel::onBufferingQualityModeChanged,
         onResetLearnedLimit = viewModel::onResetLearnedLimit,
-        onAutoSkipCreditsChanged = viewModel::onAutoSkipCreditsChanged,
+        onCreditsSkipModeChanged = viewModel::onCreditsSkipModeChanged,
         onHideUnwatchedEpisodeImagesChanged = viewModel::setHideUnwatchedEpisodeImages,
         onHideUnwatchedEpisodeOverviewsChanged = viewModel::setHideUnwatchedEpisodeOverviews,
         onMatchContentFrameRateChanged = viewModel::onMatchContentFrameRateChanged,
@@ -476,7 +477,7 @@ private fun SettingsSplitLayout(
     onIntroSkipModeChanged: (IntroSkipMode) -> Unit,
     onBufferingQualityModeChanged: (BufferingQualityMode) -> Unit,
     onResetLearnedLimit: () -> Unit,
-    onAutoSkipCreditsChanged: (Boolean) -> Unit,
+    onCreditsSkipModeChanged: (CreditsSkipMode) -> Unit,
     onHideUnwatchedEpisodeImagesChanged: (Boolean) -> Unit,
     onHideUnwatchedEpisodeOverviewsChanged: (Boolean) -> Unit,
     onMatchContentFrameRateChanged: (Boolean) -> Unit,
@@ -568,7 +569,7 @@ private fun SettingsSplitLayout(
             onIntroSkipModeChanged = onIntroSkipModeChanged,
             onBufferingQualityModeChanged = onBufferingQualityModeChanged,
             onResetLearnedLimit = onResetLearnedLimit,
-            onAutoSkipCreditsChanged = onAutoSkipCreditsChanged,
+            onCreditsSkipModeChanged = onCreditsSkipModeChanged,
             onHideUnwatchedEpisodeImagesChanged = onHideUnwatchedEpisodeImagesChanged,
             onHideUnwatchedEpisodeOverviewsChanged = onHideUnwatchedEpisodeOverviewsChanged,
             onMatchContentFrameRateChanged = onMatchContentFrameRateChanged,
@@ -869,7 +870,7 @@ private fun SettingsDetailPane(
     onIntroSkipModeChanged: (IntroSkipMode) -> Unit,
     onBufferingQualityModeChanged: (BufferingQualityMode) -> Unit,
     onResetLearnedLimit: () -> Unit,
-    onAutoSkipCreditsChanged: (Boolean) -> Unit,
+    onCreditsSkipModeChanged: (CreditsSkipMode) -> Unit,
     onHideUnwatchedEpisodeImagesChanged: (Boolean) -> Unit,
     onHideUnwatchedEpisodeOverviewsChanged: (Boolean) -> Unit,
     onMatchContentFrameRateChanged: (Boolean) -> Unit,
@@ -936,7 +937,7 @@ private fun SettingsDetailPane(
                 onIntroSkipModeChanged = onIntroSkipModeChanged,
                 onBufferingQualityModeChanged = onBufferingQualityModeChanged,
                 onResetLearnedLimit = onResetLearnedLimit,
-                onAutoSkipCreditsChanged = onAutoSkipCreditsChanged,
+                onCreditsSkipModeChanged = onCreditsSkipModeChanged,
                 onHideUnwatchedEpisodeImagesChanged = onHideUnwatchedEpisodeImagesChanged,
                 onHideUnwatchedEpisodeOverviewsChanged = onHideUnwatchedEpisodeOverviewsChanged,
             onMatchContentFrameRateChanged = onMatchContentFrameRateChanged,
@@ -1230,7 +1231,7 @@ private fun TvPlaybackSettingsPane(
     onIntroSkipModeChanged: (IntroSkipMode) -> Unit,
     onBufferingQualityModeChanged: (BufferingQualityMode) -> Unit,
     onResetLearnedLimit: () -> Unit,
-    onAutoSkipCreditsChanged: (Boolean) -> Unit,
+    onCreditsSkipModeChanged: (CreditsSkipMode) -> Unit,
     onHideUnwatchedEpisodeImagesChanged: (Boolean) -> Unit,
     onHideUnwatchedEpisodeOverviewsChanged: (Boolean) -> Unit,
     onMatchContentFrameRateChanged: (Boolean) -> Unit,
@@ -1264,7 +1265,6 @@ private fun TvPlaybackSettingsPane(
     // A switch's "Use Profile Setting" row leaves once used, so focus is
     // handed back to the switch above it rather than lost.
     val autoPlayNextFocus = remember { FocusRequester() }
-    val skipCreditsFocus = remember { FocusRequester() }
     val bufferingQualityFocus = remember { FocusRequester() }
     val seekState = seekIntervals?.state?.collectAsState()?.value
     val connectionState = connectionSpeed?.state?.collectAsState()?.value
@@ -1472,20 +1472,14 @@ private fun TvPlaybackSettingsPane(
                     value = stringResource(introSkipModeLabel(state.introSkipMode)),
                     onClick = { activePicker = PlaybackPicker.IntroSkipMode },
                 )
-                SettingsToggleRow(
-                    label = "Skip Credits",
-                    checked = state.autoSkipCredits,
-                    onCheckedChange = onAutoSkipCreditsChanged,
-                    focusRequester = skipCreditsFocus,
+                SettingsValueRow(
+                    label = stringResource(R.string.settings_credits_skip_title),
+                    value = state.creditsSkipMode.label,
+                    onClick = { activePicker = PlaybackPicker.CreditsSkipMode },
                 )
-                if (overridden(PlaybackSettingsKeys.AutoSkipCredits)) {
-                    UseProfileSettingRow(
-                        setting = "Skip Credits",
-                        onClick = {
-                            skipCreditsFocus.requestFocus()
-                            onUseProfileSetting(PlaybackSettingsKeys.AutoSkipCredits)
-                        },
-                    )
+                SettingsFooterText(text = stringResource(R.string.settings_credits_skip_description))
+                if (state.creditsSkipMode == CreditsSkipMode.Auto) {
+                    SettingsFooterText(text = stringResource(R.string.settings_credits_skip_warning))
                 }
                 SettingsValueRow(
                     label = "Rewind on Resume",
@@ -1711,6 +1705,16 @@ private fun TvPlaybackSettingsPane(
                 onDismiss = { activePicker = null },
             )
         }
+        PlaybackPicker.CreditsSkipMode -> TvSettingsPickerSheet(
+            title = stringResource(R.string.settings_credits_skip_title),
+            options = CreditsSkipMode.entries.map { PickerOption(it.wireValue, it.label, it.description) },
+            selectedId = state.creditsSkipMode.wireValue,
+            onSelect = { id ->
+                CreditsSkipMode.fromWire(id)?.let(onCreditsSkipModeChanged)
+                activePicker = null
+            },
+            onDismiss = { activePicker = null },
+        )
         PlaybackPicker.ResumeRewind -> TvSettingsPickerSheet(
             title = "Rewind on Resume",
             options = ResumeRewindOptions.map { PickerOption(it.toString(), resumeRewindLabel(it)) },
@@ -2416,6 +2420,7 @@ private fun nextUpPromptLabel(seconds: Int): String = when {
 }
 
 private enum class PlaybackPicker {
+    CreditsSkipMode,
     Resolution,
     MaxBitrate,
     AudioLanguage,

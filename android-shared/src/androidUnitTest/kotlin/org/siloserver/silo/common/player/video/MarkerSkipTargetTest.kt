@@ -1,6 +1,7 @@
 package org.siloserver.silo.common.player.video
 
 import org.siloserver.silo.domain.player.MarkerTimeline
+import org.siloserver.silo.domain.player.CreditsSkipMode
 import org.siloserver.silo.model.catalog.MarkerSegment
 import org.siloserver.silo.model.catalog.TimeRange
 import kotlin.test.Test
@@ -34,6 +35,21 @@ class MarkerSkipTargetTest {
         assertEquals(MarkerSkipTarget(ManualMarkerKind.Credits, 3167.4), markerSkipTarget(3000.0, markers))
         assertNull(markerSkipTarget(3175.0, markers))
         assertEquals(MarkerSkipTarget(ManualMarkerKind.Credits, 3300.0), markerSkipTarget(3189.0, markers))
+    }
+
+    @Test fun creditsModesControlTheManualButtonWithoutAffectingRecaps() {
+        val markers = legacy(TimeRange(10.0, 20.0), TimeRange(80.0, 100.0))
+        val credits = MarkerSkipTarget(ManualMarkerKind.Credits, 100.0)
+        assertEquals(credits, markerSkipTarget(85.0, markers, CreditsSkipMode.Ask))
+        assertNull(markerSkipTarget(85.0, markers, CreditsSkipMode.Auto))
+        assertNull(markerSkipTarget(85.0, markers, CreditsSkipMode.Off))
+        // Do not flash a credits button before the persisted mode is loaded.
+        assertNull(markerSkipTarget(85.0, markers, null))
+        for (mode in CreditsSkipMode.entries) {
+            assertEquals(MarkerSkipTarget(ManualMarkerKind.Recap, 20.0), markerSkipTarget(15.0, markers, mode))
+        }
+        assertEquals(credits, markerSkipTarget(85.0, markers, CreditsSkipMode.Auto, inWatchParty = true))
+        assertNull(markerSkipTarget(85.0, markers, CreditsSkipMode.Off, inWatchParty = true))
     }
 
     @Test fun invalidRangesCannotOfferASeek() {

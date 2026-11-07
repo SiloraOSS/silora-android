@@ -800,7 +800,9 @@ fun TvPlayerScreen(
 
     fun handleManualMarkerSelect() {
         val current = viewModel.uiState.value
-        val target = markerSkipTarget(current.position, current.markerTimeline) ?: return
+        val target = markerSkipTarget(
+            current.position, current.markerTimeline, viewModel.creditsSkipMode.value, watchParty != null,
+        ) ?: return
         if (watchParty != null) {
             if (!watchParty.canSeek()) return
             watchParty.seek(target.endSeconds)

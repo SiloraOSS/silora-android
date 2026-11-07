@@ -98,6 +98,8 @@ import org.siloserver.silo.model.playback.isCommittedAt
 import org.siloserver.silo.model.playback.LEARNED_LIMIT_CLEAR
 import org.siloserver.silo.model.playback.PLAYBACK_QUALITY_AUTO
 import org.siloserver.silo.domain.player.IntroAutoSkipController
+import org.siloserver.silo.domain.player.CreditsAutoSkipController
+import org.siloserver.silo.domain.player.CreditsSkipMode
 import org.siloserver.silo.domain.player.IntroAutoSkipState
 import org.siloserver.silo.domain.player.IntroSkipMode
 import org.siloserver.silo.domain.player.NextUpDismissal
@@ -1408,8 +1410,10 @@ class TvPlayerViewModel(
             initialValue = _uiState.value.toPlaybackClock(),
         )
     // Marker controls use source time; presentationState deliberately omits the clock.
-    val manualMarkerSkipTarget: StateFlow<MarkerSkipTarget?> = uiState
-        .map { markerSkipTarget(it.position, it.markerTimeline) }
+    val manualMarkerSkipTarget: StateFlow<MarkerSkipTarget?> =
+        combine(uiState, playerSettingsStore.creditsSkipModeFlow) { state, mode ->
+            markerSkipTarget(state.position, state.markerTimeline, mode, roomId != null)
+        }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -1908,6 +1912,8 @@ class TvPlayerViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, 1.0)
     val introSkipMode: StateFlow<IntroSkipMode> = playerSettingsStore.introSkipModeFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, IntroSkipMode.Default)
+    val creditsSkipMode: StateFlow<CreditsSkipMode?> = playerSettingsStore.creditsSkipModeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val autoPlayNextEnabled: StateFlow<Boolean> = playerSettingsStore.autoPlayNextFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     // Wait for the persisted choice before allowing any automatic pre-end prompt.
@@ -1972,6 +1978,8 @@ class TvPlayerViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, 30)
 
     private var introObserveJob: Job? = null
+    private var creditsObserveJob: Job? = null
+    private val creditsAutoSkipController = CreditsAutoSkipController()
     private var lifecycleObserveJob: Job? = null
 
     // Subtitle suite bookkeeping.
@@ -2630,6 +2638,7 @@ class TvPlayerViewModel(
         resetSeekRecoveryForContentChange()
         transportMountGate.beginLoad()
         introAutoSkipController.reset()
+        stopCreditsAutoSkipObserver()
         beginBufferingQualityLoad()
         manualSubtitleSelectionApplied = false
         launchSubtitleSelectionApplied = false
@@ -3062,6 +3071,7 @@ class TvPlayerViewModel(
                             )
                         }
                         startIntroAutoSkipObserver()
+                        startCreditsAutoSkipObserver()
                         if (!nextUpTransitionGate.isActive) {
                             resolveNextEpisode()
                             loadOnDeckItems()
@@ -3142,6 +3152,30 @@ class TvPlayerViewModel(
     private fun failReplacementLoad(message: String) {
         _uiState.update { failTvReplacementLoad(it, message) }
         bufferingPicks.refused(lastVersionPick)
+    }
+
+    private fun startCreditsAutoSkipObserver() {
+        creditsObserveJob?.cancel()
+        creditsObserveJob = viewModelScope.launch {
+            combine(_uiState, playerSettingsStore.creditsSkipModeFlow) { state, mode -> state to mode }
+                .collect { (state, mode) ->
+                    creditsAutoSkipController.seekTarget(
+                        key = state.sessionId?.let { "$it:${state.selectedFileId}" },
+                        position = state.position,
+                        duration = state.duration,
+                        markers = state.markerTimeline,
+                        mode = mode,
+                        playbackActive = state.isPlaying && !state.isPaused && !state.isLoading &&
+                            !state.isNextUpTransitioning && !state.isScrubbing && roomId == null,
+                    )?.let(::seekImmediate)
+                }
+        }
+    }
+
+    private fun stopCreditsAutoSkipObserver() {
+        creditsObserveJob?.cancel()
+        creditsObserveJob = null
+        creditsAutoSkipController.reset()
     }
 
     private fun startIntroAutoSkipObserver() {
@@ -5631,6 +5665,7 @@ class TvPlayerViewModel(
         }
         subtitleTransactions.persistCommittedSelectionAndFlush()
         introObserveJob?.cancel()
+        stopCreditsAutoSkipObserver()
         introAutoSkipController.reset()
         resetBufferingQuality()
         val stopped = sessionLifecycle.stop(expectedSessionId = expectedSessionId)
@@ -7489,6 +7524,7 @@ class TvPlayerViewModel(
         }
         introObserveJob?.cancel()
         nextUpCountdownJob?.cancel()
+        stopCreditsAutoSkipObserver()
         introAutoSkipController.reset()
         resetBufferingQuality()
         // Only fills a gap; never overwrites. The adoption paths publish this
@@ -7997,6 +8033,7 @@ class TvPlayerViewModel(
         introObserveJob?.cancel()
         lifecycleObserveJob?.cancel()
         nextUpCountdownJob?.cancel()
+        stopCreditsAutoSkipObserver()
         introAutoSkipController.reset()
         resetBufferingQuality()
     }

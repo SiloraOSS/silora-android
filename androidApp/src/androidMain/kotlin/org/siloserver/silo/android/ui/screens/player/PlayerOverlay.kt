@@ -210,6 +210,7 @@ fun PlayerOverlay(
     val isOrientationLocked by viewModel.orientationLocked.collectAsState()
     val context = LocalContext.current
 
+    val creditsSkipMode by viewModel.creditsSkipMode.collectAsState()
     val introSkipState by viewModel.introSkipState.collectAsState()
     val trickplayThumbnail by viewModel.trickplayThumbnail.collectAsState()
     val introSkipCountdownRun by viewModel.introSkipCountdownRun.collectAsState()
@@ -580,7 +581,7 @@ fun PlayerOverlay(
         }
 
         if (!state.showUpNext && !introSkipState.isVisible && seekEnabled && !state.isLoading) {
-            val target = markerSkipTarget(state.position, state.markerTimeline)
+            val target = markerSkipTarget(state.position, state.markerTimeline, creditsSkipMode, inRoom)
             if (target != null) {
                 Box(modifier = bottomEndSlotModifier, contentAlignment = Alignment.BottomEnd) {
                     MarkerSkipPill(

@@ -14,6 +14,7 @@ import org.siloserver.silo.common.player.audio.NightModeParameters
 import org.siloserver.silo.common.store.AccountScopedKeys
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.CreditsSkipMode
 import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.model.download.DownloadQuality
 import org.siloserver.silo.model.settings.CellularQuality
@@ -301,6 +302,12 @@ class AndroidPlayerSettingsStore(
         bufferingQualityModeDefined.map { it == true }.distinctUntilChanged()
 
     // ---- Booleans ------------------------------------------------------
+    override val creditsSkipModeFlow: Flow<CreditsSkipMode> =
+        profileScopedFlow(CreditsSkipMode.Default) { p, s ->
+            CreditsSkipMode.fromWire(p.stringFor(s, CREDITS_SKIP_MODE, ""))
+                ?: CreditsSkipMode.fromLegacyBoolean(p.boolFor(s, PlaybackSettingsKeys.AutoSkipCredits, false))
+        }
+
     override val autoSkipCreditsFlow: Flow<Boolean> =
         profileScopedFlow(false) { p, s -> p.boolFor(s, PlaybackSettingsKeys.AutoSkipCredits, false) }
 
@@ -587,6 +594,11 @@ class AndroidPlayerSettingsStore(
             serverSettingsFlusher.enqueue(scope.profileId, key, value.wireValue, scope.serverUrl, scope.authority)
         }
     }
+
+    // The server only knows the boolean. Keep all three modes local so a
+    // server refresh cannot collapse Off into Ask or overwrite this choice.
+    override suspend fun setCreditsSkipMode(value: CreditsSkipMode) =
+        writeStringLocal(CREDITS_SKIP_MODE, value.wireValue)
 
     override suspend fun setAutoSkipCredits(value: Boolean) =
         writeBool(PlaybackSettingsKeys.AutoSkipCredits, value)
@@ -1135,6 +1147,7 @@ class AndroidPlayerSettingsStore(
                 it.remove(booleanPreferencesKey(scope.keyPrefix + AUDIO_NORMALIZATION_ENABLED))
                 it.remove(stringPreferencesKey(scope.keyPrefix + NIGHT_MODE_PARAMETERS))
                 it.remove(stringPreferencesKey(scope.keyPrefix + NEXT_UP_PROMPT_MODE))
+                it.remove(stringPreferencesKey(scope.keyPrefix + CREDITS_SKIP_MODE))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + MATCH_CONTENT_RESOLUTION))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.PictureInPictureEnabled))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.ForceHdrPassthrough))
@@ -1502,6 +1515,7 @@ class AndroidPlayerSettingsStore(
         const val AUDIO_NORMALIZATION_ENABLED = "audio_normalization_enabled"
         const val NIGHT_MODE_PARAMETERS = "night_mode_parameters"
         const val NEXT_UP_PROMPT_MODE = "silora.next_up_prompt_mode"
+        const val CREDITS_SKIP_MODE = "silora.credits_skip_mode"
         const val SAVED_CUSTOM_SUBTITLE_APPEARANCE = "subtitle_appearance.saved_custom"
         /**
          * Local-only: the server-stored keys this device holds its own value

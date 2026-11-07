@@ -16,6 +16,7 @@ import org.siloserver.silo.model.settings.CardPresentation
 import org.siloserver.silo.model.auth.User
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.CreditsSkipMode
 import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.settings.ProfileSettingsController
 import org.siloserver.silo.model.settings.QualityPresets
@@ -164,7 +165,7 @@ class TvSettingsViewModel(
         val ignoreHevcLevelLimits: Boolean = PlayerSettingsStore.DEFAULT_IGNORE_HEVC_LEVEL_LIMITS,
         val audioNormalizationEnabled: Boolean = false,
         val trueBlackBars: Boolean = false,
-        val autoSkipCredits: Boolean = false,
+        val creditsSkipMode: CreditsSkipMode = CreditsSkipMode.Default,
         // Seconds to skip back on resume (0 = off); consecutive auto-advances
         // before the "Still watching?" prompt (0 = off).
         val resumeRewindSeconds: Int = 7,
@@ -398,7 +399,7 @@ class TvSettingsViewModel(
                 playerSettingsStore.maxBitrateKbpsFlow,
                 playerSettingsStore.autoPlayNextFlow,
                 playerSettingsStore.introSkipModeFlow,
-                playerSettingsStore.autoSkipCreditsFlow,
+                playerSettingsStore.creditsSkipModeFlow,
                 // The appearance in effect: edits start from what is on screen.
                 playerSettingsStore.subtitleAppearanceFlow,
                 playerSettingsStore.audioLanguageFlow,
@@ -413,7 +414,7 @@ class TvSettingsViewModel(
                 @Suppress("UNCHECKED_CAST")
                 val skipIntro = values[3] as IntroSkipMode
                 @Suppress("UNCHECKED_CAST")
-                val skipCredits = values[4] as Boolean
+                val skipCredits = values[4] as CreditsSkipMode
                 @Suppress("UNCHECKED_CAST")
                 val appearance = values[5] as SubtitleAppearance
                 @Suppress("UNCHECKED_CAST")
@@ -431,7 +432,7 @@ class TvSettingsViewModel(
                         maxBitrateKbps = snap.maxBitrateKbps,
                         autoPlayNext = snap.autoPlay,
                         introSkipMode = snap.skipIntro,
-                        autoSkipCredits = snap.skipCredits,
+                        creditsSkipMode = snap.skipCredits,
                         subtitleSize = snap.appearance.fontSize.toTvSubtitleSize(),
                         subtitleAppearance = snap.appearance,
                         audioLanguage = snap.audioLanguage,
@@ -871,8 +872,8 @@ class TvSettingsViewModel(
         }
     }
 
-    fun onAutoSkipCreditsChanged(value: Boolean) {
-        viewModelScope.launch { playerSettingsStore.setAutoSkipCredits(value) }
+    fun onCreditsSkipModeChanged(value: CreditsSkipMode) {
+        viewModelScope.launch { playerSettingsStore.setCreditsSkipMode(value) }
     }
 
     fun onResumeRewindSecondsChanged(value: Int) {
@@ -950,7 +951,7 @@ class TvSettingsViewModel(
         val maxBitrateKbps: Int?,
         val autoPlay: Boolean,
         val skipIntro: IntroSkipMode,
-        val skipCredits: Boolean,
+        val skipCredits: CreditsSkipMode,
         val appearance: SubtitleAppearance,
         val audioLanguage: String,
         val resumeRewindSeconds: Int,

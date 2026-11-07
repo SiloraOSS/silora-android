@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.CreditsSkipMode
 import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.model.settings.EffectiveSettingValue
 import org.siloserver.silo.model.settings.EffectiveSettingValuesResponse
@@ -320,6 +321,66 @@ class AndroidPlayerSettingsStoreTest {
             fakeFlusher.calls.any { it.key == PlaybackSettingsKeys.PictureInPictureEnabled },
             "PiP is platform-local and must never flush an unknown setting key to the server",
         )
+    }
+
+    @Test
+    fun `credits mode keeps legacy intent until a local mode is chosen`() = runTest {
+        val api = FakeSettingsApi(mapOf(stored(PlaybackSettingsKeys.AutoSkipCredits, JsonPrimitive(true))))
+        val store = newStore(repository = SettingsRepository(api))
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
+        store.refreshFromServer()
+        assertEquals(CreditsSkipMode.Auto, store.creditsSkipModeFlow.first())
+        store.setCreditsSkipMode(CreditsSkipMode.Off)
+        store.refreshFromServer()
+        assertEquals(CreditsSkipMode.Off, store.creditsSkipModeFlow.first())
+        assertTrue(store.autoSkipCreditsFlow.first(), "The local mode must not change the server boolean")
+        store.setCreditsSkipMode(CreditsSkipMode.Ask)
+        api.effective = mapOf(stored(PlaybackSettingsKeys.AutoSkipCredits, JsonPrimitive(false)))
+        store.refreshFromServer()
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
+        store.setCreditsSkipMode(CreditsSkipMode.Auto)
+        store.refreshFromServer()
+        assertEquals(CreditsSkipMode.Auto, store.creditsSkipModeFlow.first())
+        assertTrue(fakeFlusher.calls.isEmpty(), "The three-way mode must stay on this device")
+    }
+
+    @Test
+    fun `credits mode persists locally and resets without crossing account profile server or device scopes`() = runTest {
+        var account = "account-a"
+        var profile = "profile-a"
+        var server = "https://one.example"
+        var device = "device-a"
+        val stores = mutableMapOf<String, DataStore<Preferences>>()
+        fun newStore() = AndroidPlayerSettingsStore(
+            context = mockContextStub(), legacyCache = fakeLegacyCache,
+            getActiveProfileId = { profile }, getServerUrl = { server },
+            getDeviceId = { device }, getActiveAccountId = { account }, serverSettingsFlusher = fakeFlusher,
+            dataStoreFactory = { accountId, id -> stores.getOrPut("$accountId:$id") {
+                PreferenceDataStoreFactory.create(produceFile = { File(tempFolder.root, "credits_${accountId}_$id.preferences_pb") })
+            } },
+        )
+        val store = newStore()
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
+        for (mode in CreditsSkipMode.entries) {
+            store.setCreditsSkipMode(mode)
+            assertEquals(mode, newStore().creditsSkipModeFlow.first())
+        }
+        profile = "profile-b"
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
+        profile = "profile-a"
+        account = "account-b"
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
+        account = "account-a"
+        server = "https://two.example"
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
+        server = "https://one.example"
+        device = "device-b"
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
+        device = "device-a"
+        assertEquals(CreditsSkipMode.Off, store.creditsSkipModeFlow.first())
+        assertTrue(fakeFlusher.calls.isEmpty(), "The mode must not be sent to the server")
+        store.resetAllDeviceSettings()
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
     }
 
     @Test

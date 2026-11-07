@@ -80,6 +80,8 @@ import org.siloserver.silo.domain.player.BufferingQualityPill
 import org.siloserver.silo.domain.player.BufferingQualityReplan
 import org.siloserver.silo.domain.player.toBufferingQualityPlan
 import org.siloserver.silo.domain.player.IntroAutoSkipController
+import org.siloserver.silo.domain.player.CreditsAutoSkipController
+import org.siloserver.silo.domain.player.CreditsSkipMode
 import org.siloserver.silo.domain.player.IntroAutoSkipState
 import org.siloserver.silo.domain.player.IntroSkipMode
 import org.siloserver.silo.domain.player.NextUpDismissal
@@ -865,9 +867,9 @@ class PlayerViewModel(
         viewModelScope.launch {
             combine(
                 introAutoSkipController.state.map { it.isVisible },
-                _uiState.map { state ->
+                combine(_uiState, playerSettingsStore.creditsSkipModeFlow) { state, mode ->
                     state.showUpNext ||
-                        (!state.isLoading && markerSkipTarget(state.position, state.markerTimeline) != null)
+                        (!state.isLoading && markerSkipTarget(state.position, state.markerTimeline, mode, inRoom) != null)
                 },
             ) { introVisible, otherVisible -> introVisible || otherVisible }
                 .distinctUntilChanged()
@@ -946,6 +948,8 @@ class PlayerViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val introSkipMode: StateFlow<IntroSkipMode> = playerSettingsStore.introSkipModeFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, IntroSkipMode.Default)
+    val creditsSkipMode: StateFlow<CreditsSkipMode?> = playerSettingsStore.creditsSkipModeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val autoPlayNextEnabled: StateFlow<Boolean> = playerSettingsStore.autoPlayNextFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     // Wait for the persisted choice before allowing any automatic pre-end prompt.
@@ -1248,6 +1252,8 @@ class PlayerViewModel(
     // True while the seek bar is dragged; see onScrubbingChanged.
     private var scrubbing = false
     private var introObserverJob: Job? = null
+    private var creditsObserverJob: Job? = null
+    private val creditsAutoSkipController = CreditsAutoSkipController()
     private var lifecycleObserverJob: Job? = null
     private var resolveNextEpisodeJob: Job? = null
     private val exitPrepared = AtomicBoolean(false)
@@ -1663,6 +1669,7 @@ class PlayerViewModel(
         if (room != null) beginRoomLoad(room)
         // A fresh load resets any in-flight intro countdown / cancellation memory.
         introAutoSkipController.reset()
+        stopCreditsAutoSkipObserver()
         beginBufferingQualityLoad(contentId)
         // New item: re-arm the once-per-episode auto-advance trigger. (The
         // AutoPlayGuard streak intentionally PERSISTS across episodes.)
@@ -2186,6 +2193,7 @@ class PlayerViewModel(
 
         // Begin observing intro auto-skip inputs for this session.
         startIntroAutoSkipObserver()
+        startCreditsAutoSkipObserver()
         // During an in-place Next Up handoff the old card remains authoritative
         // until the successor's own first frame. Fetching its following episode
         // earlier could replace that card while it is still masking the mount.
@@ -2196,6 +2204,32 @@ class PlayerViewModel(
 
         // Schedule controls auto-hide
         scheduleControlsHide()
+    }
+
+    private fun startCreditsAutoSkipObserver() {
+        creditsObserverJob?.cancel()
+        creditsObserverJob = viewModelScope.launch {
+            combine(_uiState, playerSettingsStore.creditsSkipModeFlow) { state, mode -> state to mode }
+                .collect { (state, mode) ->
+                    val fileId = state.versions.getOrNull(state.selectedVersionIndex)?.fileId
+                    creditsAutoSkipController.seekTarget(
+                        key = state.sessionId?.let { "$it:$fileId" }
+                            ?: "local:${state.contentId}:$fileId".takeIf { state.isLocalFilePlayback() },
+                        position = state.position,
+                        duration = state.duration,
+                        markers = state.markerTimeline,
+                        mode = mode,
+                        playbackActive = state.isPlaying && !state.isPaused && !state.isLoading &&
+                            !state.isNextUpTransitioning && !scrubbing && !inRoom,
+                    )?.let(::seekImmediate)
+                }
+        }
+    }
+
+    private fun stopCreditsAutoSkipObserver() {
+        creditsObserverJob?.cancel()
+        creditsObserverJob = null
+        creditsAutoSkipController.reset()
     }
 
     private fun startIntroAutoSkipObserver() {
@@ -6747,6 +6781,7 @@ class PlayerViewModel(
         }
         controlsHideJob?.cancel()
         introObserverJob?.cancel()
+        stopCreditsAutoSkipObserver()
         searchJob?.cancel()
         aiJobHandle?.cancel()
         introAutoSkipController.reset()
@@ -7000,7 +7035,10 @@ class PlayerViewModel(
         // has to exist here too or a multi-audio download cannot be corrected.
         // With manifest data the default is the manifest's pick (the viewer's
         // preferred language when the file has it); legacy downloads keep 0.
-        if (_uiState.value.audioTracks.isNotEmpty()) setDesiredAudio(localSelectedAudio, explicit = false)
+        if (published) {
+            startCreditsAutoSkipObserver()
+            if (_uiState.value.audioTracks.isNotEmpty()) setDesiredAudio(localSelectedAudio, explicit = false)
+        }
         return published
     }
 
@@ -7029,6 +7067,7 @@ class PlayerViewModel(
         clearedSessionId?.let { lifecycleTeardown.stopDetached(expectedSessionId = it) }
         controlsHideJob?.cancel()
         introObserverJob?.cancel()
+        stopCreditsAutoSkipObserver()
         lifecycleObserverJob?.cancel()
         searchJob?.cancel()
         aiJobHandle?.cancel()

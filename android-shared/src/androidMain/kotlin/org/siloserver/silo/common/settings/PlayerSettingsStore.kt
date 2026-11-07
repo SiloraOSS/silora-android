@@ -3,6 +3,7 @@ package org.siloserver.silo.common.settings
 import org.siloserver.silo.common.player.audio.NightModeParameters
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.CreditsSkipMode
 import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.model.settings.CellularQuality
 import org.siloserver.silo.model.settings.SubtitleAppearance
@@ -77,6 +78,9 @@ interface PlayerSettingsStore {
      */
     val autoSkipIntroFlow: Flow<Boolean>
         get() = introSkipModeFlow.map { it == IntroSkipMode.ALWAYS }
+    /** Device-local credits behavior; older saved booleans map to Auto or Ask. */
+    val creditsSkipModeFlow: Flow<CreditsSkipMode>
+        get() = autoSkipCreditsFlow.map { CreditsSkipMode.fromLegacyBoolean(it) }
     val autoSkipCreditsFlow: Flow<Boolean>
     val autoPlayNextFlow: Flow<Boolean>
 
@@ -237,6 +241,7 @@ interface PlayerSettingsStore {
      */
     suspend fun setAutoSkipIntro(value: Boolean) =
         setIntroSkipMode(IntroSkipMode.fromLegacyBoolean(value))
+    suspend fun setCreditsSkipMode(value: CreditsSkipMode) = Unit
     suspend fun setAutoSkipCredits(value: Boolean)
     suspend fun setAutoPlayNext(value: Boolean)
     suspend fun setThemeMusicEnabled(value: Boolean)

@@ -52,6 +52,7 @@ object PlaybackSettingsKeys {
      * server's settings manifest rather than by its revision number.
      */
     val ManifestDetectedKeys: Set<String> = setOf(BufferingQualityMode)
+    /** Server boolean fallback: true means Auto, false means Ask until this device chooses a mode. */
     const val AutoSkipCredits = "playback.auto_skip_credits"
     const val AutoPlayNext = "playback.auto_play_next"
     // Renamed at the settings cutover: every other key carries a domain prefix
