@@ -213,7 +213,6 @@ fun TvSearchScreen(
     val activeSearchFieldFocusRequester = searchFieldFocusRequester ?: internalSearchFieldFocusRequester
     val keyboardController = LocalSoftwareKeyboardController.current
     val firstKeyboardKeyFocusRequester = remember { FocusRequester() }
-    val microphoneFocusRequester = remember { FocusRequester() }
     var hasEnteredSearch by rememberSaveable { mutableStateOf(false) }
     var lastSearchEntryRequest by rememberSaveable { mutableIntStateOf(0) }
     var keyboardState by remember { mutableStateOf(TvSearchKeyboardState()) }
@@ -284,11 +283,11 @@ fun TvSearchScreen(
             requestState.error != null ||
             (requestState.hasSubmittedQuery && !onlyLibraryRequestMatches))
     val requestSearchSettled = !canSearchRequests || !requestState.isLoading
-    fun submitCurrentSearch() {
-        setKeyboardOpen(false)
-        keyboardController?.hide()
+    // Submitting hands focus to the results and searches requests alongside
+    // the library. Typed and spoken queries both come through here.
+    val submitQuery: (String) -> Unit = { rawQuery ->
         pendingSearchFocus = true
-        val query = viewModel.uiState.value.query.trim()
+        val query = rawQuery.trim()
         if (requestsEnabled && query.length >= 2) {
             requestSearchViewModel.onMediaTypeChanged(requestMediaType)
             requestSearchViewModel.onQueryChanged(query)
@@ -296,24 +295,29 @@ fun TvSearchScreen(
         }
         viewModel.submitSearch()
     }
+
+    // A spoken query is a submitted query, including the focus handoff:
+    // nobody dictates a title in order to be left sitting on the search field.
     var voiceUnavailableMessage by remember { mutableStateOf<String?>(null) }
     val voiceSearch = rememberTvVoiceSearch(
         prompt = "Speak a title",
         onResult = { spoken ->
+            // The same cap typing obeys; recognised text never went through
+            // the field's own limit.
             val query = spoken.take(TV_SEARCH_QUERY_MAX_LENGTH)
             voiceUnavailableMessage = null
-            updateInput(TextFieldValue(query, TextRange(query.length)))
-            submitCurrentSearch()
+            viewModel.onQueryChanged(query)
+            submitQuery(query)
         },
         onUnavailable = {
             voiceUnavailableMessage = "Voice search isn't available on this device."
         },
     )
-    fun startVoiceSearch() {
-        pendingSearchFocus = false
+
+    fun submitCurrentSearch() {
         setKeyboardOpen(false)
         keyboardController?.hide()
-        voiceSearch.start()
+        submitQuery(viewModel.uiState.value.query)
     }
     val reportInputOverlay by rememberUpdatedState(onInputOverlayChanged)
     LaunchedEffect(appKeyboardOpen) {
@@ -806,9 +810,7 @@ fun TvSearchScreen(
                     onSearch = ::submitCurrentSearch,
                     appKeyboardMode = keyboardMode == TvSearchKeyboardMode.App,
                     firstKeyboardKeyFocusRequester = firstKeyboardKeyFocusRequester,
-                    microphoneFocusRequester = microphoneFocusRequester,
-                    onVoiceSearch = ::startVoiceSearch,
-                    voiceSearchAvailable = voiceSearch.isAvailable,
+                    voiceSearch = voiceSearch,
                     voiceUnavailableMessage = voiceUnavailableMessage,
                     onMediaTypeChanged = viewModel::onMediaTypeChanged,
                     isKeyboardOpen = isKeyboardOpen,
@@ -1120,9 +1122,7 @@ private fun SearchStage(
     onSearch: () -> Unit,
     appKeyboardMode: Boolean,
     firstKeyboardKeyFocusRequester: FocusRequester,
-    microphoneFocusRequester: FocusRequester,
-    onVoiceSearch: () -> Unit,
-    voiceSearchAvailable: Boolean,
+    voiceSearch: TvVoiceSearchController,
     voiceUnavailableMessage: String?,
     onMediaTypeChanged: (TvSearchMediaType) -> Unit,
     isKeyboardOpen: Boolean,
@@ -1133,9 +1133,11 @@ private fun SearchStage(
     val mediaTypes = availableMediaTypes
     val fieldShape = RoundedCornerShape(14.dp)
     val clearButtonFocusRequester = remember { FocusRequester() }
+    val voiceButtonFocusRequester = remember { FocusRequester() }
     val canClear = query.isNotEmpty()
+    val showVoice = voiceSearch.isAvailable
     val fieldRightFocusRequester = when {
-        voiceSearchAvailable -> microphoneFocusRequester
+        showVoice -> voiceButtonFocusRequester
         canClear -> clearButtonFocusRequester
         else -> null
     }
@@ -1248,7 +1250,7 @@ private fun SearchStage(
                             fieldRightFocusRequester != null -> {
                             if (event.type == KeyEventType.KeyDown) {
                                 fieldRightFocusRequester.claimFocusOrReport(
-                                    target = if (voiceSearchAvailable) "search_microphone" else "search_clear_button",
+                                    target = if (showVoice) "search_voice_button" else "search_clear_button",
                                     action = "field_right",
                                 )
                             }
@@ -1285,16 +1287,16 @@ private fun SearchStage(
                 unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
             ),
         )
-        if (voiceSearchAvailable) {
+        if (showVoice) {
             TvHeroToggleIconButton(
                 selected = false,
                 selectedContainerColor = Color.Transparent,
                 selectedContentColor = Color.White,
                 icon = Icons.Filled.Mic,
                 contentDescription = "Search by voice",
-                onClick = onVoiceSearch,
+                onClick = voiceSearch::start,
                 modifier = Modifier
-                    .focusRequester(microphoneFocusRequester)
+                    .focusRequester(voiceButtonFocusRequester)
                     .focusProperties {
                         left = searchFieldFocusRequester
                         right = if (canClear) clearButtonFocusRequester else FocusRequester.Cancel
@@ -1314,7 +1316,7 @@ private fun SearchStage(
                 modifier = Modifier
                     .focusRequester(clearButtonFocusRequester)
                     .focusProperties {
-                        left = if (voiceSearchAvailable) microphoneFocusRequester else searchFieldFocusRequester
+                        left = if (showVoice) voiceButtonFocusRequester else searchFieldFocusRequester
                         if (appKeyboardMode && isKeyboardOpen) up = FocusRequester.Cancel
                     },
                 downFocusRequester = if (appKeyboardMode && isKeyboardOpen) firstKeyboardKeyFocusRequester else firstFilterChipFocusRequester,

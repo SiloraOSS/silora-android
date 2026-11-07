@@ -58,7 +58,7 @@ competing product requirements to that checklist.
 
 | ID | Replacement and reason | Validation |
 | --- | --- | --- |
-| `tv-voice` | Superseded by [upstream PR #830](https://github.com/Silo-Server/silo-android/pull/830), commit `4fb8f1b59`. Matt requested retiring the fork implementation on November 6, 2026. Use upstream's system-recognizer mic button and result handling. Do not restore the fork's local recording controller, permission flow or voice overlay from old commits. | Exact upstream `TvVoiceSearch.kt` helper adopted; TV tests/build and on-device limits are recorded in `CHANGELOG.md`. |
+| `tv-voice` | Superseded by [upstream PR #830](https://github.com/Silo-Server/silo-android/pull/830), commit `4fb8f1b59`. Matt requested retiring the fork implementation on November 6, 2026. Use upstream's system-recognizer mic button and result handling. Do not restore the fork's local recording controller, permission flow or voice overlay from old commits. | Use upstream’s recognizer helper, direct mic launch and shared spoken-query submission. Keep custom keyboard adaptations outside the voice launch/result callbacks. Device speech capture remains unverified. |
 
 Requests navigation has no fork override and must not be reintroduced from old
 merge logs or instruction text.
