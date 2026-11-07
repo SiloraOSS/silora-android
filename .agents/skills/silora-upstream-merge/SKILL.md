@@ -106,14 +106,10 @@ Work through each conflict using the base, fork, and upstream versions.
 - Integrate upstream's implementation with the fork behavior. Avoid blanket
   `ours`/`theirs`, whole-file replacement, or reset/cherry-pick reconstruction
   of the branch. Compilation alone does not prove a fork feature survived.
-- Before retiring an active fix, follow the replacement review below. An
-  upstream PR's existence, a matching helper file, or passing host tests does
-  not establish equivalent user behavior. Honor manifest-specific deferral
-  conditions. If the replacement is unverified, retain the active behavior and
-  integrate compatible upstream changes; surface any conflict that makes this
-  impossible rather than declaring the replacement verified. If the user
-  explicitly chooses an unverified replacement, honor that choice and record
-  the validation gap; do not relabel it as verified.
+- When upstream provides an equivalent or better fix, use its implementation
+  after verifying the behavior that the fork fixed. Explain which local
+  workaround became unnecessary. Ask only when the resolution requires a
+  product decision or would drop a behavior without an equivalent replacement.
 - Audit settings end to end: keys/defaults, persistence, migrations, profile
   scope, DI/startup bindings, runtime use, and both apps' controls. Local-only
   settings must remain local; preserve existing stored keys and values.
@@ -135,31 +131,6 @@ Work through each conflict using the base, fork, and upstream versions.
 
 Review all affected fork behavior after the merge, including files Git merged
 without conflicts. Stage only files belonging to this merge and its fixes.
-
-## Verify an upstream replacement
-
-For an overlapping feature, inspect the complete merged patch and any required
-companion changes. Trace its entry point, platform declarations/dependencies,
-launch or request, callback/error handling, state ownership, and visible result.
-Include fork adapters at those boundaries: identical callback code can still
-feed a different UI state. Review packaging, permissions and result registration
-where relevant, including the built manifest if an APK was produced.
-
-Use the pre-merge source and upstream source to account for every piece of the
-old implementation being removed or retained. Keep useful upstream fixes that
-are independent of a deferred replacement. Review cleanly merged integrations
-as well as textual conflicts; remove obsolete duplicate entry points only when
-the intended replacement is established.
-
-Record what the upstream author actually validated and what was not tested.
-For hardware/platform behavior, an opened dialog or an emulator launch does not
-prove capture, callback delivery, displayed state or completion. Require evidence
-for the behavior being replaced and any explicit manifest condition before
-marking it superseded. If device evidence is unavailable, report that limit and
-keep the replacement unverified; do not declare upstream broken or all fork
-interactions ruled out from source equality alone. Use authorized test devices
-and accounts; record relevant provider/permission configuration rather than
-silently changing it to obtain a passing result.
 
 ## Record the merge in CHANGELOG.md
 
