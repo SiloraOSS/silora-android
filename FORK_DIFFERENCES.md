@@ -46,6 +46,7 @@ competing product requirements to that checklist.
 | `tv-subtitle-size` | TV has an Extra small subtitle choice. Preserve local persistence, server-compatible Small wire fallback and existing phone sizes. | `eae382b4b` |
 | `tv-remote` | Customizable long presses provide playback shortcuts while ordinary short presses and contextual action limits remain intact. Preserve playback-options focus handling; a Stats shortcut opens playback information, not an admin dashboard. | `04ef9c483`, `64a6d3b14` |
 | `tv-keyboard` | Search offers App/System keyboards with System as default and automatic opening off by default. Preserve physical typing, explicit keyboard opening, cursor state, clearing and focus handoffs. | `1d8fc7a5f`, `a42991501`, `660758013`, `bcf487826` |
+| `tv-voice` | Temporarily retain Silora’s in-app speech controller and overlay after the system recognizer opened but returned no search text in Shield testing. Preserve microphone permission handling, cancellation/lifecycle cleanup, final-query submission and mic-focus return. Matt requested this fallback on November 6, 2026; revisit upstream only after an official build is confirmed to complete spoken searches on the affected device. | `dc03dfaa7`, `a42991501`; restored controller/overlay and eight existing session tests; current request in this chat |
 | `input-scope` | Supporting storage for `tv-keyboard` and `tv-remote`: save only App/System keyboard choice, automatic keyboard opening, and long-press mappings separately per server/login/profile. This adds no menu or standalone setting. Preserve migration, switching and account-removal cleanup. | `a19729d21`; account integration in `73c46323f` |
 | `trailers` | Embedded YouTube previews, external fallback and TV controls keep trailers accessible from movie/series details. Prefer local trailers and retain attribution. | `bac06a7c7` |
 | `ai-subtitles` | Preserve the four fixes for server audio ordinals, bounded uncertain-create fencing, missing-row replanning and language-alias normalization. Retire individual workarounds when a verified upstream replacement supplies the same behavior. | `5536474b3` |
@@ -54,11 +55,19 @@ competing product requirements to that checklist.
 | `release-tooling` | Preserve persistent signed phone/TV builds, version metadata, APK verification, matching R8 mappings, release workflows and configured notification behavior. This entry does not authorize publishing, messaging, changing schedules/destinations or exposing signing material. | `bf8304d5b`, `5f68d3c69`, `74ea34c8a`, `8005d02c1`, `7d7b9bb72`, `2b958c5c2`, `198f651f4` |
 | `fork-maintenance` | Maintain this reviewed inventory and the upstream-merge skill. Explain meaningful conflict decisions by feature ID; follow upstream outside intentional differences and do not treat inherited instructions as proof of a user customization. | November 6, 2026 authorization in this chat; `AGENTS.md`, `.agents/skills/silora-upstream-merge/SKILL.md` |
 
-## Superseded or retired
+## Deferred upstream replacement
 
-| ID | Replacement and reason | Validation |
-| --- | --- | --- |
-| `tv-voice` | Superseded by [upstream PR #830](https://github.com/Silo-Server/silo-android/pull/830), commit `4fb8f1b59`. Matt requested retiring the fork implementation on November 6, 2026. Use upstream's system-recognizer mic button and result handling. Do not restore the fork's local recording controller, permission flow or voice overlay from old commits. | Use upstream’s recognizer helper, direct mic launch and shared spoken-query submission. Keep custom keyboard adaptations outside the voice launch/result callbacks. Device speech capture remains unverified. |
+The November 6 retirement of `tv-voice` was reversed later that day at Matt’s
+request. [Upstream PR #830](https://github.com/Silo-Server/silo-android/pull/830)
+(`4fb8f1b59`) remains in the ancestry, but its activity-based voice path is not
+used. The source/manifest audit found no missing upstream voice code or
+permission; the cause of the device failure remains unconfirmed. The earlier
+retirement and audit records remain in `CHANGELOG.md`.
+
+Revisit the replacement after an official build is available and confirmed to
+recognize speech, return the final text to search and submit the query on the
+affected device. Merely merging the PR, publishing a release, or opening its
+recognizer does not establish that replacement works.
 
 Requests navigation has no fork override and must not be reintroduced from old
 merge logs or instruction text.

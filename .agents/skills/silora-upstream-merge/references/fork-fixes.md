@@ -72,8 +72,8 @@ including contextual limits on actions such as Next Episode. Follow
 Keep App/System search keyboard selection, System as the default, and optional
 automatic keyboard opening (default off). Follow `TvSearchKeyboardStore.kt`,
 `TvSearchKeyboard.kt`, `TvSearchScreen.kt`, `TvSearchTextEditing.kt`, and their
-shell/settings integration. Integrate upstream's voice affordance with those
-keyboard controls; the separate fork voice implementation is retired below.
+shell/settings integration. Preserve the in-app voice integration described
+below alongside those keyboard controls.
 
 `input-scope` is the storage detail for keyboard mode, automatic opening and
 remote mappings, not a separate product feature. These values are local per
@@ -82,16 +82,25 @@ values only to the adopting account and responds to identity switches. Follow it
 integration in `AndroidTvModule.kt` and `AccountLocalData.kt`; retain the account
 isolation/adoption cases in `TvProfileInputPreferencesTest.kt`.
 
-## Retired voice implementation (`tv-voice`)
+## TV voice search (`tv-voice`)
 
-Upstream PR #830 (`4fb8f1b59`) supplies the mic button and system recognizer.
-`TvVoiceSearch.kt` is upstream code. It handles recognizer selection, result
-return and availability; the manifest declares its recognition-activity query.
-The app does not record audio and needs no `RECORD_AUDIO` permission for this
-path. Keep normal keyboard-mode focus handling around the upstream affordance.
-Do not recreate the deleted fork controller, permission UI, voice overlay or
-controller-only tests from historical commits. See the manifest's retired entry
-for the user's retirement decision and the changelog for validation limits.
+Retain `TvSearchVoiceController.kt`, `TvSearchVoiceOverlay.kt` and their
+`TvSearchScreen.kt` integration while upstream PR #830 is deferred. The local
+`SpeechRecognizer` delivers final text directly to the editable field and the
+normal search submission path. Partial results stay in the overlay. Preserve
+the runtime `RECORD_AUDIO` request, denial/settings flow, optional microphone
+feature and `android.speech.RecognitionService` package-visibility query.
+
+Keep session cancellation on pause/stop/disposal (except the permission-dialog
+pause), late-callback fencing, timeouts, empty-result handling, query length
+limits, keyboard closure, overlay Back ownership and microphone focus return.
+The eight existing `TvSearchVoiceControllerTest` cases cover the session logic;
+they do not prove microphone capture on a real TV. Retain upstream’s identical
+in-flight request-search deduplication when voice submits immediately.
+
+The inventory records Matt’s November 6 fallback decision. Do not re-adopt the
+recognizer-activity helper merely because it is present upstream: revisit it
+after an official build completes a spoken search on the affected device.
 
 ## Trailers (`trailers`)
 

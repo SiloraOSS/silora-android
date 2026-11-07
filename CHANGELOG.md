@@ -4,6 +4,38 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-06 — restore in-app TV voice search
+
+Restored `tv-voice` at Matt’s request after repeat Shield testing opened the
+system recognizer, including its listening indicator, but returned no text to
+the search field. Defer upstream PR #830 until an official build is confirmed
+to recognize speech, return its final text and submit a search on the affected
+device. Its merge remains in history; its recognizer-activity path is unused.
+
+Before restoring, compared against upstream `4fb8f1b59`: the recognizer helper,
+voice result/submission callback, MainTvActivity and search ViewModel matched
+exactly. Manifest permission lists and recognition queries matched, and the
+recognition query was present in the tested signed APK. No omitted upstream
+voice permission or callback was found. The full search screen retains fork
+keyboard/cursor adaptations; source parity in the audited paths does not
+establish the cause of the runtime failure. The upstream PR’s validation notes
+explicitly exclude an actual spoken result.
+
+Restored the previous local controller, overlay, eight session tests, runtime
+microphone permission, recognition-service visibility, lifecycle cleanup,
+cancellation and focus return. Final recognition updates the editable field
+and submits through the existing typed-search path. Kept upstream’s in-flight
+request-search deduplication. Updated the inventory and technical checklist so
+future syncs preserve this temporary fallback and its re-evaluation condition.
+
+Validation: all 1,434 TV host tests passed with zero failures, errors or skips,
+including the eight restored voice-session tests. Full TV release lint and
+release Kotlin compilation passed with existing warnings/baselines. Source
+checks verified the controller, overlay and session tests are exact restorations
+and the previous search integration differs only by retained request-search
+deduplication. Actual speech capture/result return on the affected Shield still
+requires device testing.
+
 ## 2026-11-06 — rebuild the fork as a clean patch series
 
 Prepared local branch `rebase-2026-11-06` on upstream
