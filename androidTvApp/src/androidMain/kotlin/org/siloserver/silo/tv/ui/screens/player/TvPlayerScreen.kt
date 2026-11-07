@@ -2304,9 +2304,19 @@ fun TvPlayerScreen(
     val controlsCoverCues = state.showControls && !state.hudOpen && !state.showNextUp
     val cueReachPx = if (controlsCoverCues) with(subtitleDensity) { 216.dp.roundToPx() } else 0
     val latestCueReachPx by rememberUpdatedState(cueReachPx)
-    LaunchedEffect(playerViewRef, cueReachPx, state.hudOpen) {
+    // Fork: a running AI translation's streamed lines, for this session only.
+    val liveSubtitleTrack = viewModel.liveSubtitle.collectAsState().value
+        ?.takeIf { it.sessionId == state.sessionId }
+    val liveSubtitleActive = liveSubtitleTrack != null
+    LaunchedEffect(playerViewRef, cueReachPx, state.hudOpen, liveSubtitleActive) {
         val subtitleView = playerViewRef?.subtitleView ?: return@LaunchedEffect
-        subtitleView.visibility = if (state.hudOpen) android.view.View.INVISIBLE else android.view.View.VISIBLE
+        // While live AI lines are drawn, hide Media3's own cues so only one
+        // set shows; the finished track takes over once it is selected.
+        subtitleView.visibility = if (state.hudOpen || liveSubtitleActive) {
+            android.view.View.INVISIBLE
+        } else {
+            android.view.View.VISIBLE
+        }
         liftSubtitlesClearOfControls(subtitleView, cueReachPx)
     }
     // The subtitle manager resizes and moves the canvas on its own (video
@@ -2506,6 +2516,17 @@ fun TvPlayerScreen(
                             applyPlayerViewVideoFillMode(view, if (state.showNextUp) VideoFillMode.Fit else state.videoFillMode)
                             subtitleManager.syncSubtitleVideoBounds(view)
                         },
+                    )
+                }
+
+                if (!isInPictureInPictureMode && liveSubtitleTrack != null) {
+                    TvLiveSubtitleOverlay(
+                        track = liveSubtitleTrack,
+                        positionSourceSeconds = {
+                            viewModel.liveSubtitleSourceSeconds(mediaController?.currentPosition ?: 0L)
+                        },
+                        bottomLiftPx = cueReachPx,
+                        hidden = state.hudOpen,
                     )
                 }
 

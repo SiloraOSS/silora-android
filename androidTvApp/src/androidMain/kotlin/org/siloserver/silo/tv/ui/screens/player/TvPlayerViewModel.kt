@@ -146,6 +146,8 @@ import org.siloserver.silo.model.playback.resolvedSelectedSubtitleIndex
 import org.siloserver.silo.model.playback.mergeDownloadedSubtitles
 import org.siloserver.silo.model.playback.videoQualityPreference
 import org.siloserver.silo.playback.ADMIN_ENDED_PLAYBACK_NOTICE
+import org.siloserver.silo.playback.LiveSubtitleTrack
+import org.siloserver.silo.playback.PlaybackLiveSubtitleEvent
 import org.siloserver.silo.playback.PlaybackMarkersUpdate
 import org.siloserver.silo.playback.PlaybackSubtitleReady
 import org.siloserver.silo.playback.PlaybackSubtitleTimingChanged
@@ -869,6 +871,7 @@ class TvPlayerViewModel(
 
     companion object {
         private const val TAG = "TvPlayerViewModel"
+        private const val LIVE_SUBTITLE_COMPLETED_GRACE_MS = 15_000L
         private const val AI_SUBTITLE_READY_FALLBACK_MS = 5_000L
         const val SERVER_UNREACHABLE_MESSAGE =
             "Can't reach server — check your connection."
@@ -1992,6 +1995,13 @@ class TvPlayerViewModel(
     private var aiStatusRequested = false
     private var aiJobPollJob: Job? = null
     private var activeAiJobId: Long? = null
+
+    // Fork: live AI subtitles. The server streams a running job's output over
+    // the session socket, playhead first; the screen draws it until the
+    // finished track is loaded and selected through the normal path.
+    private val _liveSubtitle = MutableStateFlow<LiveSubtitleTrack?>(null)
+    val liveSubtitle: StateFlow<LiveSubtitleTrack?> = _liveSubtitle.asStateFlow()
+    private var liveSubtitleFallbackClear: Job? = null
     private var pendingAuthoritativeSubtitleDownloadId: Int? = null
     private val authoritativeSubtitleReadyRows = mutableMapOf<Pair<String, Int>, PlayerSubtitleInfo>()
     private val subtitleRemountReselection = SubtitleRemountReselection()
@@ -6950,6 +6960,61 @@ class TvPlayerViewModel(
     }
 
     /** Dismiss the dialog. A running job keeps polling — reopening shows live progress. */
+    /**
+     * Fork: applies one live AI subtitle event from the session socket. Events
+     * for another session, file or job are ignored. The first batch of cues
+     * closes the AI dialog so the viewer sees them over the picture.
+     */
+    internal fun applyLiveSubtitleEvent(event: PlaybackLiveSubtitleEvent) {
+        val state = _uiState.value
+        if (event.sessionId != null && event.sessionId != state.sessionId) return
+        if (event.fileId != null && state.mediaFileId != null && event.fileId != state.mediaFileId) return
+        activeAiJobId?.let { if (it != event.jobId) return }
+        when (event) {
+            is PlaybackLiveSubtitleEvent.Started -> {
+                liveSubtitleFallbackClear?.cancel()
+                _liveSubtitle.value = LiveSubtitleTrack(
+                    sessionId = state.sessionId,
+                    jobId = event.jobId,
+                    trackKey = event.trackKey,
+                    language = event.language,
+                    label = event.label,
+                    total = event.totalCues,
+                )
+            }
+            is PlaybackLiveSubtitleEvent.Cues -> {
+                val current = _liveSubtitle.value?.takeIf { it.jobId == event.jobId }
+                    ?: LiveSubtitleTrack(sessionId = state.sessionId, jobId = event.jobId, trackKey = event.trackKey)
+                val firstCues = current.cues.isEmpty() && event.cues.isNotEmpty()
+                _liveSubtitle.value = current.plus(event.cues, event.done, event.total)
+                if (firstCues && _uiState.value.showAiTranslateDialog) closeAiTranslateDialog()
+            }
+            is PlaybackLiveSubtitleEvent.Completed -> {
+                _liveSubtitle.update { live -> live?.takeIf { it.jobId == event.jobId }?.copy(completed = true) ?: live }
+                // The job poll normally loads and selects the finished track
+                // and clears this within a second or two. If that poll isn't
+                // running (it was abandoned), don't draw the live copy forever.
+                liveSubtitleFallbackClear?.cancel()
+                liveSubtitleFallbackClear = viewModelScope.launch {
+                    delay(LIVE_SUBTITLE_COMPLETED_GRACE_MS)
+                    clearLiveSubtitle(event.jobId)
+                }
+            }
+            is PlaybackLiveSubtitleEvent.Failed -> clearLiveSubtitle(event.jobId)
+        }
+    }
+
+    /** Stops drawing live AI subtitles (for [jobId] only, when given). */
+    fun clearLiveSubtitle(jobId: Long? = null) {
+        _liveSubtitle.update { live -> if (live == null || (jobId != null && live.jobId != jobId)) live else null }
+    }
+
+    /** Source (file) seconds for a player position, matching the live cues' clock. */
+    fun liveSubtitleSourceSeconds(playerPositionMs: Long): Double {
+        val seconds = playerPositionMs.coerceAtLeast(0L) / 1000.0
+        return _uiState.value.playbackPlan?.timeline?.sourcePositionForPlayer(seconds) ?: seconds
+    }
+
     fun closeAiTranslateDialog() {
         _uiState.update { it.copy(showAiTranslateDialog = false) }
     }
@@ -7321,7 +7386,10 @@ class TvPlayerViewModel(
                     }
                 },
             )
-            if (!ownsRequest()) return@launch
+            if (!ownsRequest()) {
+                clearLiveSubtitle(job.id)
+                return@launch
+            }
             activeAiJobId = null
             when (outcome) {
                 is SubtitlesRepository.SubtitleJobOutcome.Completed -> {
@@ -7329,6 +7397,9 @@ class TvPlayerViewModel(
                         autoSelectSubtitleId = outcome.resultSubtitleId,
                         source = TvSubtitleRefreshSource.AiCompletion,
                     )
+                    // The finished track is selected now (or the replan
+                    // fallback will load it); stop drawing the live copy.
+                    clearLiveSubtitle(job.id)
                     if (!ownsRequest()) return@launch
                     _aiTranslate.update {
                         if (merged) {
@@ -7343,14 +7414,16 @@ class TvPlayerViewModel(
                     }
                 }
                 is SubtitlesRepository.SubtitleJobOutcome.Failed -> {
+                    clearLiveSubtitle(job.id)
                     val message = outcome.message ?: "Translation failed"
                     _aiTranslate.update { it.copy(phase = AiJobPhase.Failed(message)) }
                     // The dialog may have been closed while the job ran; a reason
                     // is a full sentence, so it stays up long enough to read on a TV.
                     if (!_uiState.value.showAiTranslateDialog) showPlayerMessage(aiFailureNotice(message), 10_000L)
                 }
-                SubtitlesRepository.SubtitleJobOutcome.Cancelled -> _aiTranslate.update {
-                    it.copy(phase = AiJobPhase.Idle)
+                SubtitlesRepository.SubtitleJobOutcome.Cancelled -> {
+                    clearLiveSubtitle(job.id)
+                    _aiTranslate.update { it.copy(phase = AiJobPhase.Idle) }
                 }
             }
         }.also { job -> job.invokeOnCompletion { aiCreationInFlight = false } }
@@ -7363,6 +7436,7 @@ class TvPlayerViewModel(
         aiJobPollJob?.cancel()
         aiJobPollJob = null
         activeAiJobId = null
+        clearLiveSubtitle()
         _aiTranslate.update { it.copy(phase = AiJobPhase.Idle) }
         if (jobId != null && owner != null) {
             viewModelScope.launch { subtitlesRepository.cancelJob(jobId, owner) }
