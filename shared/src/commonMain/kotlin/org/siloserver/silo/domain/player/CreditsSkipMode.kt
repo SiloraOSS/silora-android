@@ -2,7 +2,7 @@ package org.siloserver.silo.domain.player
 
 /** Android's credits behavior, stored per profile on this device. */
 enum class CreditsSkipMode(val wireValue: String, val label: String, val description: String) {
-    Ask("ask", "Ask", "Show a Skip Credits button and let you choose."),
+    Ask("ask", "Ask to Skip", "Show a Skip Credits button and let you choose."),
     Auto("auto", "Auto", "Automatically skip to the end of each credits segment."),
     Off("off", "Off", "Play credits without a skip button.");
 
