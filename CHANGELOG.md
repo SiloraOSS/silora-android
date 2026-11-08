@@ -4,6 +4,33 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-08 — remove the duplicate end-only Up Next trigger
+
+At Matt’s request, removed **After playback ends** from the phone and TV
+**Up Next Trigger** choices. Keep **Credits markers** and **Time remaining**;
+**Time remaining → At end** provides the same end-only behavior. The timing
+row is now available under either trigger choice.
+
+Matt confirmed the retired choice had not shipped and only his installation
+could have it saved. No migration is needed: the old `off` value falls back to
+**Credits markers**. Select **Time remaining → At end** again for end-only
+prompts. Existing `credits` and `time_remaining` choices retain their values.
+
+The live-video/next-item-artwork panes, spoiler-safe artwork fallbacks, end
+screen, autoplay, skip controls and manual TV Up Next action are unchanged.
+Updated the existing policy/preference tests and fork-maintenance records.
+
+All 1,554 selected tests passed: seven trigger-policy tests, 88 preference-store
+tests, 25 phone player load/transition tests and all 1,434 TV host tests.
+Signed phone/TV release assembly and full release lint passed with no
+unsuppressed errors (93 phone warnings; 95 TV warnings). The initial 4 GB heap
+ran out during optimization/lint; an invocation-only 12 GB heap retry passed.
+Signature, application ID, version and checksum verification passed. APKs,
+matching R8 mappings and source provenance: `dist/local-2026-11-08.201449/`.
+Visible version: `1.0.0 (29) (silora:11082026)`; phone code `853886578`, TV
+code `853886579`. Device testing remains pending. No push, public release or
+device installation was performed.
+
 ## 2026-11-06 — confirm upstream-only TV voice failure
 
 Matt reproduced the missing voice-search text on his onn 4K Pro (Android 14)

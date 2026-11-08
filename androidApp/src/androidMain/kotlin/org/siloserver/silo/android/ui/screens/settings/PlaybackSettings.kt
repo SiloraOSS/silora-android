@@ -359,20 +359,18 @@ fun PlaybackEpisodesSection(
             },
             description = NextUpPromptMode.settingsDescription,
         )
-        if (nextUpPromptMode != NextUpPromptMode.AfterPlaybackEnds) {
-            ProfileLayeredDropdownRow(
-                label = "Time remaining",
-                value = nextUpPromptLabel(nextUpPromptSeconds),
-                options = nextUpPromptOptions.map(::nextUpPromptLabel),
-                overridden = overridden(PlaybackSettingsKeys.NextUpPromptSeconds),
-                onOptionSelected = { label ->
-                    nextUpPromptOptions.firstOrNull { nextUpPromptLabel(it) == label }
-                        ?.let(onNextUpPromptSecondsChanged)
-                },
-                onUseProfileSetting = { onUseProfileSetting(PlaybackSettingsKeys.NextUpPromptSeconds) },
-                description = NextUpPromptMode.timingDescription(nextUpPromptMode),
-            )
-        }
+        ProfileLayeredDropdownRow(
+            label = "Time remaining",
+            value = nextUpPromptLabel(nextUpPromptSeconds),
+            options = nextUpPromptOptions.map(::nextUpPromptLabel),
+            overridden = overridden(PlaybackSettingsKeys.NextUpPromptSeconds),
+            onOptionSelected = { label ->
+                nextUpPromptOptions.firstOrNull { nextUpPromptLabel(it) == label }
+                    ?.let(onNextUpPromptSecondsChanged)
+            },
+            onUseProfileSetting = { onUseProfileSetting(PlaybackSettingsKeys.NextUpPromptSeconds) },
+            description = NextUpPromptMode.timingDescription(nextUpPromptMode),
+        )
 
         // Three-way, not a switch: the boolean this replaced could not say
         // "never". Option labels and semantics are fixed by the contract.

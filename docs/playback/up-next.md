@@ -1,7 +1,7 @@
 # Up Next trigger
 
 On phone and TV, open **Settings → Playback → Episodes → Up Next Trigger**.
-The descriptions under the setting explain all three choices:
+The descriptions under the setting explain both choices:
 
 - **Credits markers** (default): open Up Next when playback crosses the start
   of the last eligible credits range. A range is eligible when it starts in the
@@ -10,9 +10,10 @@ The descriptions under the setting explain all three choices:
   **Time remaining** setting as a fallback.
 - **Time remaining**: ignore credits markers and open Up Next at the selected
   time before the end. Use this when credits markers are unreliable.
-- **After playback ends**: wait until the video finishes before opening Up Next.
-  The end screen keeps its normal autoplay countdown and Play Now controls.
-  Intro/recap/credits skip controls and TV's manual Up Next action remain available.
+
+To wait until playback finishes, select **Time remaining → At end**. The end
+screen keeps its normal autoplay countdown and Play Now controls.
+Intro/recap/credits skip controls and TV's manual Up Next action remain available.
 
 The **Time remaining** row offers **At end**, **10 seconds**, **30 seconds**,
 **1 minute**, or **2 minutes** before the end. Its description changes with the
@@ -20,7 +21,7 @@ trigger: under **Credits markers** it explicitly says this is a fallback used
 when the episode has no eligible credits markers; under **Time remaining** it says
 markers are ignored. **At end** waits until playback finishes when timing is
 used. An eligible credits marker still takes priority in **Credits markers** mode.
-The timing row is hidden while the trigger is **After playback ends**.
+The timing row is available under both trigger choices.
 
 The trigger choice is local to the active profile, server, and device. It does
 not change server markers or sync the mode to other devices. Timing retains its
@@ -56,11 +57,34 @@ next item prepares. Countdown, autoplay, cancellation and focus rules stay the s
 ## Saved choices
 
 The existing key, `silora.next_up_prompt_mode`, stays unchanged. Saved
-`credits` (previously **Enabled**) selects **Credits markers**, `off`
-(previously **Disabled** or **Off**) now displays **After playback ends** with the
-same behavior, and `time_remaining` selects **Time remaining**. A missing or unknown value uses **Credits markers**.
+`credits` selects **Credits markers**, and `time_remaining` selects **Time
+remaining**. A missing or unknown value uses **Credits markers**.
 
-## Validation
+The duplicate **After playback ends** trigger was removed on November 8, 2026.
+Matt confirmed that only his local installation could have that unreleased
+choice saved. Its old `off` value now falls back to **Credits markers** without
+a migration. Select **Time remaining → At end** again for end-only prompts.
+
+## November 8 simplification validation
+
+All 1,554 selected host tests passed: seven trigger-policy tests, 88 preference
+store tests, 25 phone player load/transition integration tests and all 1,434 TV
+host tests. Updated the existing trigger/preference cases; no new UI tests
+were added. The artwork helper, phone/TV player files and preference-store
+implementation match `a10490adc` unchanged.
+
+Signed phone/TV release assembly and full release lint passed with no
+unsuppressed errors (phone: 93 warnings; TV: 95 warnings). The first attempt
+exhausted the default 4 GB Gradle heap during optimization/lint; retrying with
+`GRADLE_OPTS='-Dorg.gradle.jvmargs=-Xmx12g'` passed without changing repository
+build settings. Signature, application ID, version and checksum checks passed.
+APKs, matching R8 mappings and source provenance are archived under
+`dist/local-2026-11-08.201449/`. Visible version: `1.0.0 (29) (silora:11082026)`;
+version codes: phone `853886578`, TV `853886579`.
+Device verification remains pending, including Time remaining → At end,
+next-item artwork, spoiler settings, focus and the 10-second end countdown.
+
+## Validation before the November 8 simplification
 
 On November 7, 2026, phone and TV release compilation passed with the new label
 and artwork panes. All 33 focused tests passed: seven trigger-policy tests,

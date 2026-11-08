@@ -401,8 +401,6 @@ class AndroidPlayerSettingsStoreTest {
         assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())
         store.setNextUpPromptMode(NextUpPromptMode.TimeRemaining)
         assertEquals(NextUpPromptMode.TimeRemaining, newStore().nextUpPromptModeFlow.first())
-        store.setNextUpPromptMode(NextUpPromptMode.AfterPlaybackEnds)
-        assertEquals(NextUpPromptMode.AfterPlaybackEnds, newStore().nextUpPromptModeFlow.first())
         profile = "profile-b"
         assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())
         profile = "profile-a"
@@ -412,7 +410,7 @@ class AndroidPlayerSettingsStoreTest {
         device = "device-b"
         assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())
         device = "device-a"
-        assertEquals(NextUpPromptMode.AfterPlaybackEnds, store.nextUpPromptModeFlow.first())
+        assertEquals(NextUpPromptMode.TimeRemaining, store.nextUpPromptModeFlow.first())
         assertTrue(fakeFlusher.calls.isEmpty(), "Silora's mode must not be sent to the server")
         store.resetAllDeviceSettings()
         assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())

@@ -141,8 +141,11 @@ verified upstream fix when it makes the local workaround unnecessary.
 Follow `NextUpPromptMode.kt`, `MarkerTimeline.kt`, `NextUpDismissal.kt`, both
 player ViewModels, phone `PlayerNextUpScreen.kt`, TV `TvPlayerScreen.kt`, settings
 stores, and phone/TV playback settings. `docs/playback/up-next.md` records the
-three trigger modes, eligible-credit filtering, fallback timing, saved wire
-values, and dismissal/end-countdown behavior.
+two trigger modes, eligible-credit filtering, fallback timing, saved wire
+values, and dismissal/end-countdown behavior. Preserve Time remaining → At end
+for end-only prompts; do not restore the removed After playback ends choice.
+Its unreleased `off` value uses Credits markers without migration, per Matt’s
+November 8 clarification. Keep the next-item artwork after playback ends.
 
 Retain profile/server/device trigger scope, existing timing overrides, startup
 settings readiness, skip controls, manual TV action, and Watch Party transition
