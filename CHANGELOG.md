@@ -42,11 +42,16 @@ phone code `853895198`, TV code `853895199`. All tracked source files matched
 the recorded source commit during this final build. Its dirty flag reflects
 the preserved unrelated untracked `.codex-attachments/` and
 `run-manual-release-workflow.sh`. This follow-up changes only the validation
-record. No push, release, PR, device installation or production-admin action
-occurred.
-The dedicated test account’s login and identity were verified, but its
-non-administrator role prevents live admin API validation. Device validation
-remains pending.
+record. No push, release, PR, agent-performed device installation or
+production-admin action occurred.
+
+**TV device test passed:** Matt installed the signed TV APK from
+`dist/local-2026-11-08.212639/` and reported on November 8, 2026 that testing
+passed and the feature is good to go. This is Matt’s device-test result;
+individual admin operations and phone-device testing are not separately
+claimed. The dedicated agent test account’s login and identity were verified,
+but its non-administrator role prevents agent-performed live admin API
+validation.
 
 ## 2026-11-08 13:08 PST — upstream 93de7e0c4
 
