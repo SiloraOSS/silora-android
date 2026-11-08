@@ -136,6 +136,35 @@ verified upstream fix when it makes the local workaround unnecessary.
   such as `eng`/`en` and avoids unnecessary same-language translation.
   Unknown language codes must not silently count as English.
 
+## Live AI subtitles on TV (`tv-live-ai-subtitles`)
+
+Matt adopted edrock200’s `20e85217c927e76fe34edd820608403f4847452b` as local
+`b812d6274` and requested recording it on November 8, 2026. This feature is
+separate from the four `ai-subtitles` workarounds above. Retire it when a
+verified upstream equivalent supplies the same live-subtitle behavior.
+
+- `shared/.../playback/PlaybackLiveSubtitles.kt` decodes
+  `subtitle_translation_started`, `subtitle_translation_cues`,
+  `subtitle_translation_completed` and `subtitle_translation_failed` events.
+  `LiveSubtitleTrack` sorts/deduplicates batches and looks up cues in source-file
+  seconds. `PlaybackLiveSubtitlesTest` covers the decoder and cue-track logic.
+- `TvPlaybackRealtimeController` routes the decoded events to
+  `TvPlayerViewModel.applyLiveSubtitleEvent`. Keep its session/file/active-job
+  checks, `liveSubtitle` state and source-time mapping. The first nonempty cue
+  batch closes the AI dialog.
+- `TvLiveSubtitleOverlay.kt` draws current cues, displays “Translating subtitles…”
+  before any arrive, keeps lines clear of transport controls and hides under the HUD.
+  `TvPlayerScreen.kt` hides Media3’s subtitle view while the live track is active
+  and draws the overlay outside picture-in-picture.
+- The AI job poll’s existing finished-track refresh/selection path takes over
+  on completion; completion, failure and cancellation clear the live overlay
+  through `clearLiveSubtitle`. A completed realtime event also schedules a
+  15-second fallback clear. Preserve these handoff/cleanup hooks during merges.
+
+The decoder is shared, but live display is TV-only; the phone has no live
+subtitle overlay. It requires server realtime events. Decoder tests do not
+establish on-device cue timing or finished-track handoff.
+
 ## Up Next (`up-next-setting`, `up-next-fixes`)
 
 Follow `NextUpPromptMode.kt`, `MarkerTimeline.kt`, `NextUpDismissal.kt`, both

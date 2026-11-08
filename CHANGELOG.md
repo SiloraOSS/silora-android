@@ -4,6 +4,35 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-08 — show live AI subtitles on TV
+
+**TV shows AI subtitles while they are being made.** The TV player now draws
+translation or transcription lines as the server streams them for the playing
+session, instead of waiting for the finished subtitle file. It shows
+“Translating subtitles…” before the first cues arrive and closes the AI dialog
+when the first nonempty cue batch arrives. Media3’s subtitle view is hidden
+while the live overlay is active so the two renderers do not draw together.
+The phone app does not have this live-subtitle UI.
+
+Matt cherry-picked [edrock200’s
+`20e85217c927e76fe34edd820608403f4847452b`](https://github.com/edrock200/silo-android/commit/20e85217c927e76fe34edd820608403f4847452b)
+as local commit `b812d6274`. The shared decoder handles
+`subtitle_translation_started`, `subtitle_translation_cues`,
+`subtitle_translation_completed` and `subtitle_translation_failed` events.
+TV routes them to a growing cue track and draws the lines at the current
+source-file position. The existing AI job poll refreshes/selects the finished
+track and clears the live overlay on completion; failure and cancellation
+also clear it. A completed realtime event schedules a 15-second fallback
+clear if the overlay has not already been cleared.
+
+Recorded the feature as `tv-live-ai-subtitles` in the fork inventory and
+maintenance checklist, separate from the four existing AI-subtitle fixes.
+The cherry-pick includes three `PlaybackLiveSubtitlesTest` cases covering
+event decoding, malformed cues, batch ordering/deduplication and cue lookup.
+This documentation update reviewed the local implementation and source commit;
+no tests, builds or device playback were run for it. Earlier Up Next validation
+predates this cherry-pick and does not validate the live-subtitle feature.
+
 ## 2026-11-08 — remove the duplicate end-only Up Next trigger
 
 At Matt’s request, removed **After playback ends** from the phone and TV
