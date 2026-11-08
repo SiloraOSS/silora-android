@@ -4,6 +4,21 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-08 — import Edrock’s admin console
+
+Cherry-picked edrock200’s ten commits from `3cb8886ed` through `3792ac473`,
+as requested by Matt. Phone and TV gain **Admin** in the profile menu for
+administrator accounts, a bundled OpenAPI catalog, generic operation forms,
+and dashboard, request moderation, tasks/scans and logs screens. Admin changes
+require the account’s primary profile. The ordinary user Requests screens
+retain their existing scope.
+
+Resolved documentation conflicts by keeping Silora’s identity, release tooling
+and existing changelog. Ported the admin maintenance instructions into
+`docs/admin-console.md` instead of restoring Edrock’s deleted release skill.
+Validation and integration fixes will be recorded after the complete range
+has been checked.
+
 ## 2026-11-08 13:08 PST — upstream 93de7e0c4
 
 **Merge inputs:** Local `main` at `42607c165b909e18eb23d8a7397fd5361c277db1` merged

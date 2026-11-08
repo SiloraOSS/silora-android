@@ -1,5 +1,7 @@
 > **Using Silora?** See [README-SILORA.md](README-SILORA.md) for Silora features,
-> downloads, and installation instructions. The upstream Silo README follows below.
+> downloads, and installation instructions. Silora also adds an administrator-only
+> **Admin** console on phone and TV; see [admin console](docs/admin-console.md).
+> The upstream Silo README follows below; its admin exposure notes describe upstream.
 
 # Silo Android
 
