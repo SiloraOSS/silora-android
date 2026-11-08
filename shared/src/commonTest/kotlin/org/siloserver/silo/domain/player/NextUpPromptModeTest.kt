@@ -12,7 +12,7 @@ class NextUpPromptModeTest {
     }
 
     @Test fun savedChoicesKeepTheirWireValues() {
-        assertEquals(NextUpPromptMode.Disabled, NextUpPromptMode.fromWire("off"))
+        assertEquals(NextUpPromptMode.AfterPlaybackEnds, NextUpPromptMode.fromWire("off"))
         assertEquals(NextUpPromptMode.TimeRemaining, NextUpPromptMode.fromWire("time_remaining"))
     }
 
@@ -33,9 +33,9 @@ class NextUpPromptModeTest {
         assertEquals(1790.0, NextUpPromptMode.TimeRemaining.promptStartPosition(null, 1800.0, 10))
     }
 
-    @Test fun disabledSuppressesBothKindsOfPreEndTrigger() {
-        assertNull(NextUpPromptMode.Disabled.promptStartPosition(88.0, 1800.0, 10))
-        assertNull(NextUpPromptMode.Disabled.promptStartPosition(null, 1800.0, 10))
+    @Test fun afterPlaybackEndsSuppressesBothKindsOfPreEndTrigger() {
+        assertNull(NextUpPromptMode.AfterPlaybackEnds.promptStartPosition(88.0, 1800.0, 10))
+        assertNull(NextUpPromptMode.AfterPlaybackEnds.promptStartPosition(null, 1800.0, 10))
     }
 
     @Test fun timersWaitForSavedTimingAndAKnownDurationAndRespectAtEnd() {

@@ -56,8 +56,9 @@ import org.siloserver.silo.common.player.videoViewportBounds
 import org.siloserver.silo.common.ui.components.DeferImagePresentationWhileScrolling
 import org.siloserver.silo.common.cards.LocalEpisodeSpoilerPrefs
 import org.siloserver.silo.common.ui.components.SpoilerImage
+import org.siloserver.silo.common.ui.components.NextUpArtwork
 
-/** Episode details and controls beside the mounted player's preview pane. */
+/** Episode details and controls beside live video, or next-item artwork after playback ends. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PlayerNextUpScreen(
@@ -239,7 +240,10 @@ fun PlayerNextUpScreen(
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    NextUpVideoPane(onVideoBoundsChanged, spinnerVisible, Modifier.weight(0.45f))
+                    NextUpVideoPane(
+                        onVideoBoundsChanged, spinnerVisible, Modifier.weight(0.45f),
+                        videoEnded = videoEnded, nextEpisode = nextEpisode,
+                    )
                     panel(Modifier.weight(0.55f).verticalScroll(scrollState))
                 }
             } else {
@@ -254,6 +258,8 @@ fun PlayerNextUpScreen(
                             onVideoBoundsChanged,
                             spinnerVisible,
                             Modifier.widthIn(max = 620.dp).fillMaxWidth(),
+                            videoEnded = videoEnded,
+                            nextEpisode = nextEpisode,
                         )
                     }
                     panel(Modifier)
@@ -264,13 +270,31 @@ fun PlayerNextUpScreen(
 }
 
 @Composable
-private fun NextUpVideoPane(onBoundsChanged: (Rect) -> Unit, spinnerVisible: Boolean, modifier: Modifier) {
+private fun NextUpVideoPane(
+    onBoundsChanged: (Rect) -> Unit,
+    spinnerVisible: Boolean,
+    modifier: Modifier,
+    videoEnded: Boolean,
+    nextEpisode: PlayerViewModel.NextEpisodeInfo?,
+) {
     Box(
         modifier = modifier.aspectRatio(16f / 9f)
             .onGloballyPositioned { onBoundsChanged(it.videoViewportBounds()) }
+            .clip(RoundedCornerShape(8.dp))
             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center,
     ) {
+        if (videoEnded) {
+            NextUpArtwork(
+                stillUrl = nextEpisode?.stillUrl,
+                stillThumbhash = nextEpisode?.stillThumbhash,
+                stillIsEpisodeStill = nextEpisode?.stillIsEpisodeStill,
+                fallbackArtwork = nextEpisode?.fallbackArtwork,
+                isEpisode = nextEpisode?.isEpisode == true,
+                isUnwatched = nextEpisode?.isUnwatched != false,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         if (spinnerVisible) PlayerLoadingSpinner()
     }
 }

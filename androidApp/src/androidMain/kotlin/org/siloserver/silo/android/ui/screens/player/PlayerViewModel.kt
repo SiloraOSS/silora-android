@@ -87,6 +87,9 @@ import org.siloserver.silo.domain.player.IntroSkipMode
 import org.siloserver.silo.domain.player.NextUpDismissal
 import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.domain.player.settlingFalseEdges
+import org.siloserver.silo.model.catalog.ArtworkRef
+import org.siloserver.silo.model.catalog.parentPoster
+import org.siloserver.silo.model.catalog.seriesHeroBackdrop
 import org.siloserver.silo.model.catalog.AudioTrack
 import org.siloserver.silo.model.catalog.FileVersion
 import org.siloserver.silo.model.catalog.VersionChapter
@@ -454,6 +457,9 @@ class PlayerViewModel(
         val isUnwatched: Boolean = true,
         /** False for a shuffled movie, which has no season or episode line. */
         val isEpisode: Boolean = true,
+        val stillIsEpisodeStill: Boolean? = null,
+        /** Series/season artwork that is safe when the episode still is hidden or unavailable. */
+        val fallbackArtwork: ArtworkRef? = null,
     ) {
         val label: String
             get() = if (!isEpisode) {
@@ -6056,6 +6062,7 @@ class PlayerViewModel(
                 title = next.title,
                 stillUrl = next.stillUrl,
                 stillThumbhash = next.stillThumbhash,
+                stillIsEpisodeStill = next.stillIsEpisodeStill,
                 runtimeMinutes = next.runtime,
                 seriesTitle = state.seriesTitle,
                 overview = next.overview,
@@ -6073,6 +6080,27 @@ class PlayerViewModel(
             if (!autoAdvanceHandled) {
                 pendingApproachingEndVideoEnded?.let { videoEnded ->
                     commitApproachingEnd(info, videoEnded)
+                }
+            }
+            // Optional artwork must not delay the next-item controls or countdown.
+            val series = try {
+                catalogRepository.getCachedItemDetail(seriesId, libraryId = browseLibraryId)
+                    ?: (catalogRepository.getItemDetail(seriesId, libraryId = browseLibraryId) as? ApiResult.Success)?.data
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Missing optional art must not interrupt playback or its end screen.
+                null
+            } ?: return@launch
+            val fallbackArtwork = series.backdropUrl?.takeIf { it.isNotBlank() }
+                ?.let { ArtworkRef(it, series.backdropThumbhash) }
+                ?: series.posterUrl?.takeIf { it.isNotBlank() }?.let { ArtworkRef(it, series.posterThumbhash) }
+                ?: return@launch
+            _uiState.update { current ->
+                if (current.contentId == forContentId && current.nextEpisode?.contentId == next.contentId) {
+                    current.copy(nextEpisode = current.nextEpisode?.copy(fallbackArtwork = fallbackArtwork))
+                } else {
+                    current
                 }
             }
         }
@@ -6348,6 +6376,11 @@ class PlayerViewModel(
                 overview = pick.overview,
                 isUnwatched = pick.isUnwatched,
                 isEpisode = pick.isEpisode,
+                stillIsEpisodeStill = shuffle.latest?.next?.let { item ->
+                    if (pick.isEpisode && item.posterUrl != null) item.posterIsEpisodeStill
+                    else item.backdropIsEpisodeStill
+                },
+                fallbackArtwork = shuffle.latest?.next?.let { it.seriesHeroBackdrop() ?: it.parentPoster() },
             )
         }
         val previous = _uiState.value.nextEpisode

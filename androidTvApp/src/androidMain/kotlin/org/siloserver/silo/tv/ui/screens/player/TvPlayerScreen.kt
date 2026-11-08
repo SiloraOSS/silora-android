@@ -3,6 +3,7 @@
 package org.siloserver.silo.tv.ui.screens.player
 
 import org.siloserver.silo.playback.SubtitleSyncNotice
+import org.siloserver.silo.common.ui.components.NextUpArtwork
 import android.app.Activity
 import android.content.ComponentName
 import android.graphics.Rect
@@ -3607,7 +3608,7 @@ private fun TvRoomIndicator(
 
 /**
  * End-of-playback Up-Next overlay (mirrors tvOS `PlayerNextUpScreen`). A 16:9
- * mini-player pane on the left containing the mounted player, beside a
+ * pane on the left containing live video until it ends, then next-item artwork, beside a
  * next-episode panel on the right: an "Up Next" / "Playing Next" eyebrow,
  * series and episode metadata, a Play Now
  * primary button, a Keep Watching dismiss button, a Back button, an auto-play
@@ -3677,7 +3678,8 @@ private fun TvPlayerNextUpOverlay(
         val spoilers = org.siloserver.silo.common.cards.LocalEpisodeSpoilerPrefs.current
         val backdrop = nextEpisode
             ?.takeUnless { it.isEpisode && spoilers.hidesImage(it.isUnwatched, it.stillIsEpisodeStill) }
-            ?.stillUrl?.takeIf { it.isNotBlank() }?.let { it to null }
+            ?.stillUrl?.takeIf { it.isNotBlank() }?.let { it to nextEpisode.stillThumbhash }
+            ?: nextEpisode?.fallbackArtwork?.let { it.url to it.thumbhash }
             ?: onDeckItems.firstNotNullOfOrNull { item ->
                 when {
                     item.seriesBackdropUrl != null -> item.seriesBackdropUrl to item.seriesBackdropThumbhash
@@ -3692,7 +3694,7 @@ private fun TvPlayerNextUpOverlay(
                 paneBoundsInRoot
                 val overlay = overlayCoordinates
                 val pane = paneCoordinates
-                if (overlay != null && pane != null && overlay.isAttached && pane.isAttached) {
+                if (!videoEnded && overlay != null && pane != null && overlay.isAttached && pane.isAttached) {
                     overlay.localBoundingBoxOf(pane)
                 } else {
                     null
@@ -3719,7 +3721,8 @@ private fun TvPlayerNextUpOverlay(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // The existing PlayerView is measured and placed into this pane.
-                    // It stays mounted while the successor prepares.
+                    // It stays mounted while the successor prepares; after the
+                    // outgoing video ends, artwork covers its empty surface.
                     Box(
                         modifier = Modifier
                             .width(onDeckCardWidth * 2 + cardSpacing)
@@ -3737,6 +3740,17 @@ private fun TvPlayerNextUpOverlay(
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
+                        if (videoEnded) {
+                            NextUpArtwork(
+                                stillUrl = nextEpisode?.stillUrl,
+                                stillThumbhash = nextEpisode?.stillThumbhash,
+                                stillIsEpisodeStill = nextEpisode?.stillIsEpisodeStill,
+                                fallbackArtwork = nextEpisode?.fallbackArtwork,
+                                isEpisode = nextEpisode?.isEpisode == true,
+                                isUnwatched = nextEpisode?.isUnwatched != false,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         if (spinnerVisible) TvPlayerLoadingSpinner()
                     }
 

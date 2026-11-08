@@ -359,7 +359,7 @@ fun PlaybackEpisodesSection(
             },
             description = NextUpPromptMode.settingsDescription,
         )
-        if (nextUpPromptMode != NextUpPromptMode.Disabled) {
+        if (nextUpPromptMode != NextUpPromptMode.AfterPlaybackEnds) {
             ProfileLayeredDropdownRow(
                 label = "Time remaining",
                 value = nextUpPromptLabel(nextUpPromptSeconds),

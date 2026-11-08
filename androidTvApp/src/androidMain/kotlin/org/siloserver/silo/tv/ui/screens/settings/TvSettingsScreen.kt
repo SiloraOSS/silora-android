@@ -1456,7 +1456,7 @@ private fun TvPlaybackSettingsPane(
                     onClick = { activePicker = PlaybackPicker.NextUpMode },
                 )
                 SettingsFooterText(text = NextUpPromptMode.settingsDescription)
-                if (state.nextUpPromptMode != NextUpPromptMode.Disabled) {
+                if (state.nextUpPromptMode != NextUpPromptMode.AfterPlaybackEnds) {
                     SettingsValueRow(
                         label = "Time remaining",
                         value = nextUpPromptLabel(state.nextUpPromptSeconds),
