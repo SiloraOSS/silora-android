@@ -17,7 +17,7 @@ Legend:
 
 File pointers are repository-relative.
 
-> **Important exposure note:** Requests is live on both Android surfaces, gated by the server's `requests_enabled` flag (`/api/v2/requests/status`), and reached from the profile menu and search on phone and from a top-bar tab and search on TV — matching the Apple clients. Request administration (approve, decline, retry, limits, auto-approve) stays in web admin. The admin screens (users/sessions/logs/scans) remain inaccessible. Watch Party is experimental, behind Settings → Experimental → Watch Party.
+> **Important exposure note:** Requests is live on both Android surfaces, gated by the server's `requests_enabled` flag (`/api/v2/requests/status`), and reached from the profile menu and search on both phone and TV. Silora adds a separate administrator-only Admin console on phone and TV for dashboard/now playing, request moderation, tasks/scans, logs and generic JSON admin forms; file uploads require web admin. See [admin console](docs/admin-console.md). Watch Party is experimental, behind Settings → Experimental → Watch Party.
 
 ---
 
@@ -99,7 +99,7 @@ Shown only while Settings → Experimental → Watch Party is on (default on in 
 | Release calendar | ✅ | ✅ | Top-level mobile tab and TV top-menu tab |
 | Live home refresh (events websocket) | ✅ | ✅ | `HomeRealtimeCoordinator`: user_state/catalog channels, 2s debounce; TV also refreshes on resume |
 | System "Watch Next" row integration | ➖ | ✅ | `WatchNextRepository` (tvprovider) |
-| Requests | ✅ | ✅ | Server-gated by `requests_enabled`; phone: profile menu + search; TV: top-bar tab + search; "Notify me when available" on titles someone else requested (when the server reports `follow_supported`); request administration stays in web admin |
+| Requests | ✅ | ✅ | Server-gated by `requests_enabled`; phone and TV: profile menu + search; "Notify me when available" on titles someone else requested (when the server reports `follow_supported`); moderation is in the separate administrator-only Admin console |
 
 ## Reading (ebooks)
 
@@ -160,8 +160,8 @@ Shown only while Settings → Experimental → Watch Party is on (default on in 
 | QR / device pairing sign-in | 🟡 | ✅ | TV displays code; phone approves device logins |
 | Single-flight token refresh (REST + media streams) | ✅ | ✅ | Auth plugin + `MediaAuthInterceptor` |
 | Settings (account, appearance, playback, subtitles, notifications) | ✅ | ✅ | Effective-settings cascade synced to server |
-| Admin screens | 🚧 | 🚧 | Not currently accessible in either Android app |
-| Admin gate (account admin **and** primary profile) | 🚧 | 🚧 | Gate logic exists, but no exposed app entry point |
+| Admin console | ✅ | ✅ | Profile menu → Admin; dashboard/now playing, requests, tasks/scans, logs and generic JSON forms. File uploads require web admin |
+| Admin gate (account admin **and** primary profile) | ✅ | ✅ | Administrator-only menu entry; non-primary profiles are prompted to switch; server enforces permissions |
 
 ---
 
@@ -171,6 +171,6 @@ Shown only while Settings → Experimental → Watch Party is on (default on in 
 
 **TV** is a 10-foot, D-pad client focused on browsing and playback, including audiobooks, calendar, the subtitle suite, person detail, and system Watch Next integration. It intentionally omits ebooks/reading and downloads management.
 
-**Not currently exposed on either Android surface:** the admin stats dashboard, full admin management (users/sessions/logs/scans), and request moderation (approve, decline, retry), which stays in web admin. **Experimental:** Watch Party, behind Settings → Experimental.
+**Admin:** Silora exposes the separate administrator console on both surfaces. The normal user Requests screens keep their request, cancellation and status controls. **Experimental:** Watch Party, behind Settings → Experimental.
 
 Both apps share the same networking, auth, repositories, most ViewModels, and the entire Media3 playback/capability stack.

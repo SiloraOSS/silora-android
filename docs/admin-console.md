@@ -11,6 +11,11 @@ operations in the bundled admin API through generic forms. Edits load current
 values when a matching read exists. Destructive operations ask for confirmation.
 These controls depend on the connected server’s API and permissions.
 
+The asset lists 471 operations, including nine file-upload operations. The
+console has no file picker: multipart and binary uploads require web admin
+and are rejected locally with that explanation. JSON operations remain
+subject to the connected server’s version and schema requirements.
+
 Matt requested the ten-commit range from edrock200/silo-android
 [`3cb8886ed`](https://github.com/edrock200/silo-android/commit/3cb8886ed5b5cb96f3140b8d7786d323143f2814)
 through

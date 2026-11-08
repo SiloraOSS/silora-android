@@ -16,8 +16,20 @@ retain their existing scope.
 Resolved documentation conflicts by keeping Silora’s identity, release tooling
 and existing changelog. Ported the admin maintenance instructions into
 `docs/admin-console.md` instead of restoring Edrock’s deleted release skill.
-Validation and integration fixes will be recorded after the complete range
-has been checked.
+Integration fixes keep the console blocked while administrator access is
+unknown, require a selected primary profile, cancel stale request/log pages
+when their filter changes, and preserve failed-page cursors for retries. The
+nine multipart/binary upload operations report that they require web admin;
+the imported engine has no file picker. Updated Silora’s feature documentation.
+
+Focused validation: all 17 admin engine, bundled-spec, contract and pagination
+tests passed. All three new pagination regressions fail against the imported
+implementation and pass with the fixes. The imported baseline passed 12,548
+host test executions, full phone/TV release lint and signed release assembly.
+Final full validation of the integration fixes is recorded below when complete.
+The dedicated test account’s login and identity were verified, but its
+non-administrator role prevents live admin API validation. Device validation
+remains pending.
 
 ## 2026-11-08 13:08 PST — upstream 93de7e0c4
 

@@ -106,6 +106,9 @@ class AdminForm(
 
     /** Validates [values]; returns the request, or a message naming the first problem. */
     fun build(values: Map<String, String>): Result<AdminRequestValues> {
+        if (operation.requestBody?.isJson == false) {
+            return Result.failure(IllegalArgumentException("This operation requires a file upload. Use the web admin."))
+        }
         val pathValues = LinkedHashMap(fixedPathValues)
         val query = LinkedHashMap<String, String>()
         for (field in fields.filter { it.isParam }) {

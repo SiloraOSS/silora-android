@@ -25,6 +25,7 @@ playback, browsing, profiles, and other client features; you need a running
 | --- | --- |
 | OLED-focused branding | A purple split-prism icon on charcoal, with matching phone and TV launcher artwork, in-app wordmarks, a short Silora startup animation, and a TV banner. |
 | Shield HEVC compatibility | **Ignore HEVC Level Limits**, a simple On/Off setting enabled by default on phone and TV. It lets playback be attempted when a file exceeds the decoder's advertised HEVC level. |
+| Admin console | **Profile menu → Admin** on phone and TV for administrator accounts, with dashboard/now playing, request moderation, tasks/scans, logs and generic admin API forms. See [admin console](docs/admin-console.md) for access and API coverage. |
 | In-app trailers | Play YouTube trailers inside Silora on phone and TV, with a Trailer action on movie and series details and remote controls on TV. |
 
 The HEVC patch changes the level information reported to the server. Other
@@ -142,10 +143,10 @@ WorkManager-backed downloads of video, audiobooks, and books to public device st
 - **Phone navigation** — Home, Libraries, For You, Calendar, and Downloads when the active profile has downloads. Video / Audio / Reading are library modes, not bottom-nav tabs.
 - **TV navigation** — Home, visible media-type tabs derived from server libraries (Movies/TV/Music/Audiobooks), For You, and Calendar. Reading/ebooks are intentionally excluded from TV.
 - **Home** with Continue Watching, Recently Added/Released, and server-curated recommendation rows.
-- **Browse** with genre/rating filters, sorting, and infinite-scroll grids; **collections** are browse-only in the Android clients, while collection authoring/management remains web-only.
+- **Browse** with genre/rating filters, sorting, and infinite-scroll grids; **collections** support browsing in library navigation and administrator management through the separate Admin console.
 - **Item detail** for movies and series includes seasons → episodes, multi-version files, cast/crew, local download controls, and phone-to-TV playback handoff.
 - **Search** scoped by media type, debounced and paginated.
-- **Requests** — live on phone and TV behind the server's `requests_enabled` flag (phone: profile menu + search; TV: top-bar tab + search); request administration stays in web admin. **Experimental** — Watch Party, behind Settings → Experimental. **Not exposed** — other admin surfaces and session management are not reachable app surfaces today.
+- **Requests** — live on phone and TV behind the server's `requests_enabled` flag (phone and TV: profile menu + search). Administrators moderate requests in the separate **Admin** console. **Experimental** — Watch Party, behind Settings → Experimental.
 
 ### 📖 Reading & 🎧 Audio
 - **Ebook reader (phone only)** — EPUB, PDF, CBZ (comics), TXT/Markdown, FB2/FBZ, plus MOBI/AZW/AZW3 when the server can convert to EPUB; CBR and unsupported originals can be downloaded/opened externally. Themes, text size, margins, table of contents, bookmarks, and progress are supported.
@@ -158,7 +159,7 @@ Android phone can discover SiloCast receivers on the local network, launch movie
 Multiple **household profiles** per account (PINs, child profiles, content-rating limits, per-profile language/subtitle prefs), favorites & watchlist, ratings, a release **calendar**, and an in-app **notifications inbox** with realtime updates. Android push uses Silo's content-free push relay when the server and app are configured for FCM. TV mirrors continue-watching into the system **Watch Next** row.
 
 ### 🌐 Multi-server & accounts (phone + TV)
-Add and switch between multiple Silo servers (encrypted per-server token slots), use username/password or device/QR sign-in, and manage household profiles. Admin screens are not currently exposed in the Android apps.
+Add and switch between multiple Silo servers (encrypted per-server token slots), use username/password or device/QR sign-in, and manage household profiles. Administrator accounts can open the separate Admin console from the profile menu.
 
 ### Client diagnostics (phone + TV)
 Android-native diagnostics can retain a bounded, redacted local report for crashes, ANRs, playback, networking, focus, cast, downloads, and lifecycle events. A two-segment journal keeps only curated, already-redacted lifecycle breadcrumbs so next-launch ANR/native-crash reports retain pre-exit context; identity transitions rotate it, and Never/sign-out purges it. Adult profiles can review and delete account-scoped reports on-device, choose consent, or run a timed diagnostic capture. Child profiles cannot capture, review, or upload reports.
@@ -303,9 +304,9 @@ Active design work lives in `docs/superpowers/specs/` with phased plans in `docs
 
 - **Audiobook polish** — the phone and TV players have chapter-aware UI, speed, bookmarks, and sleep timers. Remaining work includes skip-silence, volume normalization, rich notification polish, Android Auto, and a phone widget.
 - **Ebook reader enhancements** — in-text search, highlights, and notes, with coordinated server work where the shared contract changes.
-- **Admin management (users/sessions/logs/scans)** — code/design work exists, but these are not currently exposed to users in the Android apps and need product/navigation decisions before being treated as live features.
+- **Admin file uploads** — branding, artwork, plugin and backup uploads still require web admin. The generic console supports JSON forms; it has no file picker.
 
-Known gaps the docs track: TV has no reader/ebooks and no downloads management by design; admin surfaces, including request moderation, and session management are not accessible on either Android surface today, and Watch Party is experimental.
+Known gaps the docs track: TV has no reader/ebooks and no downloads management by design; personal session management remains unexposed, and Watch Party is experimental. Administrator session controls are available in the Admin console.
 
 ---
 

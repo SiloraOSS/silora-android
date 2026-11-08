@@ -110,4 +110,13 @@ class AdminEngineTest {
         assertTrue(op("PATCH", "users/{id}").needsIfMatch)
         assertEquals("Update user", op("PATCH", "users/{id}").title)
     }
+
+    @Test
+    fun fileUploadsRequireWebAdminInsteadOfSendingEmptyBodies() {
+        for (mediaType in listOf("multipart/form-data", "application/octet-stream")) {
+            val upload = AdminSpec.parse("""{"paths":{"/api/v2/admin/uploads":{"post":{"operationId":"upload","requestBody":{"required":true,"mediaType":"$mediaType","schema":{"type":"object"}}}}}}""").operations.single()
+            val error = AdminForm(upload).build(emptyMap()).exceptionOrNull()
+            assertEquals("This operation requires a file upload. Use the web admin.", error?.message)
+        }
+    }
 }

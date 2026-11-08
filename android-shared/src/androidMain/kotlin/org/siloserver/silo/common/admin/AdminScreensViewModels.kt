@@ -291,7 +291,7 @@ class AdminRequestsViewModel(private val service: AdminService) : ViewModel() {
 
     fun load() {
         loadJob?.cancel()
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update { it.copy(loading = true, loadingMore = false, error = null) }
         loadJob = viewModelScope.launch {
             val view = _state.value.view
             val counts = service.get(AdminOps.REQUEST_COUNTS, AdminRequestCounts.serializer()).orNull()
@@ -315,9 +315,9 @@ class AdminRequestsViewModel(private val service: AdminService) : ViewModel() {
     fun loadMore() {
         val current = _state.value
         val cursor = current.nextCursor ?: return
-        if (current.loadingMore) return
+        if (current.loadingMore || current.loading) return
         _state.update { it.copy(loadingMore = true) }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             val page = service.get(
                 AdminOps.REQUESTS,
                 AdminCollection.serializer(MediaRequest.serializer()),
@@ -328,7 +328,7 @@ class AdminRequestsViewModel(private val service: AdminService) : ViewModel() {
                 it.copy(
                     loadingMore = false,
                     items = it.items + page.orNull()?.items.orEmpty(),
-                    nextCursor = page.orNull()?.page?.cursor,
+                    nextCursor = if (page is ApiResult.Success) page.data.page?.cursor else it.nextCursor,
                     notice = page.message()?.let { m -> AdminNotice(m, true) } ?: it.notice,
                 )
             }
@@ -497,7 +497,7 @@ class AdminLogsViewModel(private val service: AdminService) : ViewModel() {
 
     fun load() {
         job?.cancel()
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update { it.copy(loading = true, loadingMore = false, error = null) }
         job = viewModelScope.launch {
             val state = _state.value
             when (state.stream) {
@@ -518,15 +518,15 @@ class AdminLogsViewModel(private val service: AdminService) : ViewModel() {
         val cursor = state.nextCursor ?: return
         if (state.loadingMore || state.loading) return
         _state.update { it.copy(loadingMore = true) }
-        viewModelScope.launch {
+        job = viewModelScope.launch {
             when (state.stream) {
                 AdminLogStream.App -> {
                     val page = service.get(AdminOps.LOGS_APP, AdminCollection.serializer(AdminOperationalLog.serializer()), query = query(state), cursor = cursor)
-                    _state.update { it.copy(loadingMore = false, app = it.app + page.orNull()?.items.orEmpty(), nextCursor = page.orNull()?.page?.cursor) }
+                    _state.update { it.copy(loadingMore = false, app = it.app + page.orNull()?.items.orEmpty(), nextCursor = if (page is ApiResult.Success) page.data.page?.cursor else it.nextCursor, error = page.message()) }
                 }
                 AdminLogStream.Audit -> {
                     val page = service.get(AdminOps.LOGS_AUDIT, AdminCollection.serializer(AdminAuditLog.serializer()), query = query(state), cursor = cursor)
-                    _state.update { it.copy(loadingMore = false, audit = it.audit + page.orNull()?.items.orEmpty(), nextCursor = page.orNull()?.page?.cursor) }
+                    _state.update { it.copy(loadingMore = false, audit = it.audit + page.orNull()?.items.orEmpty(), nextCursor = if (page is ApiResult.Success) page.data.page?.cursor else it.nextCursor, error = page.message()) }
                 }
             }
         }

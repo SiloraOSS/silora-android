@@ -133,6 +133,7 @@ fun AdminConsoleScreen(
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
+                state.availability == AdminAvailability.Unknown -> Notice(state.loadError ?: "Checking administrator access…", action = "Try again" to viewModel::reload)
                 state.availability == AdminAvailability.NotAdmin -> Notice("This account isn't an administrator.")
                 state.availability == AdminAvailability.NeedsPrimaryProfile -> Notice(
                     "The server takes admin changes only from the account's main profile.",

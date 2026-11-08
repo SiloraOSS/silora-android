@@ -63,7 +63,7 @@ class AdminAccess(
         val user = (auth.getCurrentUser() as? ApiResult.Success)?.data ?: return AdminAvailability.Unknown
         if (!user.role.equals("admin", ignoreCase = true)) return AdminAvailability.NotAdmin
         val profile = profiles.getActiveProfile()
-        return if (profile == null || profile.isPrimary) AdminAvailability.Available else AdminAvailability.NeedsPrimaryProfile
+        return if (profile?.isPrimary == true) AdminAvailability.Available else AdminAvailability.NeedsPrimaryProfile
     }
 }
 
