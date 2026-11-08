@@ -26,7 +26,24 @@ Focused validation: all 17 admin engine, bundled-spec, contract and pagination
 tests passed. All three new pagination regressions fail against the imported
 implementation and pass with the fixes. The imported baseline passed 12,548
 host test executions, full phone/TV release lint and signed release assembly.
-Final full validation of the integration fixes is recorded below when complete.
+Final validation at source `20c87d9e1`: all **12,556 host test executions**
+passed with zero failures, errors or skips (shared: 2,369 per variant; Android
+shared: 2,245 per variant; phone: 947 per variant; TV: 1,434 debug host tests,
+with release host tests disabled by existing configuration). The 39 release
+script tests passed. Full phone/TV release lint passed with no unsuppressed
+errors (phone: 93 warnings, 4 hints; TV: 98 warnings, 8 hints). Signed, minified
+phone and TV release assembly passed, as did certificate, application ID,
+non-debuggable flag, version and packaged checksum verification. The build
+used an invocation-only 12 GB heap; repository build settings are unchanged.
+
+Final APKs, matching R8 mappings, metadata and checksums are in
+`dist/local-2026-11-08.212639/`. Version: `1.0.0 (29) (silora:11082026)`;
+phone code `853895198`, TV code `853895199`. All tracked source files matched
+the recorded source commit during this final build. Its dirty flag reflects
+the preserved unrelated untracked `.codex-attachments/` and
+`run-manual-release-workflow.sh`. This follow-up changes only the validation
+record. No push, release, PR, device installation or production-admin action
+occurred.
 The dedicated test account’s login and identity were verified, but its
 non-administrator role prevents live admin API validation. Device validation
 remains pending.
