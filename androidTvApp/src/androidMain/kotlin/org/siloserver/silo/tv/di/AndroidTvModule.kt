@@ -651,6 +651,7 @@ val androidTvModule = module {
     }
     viewModel { TvSearchViewModel(get(), get(), get()) }
     viewModel { params ->
+        val playbackLifecycle = get<org.siloserver.silo.common.player.PlaybackSessionLifecycle>()
         TvItemDetailViewModel(
             libraryId = params.getOrNull<Int>(),
             catalogRepository = get(),
@@ -667,6 +668,7 @@ val androidTvModule = module {
             identityTransitions = get(),
             capabilityDetector = get(),
             seriesTrackChoiceWriter = get(),
+            awaitPlaybackSettled = playbackLifecycle::awaitPendingStop,
         )
     }
     // Watch Party: the shared hub, lobby (keyed per room; roomId is the

@@ -4,6 +4,73 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-08 13:08 PST — upstream 93de7e0c4
+
+**Merge inputs:** Local `main` at `42607c165b909e18eb23d8a7397fd5361c277db1` merged
+`upstream/main` at `93de7e0c4713c1d09551964bd4e5f8fbe14334b9`. Six upstream commits
+improve TV startup and marquee rendering, center the episode rail on the
+next-up episode, refresh watched/resume state after playback, and keep the
+English TV layout left to right while allowing metadata its own text direction.
+
+**Upstream commits added:**
+
+- 3112d0671 fix(tv): draw the top-bar Silo wordmark as a vector (#849)
+- d9dc3f3de fix(tv): open the series episode rail on the next-up episode (#851)
+- 1c572eb3a perf(tv): cut startup and marquee fade jank on Android TV (#853)
+- 906e1cfa8 test(tv): match the episode rail guard to its new centering effect (#852)
+- a6453471b fix(tv): show Play, not Resume, after a title is marked watched (#845)
+- 93de7e0c4 fix(tv): keep the TV layout left to right in right-to-left languages (#833)
+
+**Silora merge decisions:**
+
+- Retained `identity`: resolved the wordmark PNG deletion and two layout-comment
+  conflicts by converting the existing purple Silora mark and outlined lettering
+  to upstream's vector format. The drawable keeps the 1200:400 canvas and existing
+  layout sizes. Updated the branding generator to reproduce that TV vector;
+  phone artwork, launcher icons, banners, splash videos and application IDs stay
+  intact. This adapts the upstream rendering improvement without changing brands.
+- Retained upstream's bare-SurfaceView splash, draw-phase marquee animations,
+  baseline profile, episode-rail centering/reveal guards, watched/resume refresh,
+  fresh catalog reads, final-progress cleanup and text-direction fixes.
+- Reviewed automatically merged playback and DI code: retained `night-mode`,
+  `tv-display`, `ai-subtitles`, `tv-live-ai-subtitles`, `up-next-setting`,
+  `up-next-fixes` and `credits-auto-skip` alongside upstream's session-exit changes.
+  Account-scoped input bindings (`input-scope`, `tv-keyboard`, `tv-remote`),
+  in-app voice permission/service declarations (`tv-voice`) and embedded trailer
+  activity (`trailers`) remain present. Settings keys, defaults, persistence,
+  profile scope and startup bindings are unchanged by this merge.
+- Other active differences, including `hevc-levels`, `tv-subtitle-size`,
+  `release-tooling` and `fork-maintenance`, are unchanged. No active fork feature
+  was superseded and no unexplained product difference required a decision.
+  Existing live-AI-subtitle documentation was committed separately as
+  `42607c165` before pinning the merge inputs, as requested.
+
+**Validation:** Passed all 6,978 host tests with zero failures, errors or skips:
+
+- `:shared:testReleaseUnitTest`: 2,362 tests.
+- `:android-shared:testReleaseUnitTest`: 2,235 tests.
+- `:androidApp:testReleaseUnitTest`: 947 tests.
+- `:androidTvApp:testDebugUnitTest`: 1,434 tests. TV release host tests are
+  disabled by the existing Gradle configuration; this ran no debug APK build.
+- `:androidApp:lintRelease` and `:androidTvApp:lintRelease`: passed, including
+  release Kotlin compilation and resource processing. Lint reports contain
+  warnings/hints but no errors or fatal issues (phone: 93 warnings, 6 hints;
+  TV: 98 warnings, 10 hints). Dependency verification remained enabled.
+- Reviewed the full incoming/staged diff and remaining fork overlaps; no
+  unmerged entries or unstaged tracked changes. `git diff --cached --check`
+  passed. The tested staged patch is retained locally under
+  `/tmp/silora-upstream-merge-20261108/tested-source.patch`; only this log entry
+  was added after tests.
+- Branding generator syntax and byte-for-byte vector regeneration passed.
+  Visually reviewed a render of the vector geometry against the prior PNG:
+  lettering pixels match, proportions/colors remain intact, and mean channel
+  differences on charcoal are under 0.05/255 from mark edge rendering.
+  Android resource compilation passed; this does not establish device rendering.
+
+No APK build, device/server playback, microphone or RTL-device validation was
+performed. No push, release, PR, workflow dispatch or publication occurred.
+
+
 ## 2026-11-08 — show live AI subtitles on TV
 
 **TV shows AI subtitles while they are being made.** The TV player now draws
