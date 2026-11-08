@@ -75,6 +75,12 @@ sealed interface AdminEntry {
 
     data class Category(val category: AdminCategory) : AdminEntry { override val title = category.title }
 
+    /** The hand-built screens. */
+    data object Dashboard : AdminEntry { override val title = "Dashboard" }
+    data object Requests : AdminEntry { override val title = "Requests" }
+    data object Tasks : AdminEntry { override val title = "Tasks and scans" }
+    data object Logs : AdminEntry { override val title = "Logs" }
+
     data class Resource(val key: String, override val title: String) : AdminEntry
 
     /** One operation: its form, then its result. */
@@ -188,6 +194,11 @@ class AdminConsoleViewModel(
     private fun changedSince(record: AdminEntry.Record) = changedRecords.remove(record)
 
     fun openCategory(category: AdminCategory) = push(AdminEntry.Category(category))
+
+    fun openDashboard() = push(AdminEntry.Dashboard)
+    fun openRequests() = push(AdminEntry.Requests)
+    fun openTasks() = push(AdminEntry.Tasks)
+    fun openLogs() = push(AdminEntry.Logs)
 
     fun openResource(key: String) {
         val resource = _state.value.catalog?.resource(key) ?: return

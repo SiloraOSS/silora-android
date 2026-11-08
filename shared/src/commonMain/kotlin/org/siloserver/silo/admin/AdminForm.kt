@@ -163,6 +163,18 @@ class AdminForm(
                 put(name, element); any = true
             }
         }
+        if (path.isEmpty() && schema.properties.keys.any { isCommandIdentity(schema, it) }) {
+            // Sequenced commands (session pause, stop, message): a fresh id and
+            // a sequence that rises with the clock, as the web admin sends.
+            return Result.success(
+                JsonObject(
+                    obj + mapOf(
+                        "command_id" to JsonPrimitive(newCommandId()),
+                        "sequence" to JsonPrimitive(nextCommandSequence()),
+                    ),
+                ),
+            )
+        }
         return Result.success(if (any || path.isEmpty()) obj else null)
     }
 
@@ -218,6 +230,7 @@ class AdminForm(
     private fun addSchemaFields(out: MutableList<AdminField>, schema: AdminSchema, path: List<String>, depth: Int, parentRequired: Boolean) {
         for ((name, prop) in schema.properties) {
             if (prop.readOnly) continue
+            if (path.isEmpty() && isCommandIdentity(schema, name)) continue
             val childPath = path + name
             val required = parentRequired && name in schema.required
             if (prop.isObject && prop.properties.isNotEmpty() && depthOk(childPath)) {
@@ -245,6 +258,22 @@ class AdminForm(
         const val RAW_BODY_KEY = "@body"
         private const val MAX_NESTING = 3
         private val PRETTY = Json { prettyPrint = true }
+
+        /** `command_id` + `sequence`: the identity a sequenced command carries. */
+        internal fun isCommandIdentity(schema: AdminSchema, name: String): Boolean =
+            name in COMMAND_IDENTITY && COMMAND_IDENTITY.all { it in schema.required && it in schema.properties }
+
+        private val COMMAND_IDENTITY = setOf("command_id", "sequence")
+        private var lastSequence = 0L
+
+        @OptIn(kotlin.time.ExperimentalTime::class)
+        internal fun nextCommandSequence(): Long {
+            lastSequence = maxOf(lastSequence + 1, kotlin.time.Clock.System.now().toEpochMilliseconds())
+            return lastSequence
+        }
+
+        @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+        internal fun newCommandId(): String = kotlin.uuid.Uuid.random().toString()
 
         fun kindFor(schema: AdminSchema): AdminFieldKind = when {
             schema.enumValues.isNotEmpty() -> AdminFieldKind.Choice(schema.enumValues)
