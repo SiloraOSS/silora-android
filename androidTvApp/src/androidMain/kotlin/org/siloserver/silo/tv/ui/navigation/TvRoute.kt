@@ -68,6 +68,9 @@ sealed class TvRoute(val route: String) {
     // --- Profile selection (no drawer) ---
     data object ProfileSelection : TvRoute("profiles")
 
+    /** Fork: the admin console, for administrator accounts. */
+    data object AdminConsole : TvRoute("admin")
+
     // --- Profile management (no drawer) ---
     data object CreateProfile : TvRoute("profiles/create")
 
