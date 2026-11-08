@@ -115,6 +115,16 @@ fun AdminConsoleScreen(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            val refresh: (() -> Unit)? = when (entry) {
+                AdminEntry.Dashboard -> koinViewModel<org.siloserver.silo.common.admin.AdminDashboardViewModel>().let { it::refresh }
+                AdminEntry.Requests -> koinViewModel<org.siloserver.silo.common.admin.AdminRequestsViewModel>().let { it::load }
+                AdminEntry.Tasks -> koinViewModel<org.siloserver.silo.common.admin.AdminTasksViewModel>().let { it::refresh }
+                AdminEntry.Logs -> koinViewModel<org.siloserver.silo.common.admin.AdminLogsViewModel>().let { it::load }
+                else -> null
+            }
+            if (refresh != null) {
+                IconButton(onClick = refresh) { Icon(Icons.Rounded.Refresh, contentDescription = "Refresh", tint = SiloOnSurface) }
+            }
             if (entry is AdminEntry.Run && entry.operation.isRead && entry.phase == AdminRunPhase.Done) {
                 IconButton(onClick = { viewModel.refresh(entry.id) }) {
                     Icon(Icons.Rounded.Refresh, contentDescription = "Refresh", tint = SiloOnSurface)
@@ -136,14 +146,28 @@ fun AdminConsoleScreen(
     }
 }
 
+/** The hand-built screens, first on the console home. */
+private val HAND_BUILT: List<Triple<String, String, (AdminConsoleViewModel) -> Unit>> = listOf(
+    Triple("Dashboard", "Server health, numbers and now playing", { it.openDashboard() }),
+    Triple("Requests", "Approve, decline and retry", { it.openRequests() }),
+    Triple("Tasks and scans", "Run tasks, scan libraries", { it.openTasks() }),
+    Triple("Logs", "Server log and admin audit trail", { it.openLogs() }),
+)
+
+/** Areas the hand-built screens cover, so the generated shortcuts skip them. */
+private val HAND_BUILT_AREAS = setOf("sessions", "requests", "tasks", "scan", "stats", "server", "logs")
+
 @Composable
 private fun EntryContent(state: AdminConsoleState, entry: AdminEntry, vm: AdminConsoleViewModel) {
     val catalog = state.catalog ?: return
     when (entry) {
         AdminEntry.Home -> Page {
-            if (catalog.quickActions.isNotEmpty()) {
+            section("Daily")
+            group(HAND_BUILT) { (title, subtitle, open), _ -> NavRow(title, subtitle) { open(vm) } }
+            val shortcuts = catalog.quickActions.filter { it.operation.resourceKey !in HAND_BUILT_AREAS }
+            if (shortcuts.isNotEmpty()) {
                 section("Shortcuts")
-                group(catalog.quickActions) { action, _ ->
+                group(shortcuts) { action, _ ->
                     NavRow(action.title, action.subtitle) { vm.openOperation(action.operation, query = action.query) }
                 }
             }
@@ -174,6 +198,10 @@ private fun EntryContent(state: AdminConsoleState, entry: AdminEntry, vm: AdminC
             }
         }
         is AdminEntry.Run -> RunContent(entry, vm)
+        AdminEntry.Dashboard -> AdminDashboardContent(onOpenRequests = vm::openRequests)
+        AdminEntry.Requests -> AdminRequestsContent()
+        AdminEntry.Tasks -> AdminTasksContent()
+        AdminEntry.Logs -> AdminLogsContent()
         is AdminEntry.Record -> Page {
             recordRows(entry.value) { title, value -> vm.openNested(title, value) }
             if (entry.actions.isNotEmpty()) {
@@ -377,7 +405,7 @@ private fun FieldBox(label: String, help: String?, content: @Composable () -> Un
 }
 
 @Composable
-private fun Page(content: LazyListScope.() -> Unit) {
+internal fun Page(content: LazyListScope.() -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().navigationBarsPadding(),
         verticalArrangement = Arrangement.Top,
@@ -388,7 +416,7 @@ private fun Page(content: LazyListScope.() -> Unit) {
     )
 }
 
-private fun LazyListScope.section(title: String) {
+internal fun LazyListScope.section(title: String) {
     item(key = "section:$title") {
         Text(
             text = title.uppercase(),
@@ -401,7 +429,7 @@ private fun LazyListScope.section(title: String) {
 }
 
 /** Rows in one rounded card, as in Settings. */
-private fun <T> LazyListScope.group(items: List<T>, row: @Composable (T, Int) -> Unit) {
+internal fun <T> LazyListScope.group(items: List<T>, row: @Composable (T, Int) -> Unit) {
     itemsIndexed(items) { index, item ->
         val top = if (index == 0) 12.dp else 0.dp
         val bottom = if (index == items.lastIndex) 12.dp else 0.dp
@@ -418,7 +446,7 @@ private fun <T> LazyListScope.group(items: List<T>, row: @Composable (T, Int) ->
 }
 
 @Composable
-private fun NavRow(title: String, subtitle: String?, destructive: Boolean = false, onClick: () -> Unit) {
+internal fun NavRow(title: String, subtitle: String?, destructive: Boolean = false, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -438,7 +466,7 @@ private fun ActionRow(bound: AdminBoundOperation, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ValueRow(label: String, value: String) {
+internal fun ValueRow(label: String, value: String) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Text(label, color = SiloSecondaryText, fontSize = 13.sp)
         Text(value, color = SiloOnSurface, fontSize = 15.sp)
@@ -446,18 +474,18 @@ private fun ValueRow(label: String, value: String) {
 }
 
 @Composable
-private fun Footnote(text: String) {
+internal fun Footnote(text: String) {
     Text(text, color = SiloSecondaryText, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp))
 }
 
 @Composable
-private fun ErrorBanner(text: String) = Banner(text, SiloDestructive)
+internal fun ErrorBanner(text: String) = Banner(text, SiloDestructive)
 
 @Composable
-private fun SuccessBanner(text: String) = Banner(text, SiloSuccess)
+internal fun SuccessBanner(text: String) = Banner(text, SiloSuccess)
 
 @Composable
-private fun Banner(text: String, color: Color) {
+internal fun Banner(text: String, color: Color) {
     Row(
         Modifier.fillMaxWidth().padding(16.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.15f)).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -469,12 +497,12 @@ private fun Banner(text: String, color: Color) {
 }
 
 @Composable
-private fun Loading() {
+internal fun Loading() {
     Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
 }
 
 @Composable
-private fun Notice(text: String, action: Pair<String, () -> Unit>? = null) {
+internal fun Notice(text: String, action: Pair<String, () -> Unit>? = null) {
     Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text, color = SiloOnSurface, fontSize = 16.sp)
         if (action != null) {

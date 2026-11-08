@@ -415,6 +415,29 @@ class AdminTasksViewModel(private val service: AdminService) : ViewModel() {
     fun cancelScan(library: AdminLibrary) =
         act("cancel:${library.id}", AdminOps.SCAN_CANCEL, emptyMap(), buildJsonObject { put("library_id", library.id) }, "Scan of ${library.name} cancelled")
 
+    /** The server cancels scans one library at a time. */
+    fun cancelAllScans() {
+        if (_state.value.busyKey != null) return
+        val libraries = _state.value.libraries
+        _state.update { it.copy(busyKey = "cancel:all") }
+        viewModelScope.launch {
+            var cancelled = 0
+            var failure: String? = null
+            for (library in libraries) {
+                val result = service.send(AdminOps.SCAN_CANCEL, body = buildJsonObject { put("library_id", library.id) })
+                if (result is ApiResult.Success) {
+                    cancelled += ((result.data as? kotlinx.serialization.json.JsonObject)?.get("cancelled") as? kotlinx.serialization.json.JsonPrimitive)
+                        ?.content?.toIntOrNull() ?: 0
+                } else failure = failure ?: result.message()
+            }
+            _state.update {
+                it.copy(busyKey = null, notice = failure?.let { m -> AdminNotice(m, true) }
+                    ?: AdminNotice(if (cancelled == 0) "No scans were running" else "Cancelled $cancelled scan${if (cancelled == 1) "" else "s"}"))
+            }
+            load()
+        }
+    }
+
     private fun act(key: String, id: String, path: Map<String, String>, body: JsonElement?, done: String) {
         if (_state.value.busyKey != null) return
         _state.update { it.copy(busyKey = key) }
