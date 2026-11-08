@@ -7,6 +7,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.ManageAccounts
@@ -16,6 +17,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.siloserver.silo.android.R
+import org.siloserver.silo.android.ui.navigation.LocalAdminConsole
 import org.koin.compose.koinInject
 import org.siloserver.silo.android.ui.screens.profiles.ProfileAvatar
 import org.siloserver.silo.common.ui.components.avatarRef
@@ -78,7 +80,8 @@ fun ProfileMenu(
     // jobs and the feature/account split would stop reading as a split. The
     // old menu drew its divider unconditionally, so a server with requests
     // disabled opened onto a stray rule above its first item.
-    val hasFeatureGroup = onRequestsClick != null || onWatchPartyClick != null
+    val onAdminClick = LocalAdminConsole.current
+    val hasFeatureGroup = onRequestsClick != null || onWatchPartyClick != null || onAdminClick != null
 
     SiloDropdownMenu(
         expanded = expanded,
@@ -115,6 +118,16 @@ fun ProfileMenu(
                 onClick = {
                     onDismissRequest()
                     onWatchPartyClick()
+                },
+            )
+        }
+        if (onAdminClick != null) {
+            SiloMenuItem(
+                label = "Admin",
+                icon = Icons.Rounded.AdminPanelSettings,
+                onClick = {
+                    onDismissRequest()
+                    onAdminClick()
                 },
             )
         }
