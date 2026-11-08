@@ -44,7 +44,9 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import kotlinx.coroutines.delay
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.onFocusChanged
+import org.siloserver.silo.tv.ui.focus.requestFocusUntilObserved
 import kotlinx.serialization.json.JsonElement
 import org.koin.compose.viewmodel.koinViewModel
 import org.siloserver.silo.admin.AdminBoundOperation
@@ -70,6 +72,9 @@ import org.siloserver.silo.tv.ui.theme.SiloSecondaryText
 import org.siloserver.silo.tv.ui.theme.SuccessGreen
 
 private val Destructive = Color(0xFFEF4444)
+
+/** Whether the current page's list holds focus; read by its initial focus claim. */
+private var pageHasFocus by mutableStateOf(false)
 
 /** What a row does when picked; the screen's one dialog at a time. */
 private sealed interface TvAdminDialog {
@@ -206,10 +211,13 @@ private fun EntryContent(
     val focusKey = state.stack.size to ((entry as? AdminEntry.Run)?.let { it.phase to it.response?.status } ?: Unit)
     val firstRow = remember(focusKey) { FocusRequester() }
     LaunchedEffect(focusKey) {
-        repeat(10) {
-            if (runCatching { firstRow.requestFocus() }.isSuccess) return@LaunchedEffect
-            delay(50)
-        }
+        pageHasFocus = false
+        requestFocusUntilObserved(
+            maxAttempts = 30,
+            awaitAttempt = { withFrameNanos { } },
+            requestFocus = firstRow::requestFocus,
+            isFocused = { pageHasFocus },
+        )
     }
 
     when (entry) {
@@ -382,7 +390,7 @@ private fun LazyListScope.recordRows(value: JsonElement?, onNested: (String, Jso
 private fun Page(focus: FocusRequester, content: LazyListScope.() -> Unit) {
     LazyColumn(
         // Requesting focus here lands on the first focusable row.
-        modifier = Modifier.fillMaxSize().focusRequester(focus),
+        modifier = Modifier.fillMaxSize().focusRequester(focus).onFocusChanged { pageHasFocus = it.hasFocus },
         contentPadding = PaddingValues(bottom = 48.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         content = content,
@@ -487,18 +495,21 @@ private fun Banner(text: String, color: Color) {
 @Composable
 private fun Notice(text: String, action: Pair<String, () -> Unit>?) {
     val focus = remember { FocusRequester() }
+    var focused by remember { mutableStateOf(false) }
     LaunchedEffect(action != null) {
-        if (action != null) repeat(10) {
-            if (runCatching { focus.requestFocus() }.isSuccess) return@LaunchedEffect
-            delay(50)
-        }
+        if (action != null) requestFocusUntilObserved(
+            maxAttempts = 30,
+            awaitAttempt = { withFrameNanos { } },
+            requestFocus = focus::requestFocus,
+            isFocused = { focused },
+        )
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text, color = SiloOnSurface, fontSize = 20.sp)
         if (action != null) {
             Spacer(Modifier.height(20.dp))
             Box(Modifier.width(360.dp)) {
-                TvRow(action.first, null, chevron = false, modifier = Modifier.focusRequester(focus), onClick = action.second)
+                TvRow(action.first, null, chevron = false, modifier = Modifier.focusRequester(focus).onFocusChanged { focused = it.hasFocus }, onClick = action.second)
             }
         }
     }
