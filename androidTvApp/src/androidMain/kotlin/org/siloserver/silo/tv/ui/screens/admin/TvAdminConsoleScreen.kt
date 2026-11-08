@@ -71,10 +71,28 @@ import org.siloserver.silo.tv.ui.theme.SiloOnSurface
 import org.siloserver.silo.tv.ui.theme.SiloSecondaryText
 import org.siloserver.silo.tv.ui.theme.SuccessGreen
 
-private val Destructive = Color(0xFFEF4444)
+internal val Destructive = Color(0xFFEF4444)
 
 /** Whether the current page's list holds focus; read by its initial focus claim. */
 private var pageHasFocus by mutableStateOf(false)
+
+/**
+ * Puts focus back on the page's first row when [key] changes (data arrived,
+ * or the focused row went away) and nothing on the page holds it. Skipped
+ * while a dialog is open, which holds focus in its own window.
+ */
+@Composable
+internal fun ReclaimPageFocus(focus: FocusRequester, key: Any?, enabled: Boolean) {
+    LaunchedEffect(key, enabled) {
+        if (!enabled || pageHasFocus) return@LaunchedEffect
+        requestFocusUntilObserved(
+            maxAttempts = 30,
+            awaitAttempt = { withFrameNanos { } },
+            requestFocus = focus::requestFocus,
+            isFocused = { pageHasFocus },
+        )
+    }
+}
 
 /** What a row does when picked; the screen's one dialog at a time. */
 private sealed interface TvAdminDialog {
@@ -222,9 +240,17 @@ private fun EntryContent(
 
     when (entry) {
         AdminEntry.Home -> Page(firstRow) {
-            if (catalog.quickActions.isNotEmpty()) {
+            section("Daily")
+            item { TvRow("Dashboard", "Server health, numbers and now playing") { vm.openDashboard() } }
+            item { TvRow("Requests", "Approve, decline and retry") { vm.openRequests() } }
+            item { TvRow("Tasks and scans", "Run tasks, scan libraries") { vm.openTasks() } }
+            item { TvRow("Logs", "Server log and admin audit trail") { vm.openLogs() } }
+            val shortcuts = catalog.quickActions.filter {
+                it.operation.resourceKey !in setOf("sessions", "requests", "tasks", "scan", "stats", "server", "logs")
+            }
+            if (shortcuts.isNotEmpty()) {
                 section("Shortcuts")
-                itemsIndexed(catalog.quickActions) { i, action ->
+                itemsIndexed(shortcuts) { i, action ->
                     TvRow(action.title, action.subtitle) { vm.openOperation(action.operation, query = action.query) }
                 }
             }
@@ -267,6 +293,10 @@ private fun EntryContent(
             }
         }
         is AdminEntry.Run -> RunContent(entry, vm, openDialog, firstRow)
+        AdminEntry.Dashboard -> TvAdminDashboardContent(firstRow, onOpenRequests = vm::openRequests)
+        AdminEntry.Requests -> TvAdminRequestsContent(firstRow)
+        AdminEntry.Tasks -> TvAdminTasksContent(firstRow)
+        AdminEntry.Logs -> TvAdminLogsContent(firstRow)
     }
 }
 
@@ -387,7 +417,7 @@ private fun LazyListScope.recordRows(value: JsonElement?, onNested: (String, Jso
 }
 
 @Composable
-private fun Page(focus: FocusRequester, content: LazyListScope.() -> Unit) {
+internal fun Page(focus: FocusRequester, content: LazyListScope.() -> Unit) {
     LazyColumn(
         // Requesting focus here lands on the first focusable row.
         modifier = Modifier.fillMaxSize().focusRequester(focus).onFocusChanged { pageHasFocus = it.hasFocus },
@@ -397,7 +427,7 @@ private fun Page(focus: FocusRequester, content: LazyListScope.() -> Unit) {
     )
 }
 
-private fun LazyListScope.section(title: String) {
+internal fun LazyListScope.section(title: String) {
     item {
         Text(
             title.uppercase(),
@@ -417,7 +447,7 @@ private fun ActionRow(bound: AdminBoundOperation, modifier: Modifier, onClick: (
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun TvRow(
+internal fun TvRow(
     title: String,
     subtitle: String?,
     modifier: Modifier = Modifier,
@@ -476,12 +506,12 @@ private fun TvRow(
 }
 
 @Composable
-private fun Footnote(text: String) {
+internal fun Footnote(text: String) {
     Text(text, color = SiloSecondaryText, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp))
 }
 
 @Composable
-private fun Banner(text: String, color: Color) {
+internal fun Banner(text: String, color: Color) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.18f)).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -493,7 +523,7 @@ private fun Banner(text: String, color: Color) {
 }
 
 @Composable
-private fun Notice(text: String, action: Pair<String, () -> Unit>?) {
+internal fun Notice(text: String, action: Pair<String, () -> Unit>?) {
     val focus = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
     LaunchedEffect(action != null) {
