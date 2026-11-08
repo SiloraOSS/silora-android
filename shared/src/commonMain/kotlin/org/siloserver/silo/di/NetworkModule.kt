@@ -55,6 +55,7 @@ val networkModule = module {
         org.siloserver.silo.network.api.DefaultExternalSignInApi(get(), get())
     }
     single { CatalogV2Api(get(), get(), get()) }
+    single { AdminV2Api(get(), get(), get()) }
     single { org.siloserver.silo.network.apiv2.ThemeMusicV2Api(get(), get(), get()) }
     single { PersonRefreshV2Api(get(), get(), get()) }
     single { WatchDetailV2Api(get(), get(), get()) }
