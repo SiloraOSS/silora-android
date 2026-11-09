@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Guard local release signing against fallback keys and incompatible APKs."""
+import contextlib
 import datetime as dt
+import io
 import hashlib
 import importlib.util
 import json
@@ -8,6 +10,7 @@ import os
 from pathlib import Path
 import tempfile
 import subprocess
+import sys
 import unittest
 from unittest import mock
 
@@ -164,6 +167,61 @@ class ReleaseArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "output already exists"):
             build.package_release(self.info, ("tv",))
         self.assertEqual((output / "silora-tv-mapping.txt").read_bytes(), b"mapping for androidTvApp")
+
+
+class OutputHandoffTests(unittest.TestCase):
+    def run_build(self, receipt, archive, failure=None):
+        info = {"version_name": "fixture", "version_code_base": 400_000_000,
+                "build_number": 29, "source_sha": "a" * 40,
+                "tracked_tree_dirty": False, "untracked_build_inputs": False}
+        def package(*args):
+            self.assertEqual(receipt.read_text(), "", "Archive path must not be emitted before packaging completes")
+            if failure == "package":
+                raise ValueError("packaging failed")
+            return archive
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(sys, "argv", ["build-local-release.py", "--lint", "--tests", "--output-file", str(receipt)]))
+            stack.enter_context(mock.patch.object(build, "signing_environment", return_value=({"SILO_RELEASE_KEYSTORE": "/fixture/release.jks"}, "c" * 64)))
+            stack.enter_context(mock.patch.object(build, "build_metadata", return_value=info))
+            runner = stack.enter_context(mock.patch.object(build.subprocess, "run"))
+            if failure == "build":
+                runner.side_effect = subprocess.CalledProcessError(7, ["fixture build"])
+            verifier = stack.enter_context(mock.patch.object(build, "verify_apks"))
+            if failure == "verification":
+                verifier.side_effect = ValueError("verification failed")
+            stack.enter_context(mock.patch.object(build, "source_status", return_value={"tracked_tree_dirty": False, "untracked_build_inputs": False}))
+            stack.enter_context(mock.patch.object(build, "capture", return_value="a" * 40))
+            stack.enter_context(mock.patch.object(build, "package_release", side_effect=package))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            build.main()
+
+    def test_completed_build_emits_exact_absolute_archive_path(self):
+        with tempfile.TemporaryDirectory(prefix="archive handoff ") as directory:
+            root = Path(directory)
+            receipt = root / "output-path"
+            receipt.write_text("")
+            archive = root / "archive with spaces"
+            archive.mkdir()
+            self.run_build(receipt, archive)
+            self.assertEqual(receipt.read_text(), str(archive.resolve()) + "\n")
+
+    def test_build_verification_and_packaging_failures_do_not_emit_a_path(self):
+        for failure in ("build", "verification", "package"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                receipt = root / "output-path"
+                receipt.write_text("")
+                with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                    self.run_build(receipt, root / "archive", failure)
+                self.assertEqual(receipt.read_text(), "")
+
+    def test_check_mode_cannot_emit_an_archive_path(self):
+        with mock.patch.object(sys, "argv", ["build-local-release.py", "--check", "--output-file", "/unused"]), \
+             mock.patch.object(build, "signing_environment") as signing, contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as error:
+                build.main()
+            self.assertEqual(error.exception.code, 2)
+            signing.assert_not_called()
 
 
 if __name__ == "__main__":

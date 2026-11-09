@@ -156,7 +156,11 @@ def main():
                         help="run release-script tests and Gradle unit tests before building")
     parser.add_argument("--lint", action="store_true",
                         help="run full release lint for the selected apps before building")
+    parser.add_argument("--output-file", type=Path,
+                        help="write the verified archive's absolute path here after a successful build")
     args = parser.parse_args()
+    if args.check and args.output_file:
+        parser.error("--output-file requires a completed build; it cannot be used with --check")
     targets = ("phone", "tv") if args.release == "both" else (args.release,)
     env, fingerprint = signing_environment(args.signing_dir)
     info = build_metadata()
@@ -178,7 +182,7 @@ def main():
         return
     tasks = []
     if args.tests:
-        for test in ("test-fork-release.py", "test-build-local-release.py", "test-local-release.py", "test-release-order.py"):
+        for test in ("test-fork-release.py", "test-build-local-release.py", "test-local-release.py", "test-release-order.py", "test-build-and-publish.py"):
             subprocess.run([sys.executable, str(ROOT / "scripts" / test)], cwd=ROOT, env=env, check=True)
         tasks.append("test")
     if args.lint:
@@ -204,6 +208,8 @@ def main():
         "signing_certificate_sha256": fingerprint,
     }
     output = package_release(info, targets)
+    if args.output_file:
+        args.output_file.expanduser().write_text(str(output.resolve()) + "\n")
     print(f"Verified APKs, R8 mappings, and checksums: {output}", flush=True)
 
 

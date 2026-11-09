@@ -116,11 +116,11 @@ a locally debug-signed build to a release signed with a different key requires
 uninstalling that Silora install, which clears its local data.
 
 For a manual release, choose GitHub compilation with `./release.sh github`, or
-publish the exact phone/TV APKs tested on your PC with
-`./release.sh local dist/local-YYYY-MM-DD.HHMMSS --publish` after building with
-`./build.sh --lint` and pushing the source commit. The PC route uses a small
-publish-only GitHub job and does not compile again. See the
-[release options](docs/fork-releases.md#choose-github-compilation-or-publish-a-pc-build).
+run **`./helper.sh`** to build both APKs on your PC with full lint and tests,
+then upload that exact build and queue publication. Commit and push the intended
+source to Silora `main` first. The PC route uses a small publish-only GitHub job
+and does not compile again. To build, test on a device and publish separately,
+see the [release options](docs/fork-releases.md#choose-github-compilation-or-publish-a-pc-build).
 
 The daily workflow syncs upstream and builds optimized, signed APKs when tracked
 source files change. See [fork releases and signing](docs/fork-releases.md) for

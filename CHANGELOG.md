@@ -4,6 +4,21 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-08 — one-command local build and release
+
+Added `./helper.sh` to run `./build.sh --lint --tests`, then upload the exact
+newly verified archive and queue its publication through `release.sh local
+<archive> --publish`. It uses a fresh temporary build-path receipt rather than
+selecting a dated directory or parsing logs. Failed builds/checks cannot publish;
+upload failures retain the archive for an explicit retry. Source must already
+be committed and pushed; the helper does not commit or push it.
+
+The local builder's new optional `--output-file` writes the absolute archive path
+only after APK verification and packaging succeed. Tests cover the exact archive
+handoff, misleading existing archives/logs, paths containing spaces, failures,
+receipt cleanup and help/argument handling. Verification uses simulated build and
+publish commands; no new public release was created for this change.
+
 ## 2026-11-08 — prevent older release jobs from replacing Latest
 
 Reviewed version compatibility between Manual Release, Automation Release and

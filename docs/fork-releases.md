@@ -106,10 +106,31 @@ You can still start **Silora Manual Release** from GitHub's Actions page.
 `./release.sh github --tests` enables its full-test checkbox;
 `./release.sh github --dry-run` prints the dispatch command without starting it.
 
-For the PC route, commit the source first, then build both apps with full lint:
+### One-command PC build and release
+
+Commit and push the intended source to Silora `main`, then run:
 
 ```sh
-./build.sh --release=both --lint       # Add --tests when you want the full test suite
+./helper.sh
+```
+
+This runs `./build.sh --lint --tests` for both signed APKs, then passes the exact
+archive produced by that build to `./release.sh local <archive> --publish`.
+It uploads and queues the existing publish-only GitHub job, without recompiling
+there. The helper stops if any build check fails and keeps the completed archive
+if uploading or publishing needs a retry. It does not commit or push source.
+
+The archive path is handed off through a temporary output file written only after
+successful verification and packaging. The helper never selects an older archive
+or parses build logs. You can invoke the helper by its full path from another
+working directory. `./helper.sh --help` shows its usage without building or publishing.
+
+### Build and publish separately
+
+For a device test between building and publishing, run the individual commands:
+
+```sh
+./build.sh --release=both --lint --tests
 # Test the APKs in the printed dist/local-... folder, then push their source commit.
 ./release.sh local dist/local-YYYY-MM-DD.HHMMSS             # Verify and preview only
 ./release.sh local dist/local-YYYY-MM-DD.HHMMSS --publish   # Upload and queue publication
