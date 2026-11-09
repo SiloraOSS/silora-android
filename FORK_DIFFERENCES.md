@@ -77,5 +77,12 @@ recognize speech, return the final text to search and submit the query on the
 affected device. Merely merging the PR, publishing a release, or opening its
 recognizer does not establish that replacement works.
 
+The November 9 merge includes upstream PR #860 (`484b55da5`) in history. Its
+Android 11 Google recognition-service fallback does not establish that the
+activity path works on the affected Android 14 device. Keep Silora's controller
+and overlay, unrestricted microphone permission and recognition-service query;
+the unused upstream activity and legacy helper remain excluded. No new device
+voice test was performed during that merge.
+
 Requests navigation has no fork override and must not be reintroduced from old
 merge logs or instruction text.

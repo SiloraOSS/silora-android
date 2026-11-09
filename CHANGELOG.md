@@ -4,6 +4,68 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-09 13:04 PST — upstream 075e37d6a
+
+**Merge inputs:** `main`; fork before `27193f9df9d35c586dd145dd97f816e74d9c1f8a`;
+upstream `075e37d6a75bff84cd5c5f07e918cd41d6c06601`. Incoming changes add bounded
+loading for stalled Dolby Vision starts, an Android 11 Google voice fallback,
+and feature-idea/contribution-policy updates.
+
+**Upstream commits added:**
+
+- `484b55da5` fix(tv): restore Google voice search on Android 11 (#860)
+- `58d9aac6e` fix(playback): keep loading when a Dolby Vision start stalls on passthrough audio (#861)
+- `075e37d6a` ci: move feature requests to Discussions and close out-of-policy pull requests (#866)
+
+**Silora merge decisions:**
+
+- Retained (`night-mode`): resolved the player-factory conflict by keeping
+  Night Mode's audio binding alongside upstream's new load-control playing
+  listener. PCM/output policy, libass initialization and release cleanup remain.
+- Retained (`tv-voice`): kept Silora's in-app speech controller, overlay,
+  recognition-service query and microphone permission on newer Android versions.
+  PR #860 limits its service fallback to Android 11; it does not satisfy the
+  deferred replacement's device-confirmation condition for Android 14. Resolved
+  the manifest and modify/delete conflicts without restoring the unused upstream
+  activity controller or its new legacy helper. Updated the inventory/checklist.
+- Accepted upstream's stalled-start guard and its four focused tests unchanged,
+  plus its contribution workflow, templates, policy and README updates; retained
+  the README's Silora link. The guard extends loading only during a playing
+  position stall, bounded by time and memory limits.
+- Other active fork differences have no source changes in this merge, including
+  Admin opt-in/access controls, live AI subtitles, Up Next, credits skipping,
+  display/input preferences, identity and release tooling. No workaround was
+  declared superseded and no unexplained product difference was adopted.
+
+**Validation:**
+
+- Required JDK 21 command passed: `./build.sh --release=both --tests --lint
+  --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing`.
+  Both R8-optimized release APKs passed persistent-key signature, package,
+  version and non-debuggable checks; matching mappings and checksums verified.
+- Gradle XML reports contain 12,572 variant test cases, with zero failures,
+  errors or skips: shared 2,369 debug + 2,369 release; android-shared 2,251
+  debug + 2,251 release; phone 947 debug + 947 release; TV 1,434 debug;
+  libass bridge 2 debug + 2 release. TV release host tests are disabled by the
+  existing configuration; its debug host suite ran, with release compilation
+  and full release lint. Both app release-lint tasks passed with existing
+  baselines; baselines were not changed.
+- All 88 local release-tooling tests passed, plus 34 automation-release,
+  17 local-notification and 10 daily-notification tests. Build supply-chain
+  checks and staged whitespace checks passed. `actionlint` is unavailable.
+- The MPV text guard reports pre-existing `rampVolume` substring matches and
+  an attribution comment, all byte-identical to the pre-merge source. Manual
+  review found no added runtime reference; neither APK contains MPV artifacts.
+- The initial sandbox attempt could not write the existing Gradle cache lock.
+  The identical required command passed with cache access; no build,
+  signing, lint or dependency-verification requirement was weakened.
+- The pre-commit build compiled staged merge tree
+  `59dac55a5720157b3dc09c3dbe80876c9e540732`; its build-info records the
+  pre-merge parent HEAD and a dirty tracked tree. Only this changelog entry is
+  added after those checks. Exact-SHA artifact verification follows the merge
+  commit before push. The unrelated untracked release wrapper is preserved.
+- No device, microphone, server or playback testing was performed.
+
 ## 2026-11-08 — one-command local build and release
 
 Added `./helper.sh` to run `./build.sh --lint --tests`, then upload the exact

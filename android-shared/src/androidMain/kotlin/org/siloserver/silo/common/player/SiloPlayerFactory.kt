@@ -438,6 +438,7 @@ class SiloPlayerFactory(
         return builder.build().also { player ->
             libassBridge.initialize(player)
             audioNormalization.bind(player)
+            player.addListener(loadControl.playingListener)
         }
     }
 

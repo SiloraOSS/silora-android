@@ -105,6 +105,12 @@ Do not re-adopt the recognizer-activity helper merely because it is present
 upstream; revisit it after an official build completes a spoken search on the
 affected device.
 
+Upstream PR #860 (`484b55da5`) adds a service fallback only for Android 11 with
+Google's recognizer. The November 9 merge retains Silora's path on all supported
+TV versions, including Android 14, and excludes the unused `TvVoiceSearch.kt`
+and `LegacyTvVoiceSearch.kt`. Do not cap `RECORD_AUDIO` at API 30: Silora uses
+the service on newer versions too. This merge supplies no new device evidence.
+
 ## Trailers (`trailers`)
 
 Keep embedded YouTube playback, external fallback, and the detail-page Trailer
