@@ -2,8 +2,10 @@
 
 **Silora Automation Release** builds and releases one exact commit supplied by
 the local upstream-merge automation. It lives beside **Silora Manual Release**
-and **Silora Daily**. Their workflow files, shared scripts, signing secrets,
-download filenames, and notification handlers are unchanged.
+and **Silora Daily**. The release routes share signing secrets, versioning,
+download filenames and a publication lock. The publishers now also share a
+version-order check: an older or equal build cannot replace the current Latest
+release. Notification handlers retain their existing scope.
 
 The new workflow has only `workflow_dispatch`. It has no schedule or push
 trigger. Adding these files does not redirect the saved local automation.

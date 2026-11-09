@@ -88,6 +88,7 @@ jobs:
           python3 scripts/test-fork-release.py
           python3 scripts/test-build-local-release.py
           python3 scripts/test-automation-release.py
+          python3 scripts/test-release-order.py
 
       - name: Read official version tags already present in the source history
         env:

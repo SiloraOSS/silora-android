@@ -20,6 +20,11 @@ SHA = re.compile(r"[0-9a-f]{40}")
 TAG = re.compile(r"(?:build-\d{4}-\d{2}-\d{2}\.\d{6}\.[1-9]\d*|(?:daily|manual)-\d{4}-\d{2}-\d{2}\.[1-9]\d*)")
 
 
+order_spec = importlib.util.spec_from_file_location("release_order", Path(__file__).with_name("release-order.py"))
+order = importlib.util.module_from_spec(order_spec)
+order_spec.loader.exec_module(order)
+
+
 def run(*args):
     return subprocess.run(args, check=True, capture_output=True, text=True).stdout.strip()
 
@@ -218,6 +223,7 @@ def publish(folder):
     run("gh", "release", "upload", tag, "--repo", REPO,
         *[str(folder / name) for name in sorted(PAYLOAD | {"SHA256SUMS"})], "--clobber")
     verify_download(folder, source, upstream, tag)
+    order.ensure_newer(json.loads((folder / "build-info.json").read_text()), REPO)
     run("gh", "release", "edit", tag, "--repo", REPO, "--draft=false", "--prerelease=false", "--latest")
     # Do not call success based only on the edit command's exit status.
     public = api(f"releases/tags/{tag}")

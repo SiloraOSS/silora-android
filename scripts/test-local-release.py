@@ -131,14 +131,10 @@ class ReleaseTests(ArchiveFixture, unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "pushed and included"):
                 release.check_source("a" * 40)
 
-    def test_stale_or_equal_versions_are_rejected(self):
-        for delta in (0, 1):
-            def gh(*args):
-                target = Path(args[args.index("--dir") + 1])
-                (target / "build-info.json").write_text(json.dumps({"version_code_base": self.info["version_code_base"] + delta}))
-            with mock.patch.object(release, "api", return_value={"tag_name": "latest"}), mock.patch.object(release, "gh", side_effect=gh):
-                with self.assertRaisesRegex(ValueError, "newer than or equal"):
-                    release.ensure_newer(self.info)
+    def test_shared_order_check_uses_the_local_authenticated_transport(self):
+        with mock.patch.object(release.order, "ensure_newer") as check:
+            release.ensure_newer(self.info)
+            check.assert_called_once_with(self.info, release.REPO, transport=release.gh)
 
     def test_existing_tag_is_never_retargeted(self):
         with mock.patch.object(release, "api", return_value=[{"ref": "refs/tags/test", "object": {"sha": "d" * 40}}]), \
@@ -196,7 +192,9 @@ class FakeGitHubTests(ArchiveFixture, unittest.TestCase):
             if "releases?" in path:
                 if self.draft is not None:
                     self.draft["assets"] = [{"name": p.name} for p in self.remote.iterdir()]
-                return json.dumps([[self.draft] if self.draft else []])
+                return json.dumps([[{"tag_name": "previous", "draft": False,
+                                     "prerelease": False, "published_at": "2026-11-07T00:00:00Z"}]
+                                   + ([self.draft] if self.draft else [])])
             if path.endswith("releases/latest"):
                 return json.dumps({"tag_name": "previous"})
             if "git/matching-refs" in path:

@@ -38,7 +38,9 @@ jobs:
           persist-credentials: false
 
       - name: Check publish tooling
-        run: python3 scripts/test-local-release.py
+        run: |
+          python3 scripts/test-local-release.py
+          python3 scripts/test-release-order.py
 
       - name: Verify the uploaded PC build and publish it
         env:

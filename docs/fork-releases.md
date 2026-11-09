@@ -152,6 +152,30 @@ Follow the workflow link printed by the command for the final publication result
 The existing daily/manual notification workflows keep their current scope; this
 new publish-only workflow does not send Discord notifications.
 
+## Versioning when switching release routes
+
+`./release.sh github` starts **Silora Manual Release**, the same workflow as the
+GitHub Actions button. **Silora Automation Release** uses the same version helper,
+persistent signing identity, package IDs, phone/TV version-code split and APK names.
+Local builds also use that helper. There are no separate version counters to
+synchronize when switching routes.
+
+Android's internal version code comes from UTC build time, not the individual
+workflow's run number. Later build timestamps produce larger version codes even
+when the next workflow has a smaller run counter. Keep the PC's clock correct.
+The visible upstream version/build and Pacific date can repeat during a day;
+that does not stop an update because the internal codes differ.
+
+Every publisher checks the candidate's internal version against the current
+Latest release immediately before publication, while holding the shared release
+lock. An older or equal build remains unpublished instead of moving Latest
+backwards. Rebuild when that guard rejects an archive. Existing public releases
+remain unchanged, and replaying a completed publication does not promote it again.
+
+These protections apply to runs using the updated workflow definitions. Historical
+runs keep their original workflow/source: start a fresh run on current `main`
+instead of rerunning an old publish job after newer releases have shipped.
+
 ## Published releases
 
 Each dated release includes:

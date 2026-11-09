@@ -306,7 +306,10 @@ class PublishRecoveryTest(unittest.TestCase):
             dist = root / "dist"
             dist.mkdir()
             (dist / "phone.apk").write_bytes(b"signed-apk")
-            (dist / "build-info.json").write_text('{}\n')
+            (dist / "build-info.json").write_text(json.dumps({"version_code_base": 500_000_001}) + "\n")
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (scripts / "release-order.py").write_bytes(Path(__file__).with_name("release-order.py").read_bytes())
             (dist / "RELEASE_NOTES.md").write_text('Daily build\n')
             (dist / "SHA256SUMS").write_text(
                 f"{hashlib.sha256(b'signed-apk').hexdigest()}  phone.apk\n")
@@ -329,10 +332,18 @@ if args[:2] == ['release', 'view']:
         print(json.dumps({'isDraft': state != 'published',
                           'targetCommitish': 'main' if state == 'default-target' else 'a' * 40}))
 elif args[0] == 'api':
-    # A snapshot tag is reserved before the expensive build starts.
-    print(('b' if state == 'wrong-tag' else 'a') * 40)
+    if 'releases?' in args[1]:
+        print(json.dumps([[{'tag_name': 'previous', 'draft': False, 'prerelease': False, 'published_at': '2026-11-07'}]]))
+    elif args[1].endswith('releases/latest'):
+        print(json.dumps({'tag_name': 'previous'}))
+    else:
+        # A snapshot tag is reserved before the expensive build starts.
+        print(('b' if state == 'wrong-tag' else 'a') * 40)
 elif args[:2] == ['release', 'download']:
     destination = pathlib.Path(args[args.index('--dir') + 1])
+    if args[2] == 'previous':
+        (destination / 'build-info.json').write_text(json.dumps({'version_code_base': 500_000_002 if state == 'stale' else 500_000_000}))
+        sys.exit(0)
     shutil.copytree(root / 'dist', destination)
     if state == 'corrupt':
         (destination / 'phone.apk').write_bytes(b'corrupted')
@@ -376,6 +387,12 @@ elif args[:2] == ['release', 'download']:
         self.assertEqual(code, 0, output)
         self.assertIn("release upload", calls)
         self.assertIn("--draft=false", calls)
+
+    def test_stale_build_cannot_become_latest_on_publish_rerun(self):
+        code, calls, output = self.run_publish("stale")
+        self.assertNotEqual(code, 0)
+        self.assertIn("newer than or equal", output)
+        self.assertNotIn("release edit", calls)
 
     def test_failed_download_checksum_blocks_publication(self):
         code, calls, _ = self.run_publish("corrupt")

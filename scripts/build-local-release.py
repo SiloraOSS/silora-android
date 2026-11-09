@@ -178,7 +178,7 @@ def main():
         return
     tasks = []
     if args.tests:
-        for test in ("test-fork-release.py", "test-build-local-release.py", "test-local-release.py"):
+        for test in ("test-fork-release.py", "test-build-local-release.py", "test-local-release.py", "test-release-order.py"):
             subprocess.run([sys.executable, str(ROOT / "scripts" / test)], cwd=ROOT, env=env, check=True)
         tasks.append("test")
     if args.lint:

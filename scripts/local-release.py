@@ -25,6 +25,10 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 spec = importlib.util.spec_from_file_location("local_build", ROOT / "scripts/build-local-release.py")
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
+order_spec = importlib.util.spec_from_file_location("release_order", ROOT / "scripts/release-order.py")
+order = importlib.util.module_from_spec(order_spec)
+order_spec.loader.exec_module(order)
+
 
 
 def gh(*args):
@@ -109,16 +113,9 @@ def check_source(source):
 
 
 def ensure_newer(info):
-    # Read through the API so a failed lookup cannot silently promote an older
-    # build. Silora already has public releases; absence is an actionable error.
-    latest = api("releases/latest")
-    with tempfile.TemporaryDirectory(prefix="silora-latest-") as temp:
-        gh("release", "download", latest["tag_name"], "--repo", REPO,
-           "--pattern", "build-info.json", "--dir", temp)
-        previous = json.loads((Path(temp) / "build-info.json").read_text())
-    base = previous.get("version_code_base")
-    if type(base) is not int or info["version_code_base"] <= base:
-        raise ValueError("A public release is newer than or equal to this build; build again before publishing")
+    # Use this transport so local preview, recovery and publication tests all
+    # exercise the same authenticated GitHub reads as the other release paths.
+    order.ensure_newer(info, REPO, transport=gh)
 
 
 def public_tag(info):

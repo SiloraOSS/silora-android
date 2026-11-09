@@ -4,6 +4,27 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-08 — prevent older release jobs from replacing Latest
+
+Reviewed version compatibility between Manual Release, Automation Release and
+`release.sh` at Matt's request. `release.sh github` dispatches Manual Release;
+all build routes already use the same timestamp-based Android version calculation.
+Workflow counters do not determine update ordering.
+
+Added a shared publication-order check to local, manual, automation and legacy
+daily publishers. It rejects a candidate whose Android version is older than or
+equal to the current Latest release before publication, including a failed job
+resumed after a newer release ships. First releases can bootstrap; failed API
+or metadata reads stop publication. Existing public releases remain immutable.
+Historical runs retain their original code and should be replaced with fresh
+runs on current main rather than replayed after newer releases.
+
+Validation: shared ordering tests cover cross-workflow counters, repeated visible
+labels, older/equal versions, first-release bootstrap and failed GitHub reads.
+Manual and daily publication recovery tests exercise a stale publish retry;
+automation and local recovery tests confirm the guard blocks publication.
+No Android app code, APK version formula, signing configuration or schedule changed.
+
 ## 2026-11-08 — choose GitHub or PC release builds
 
 Added `./release.sh github` to start the existing manual GitHub build and

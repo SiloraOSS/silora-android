@@ -152,6 +152,7 @@ class PublishTest(unittest.TestCase):
         release.receipt(self.folder)
         self.entries = []
         self.corrupt = False
+        self.order = mock.patch.object(release.order, "ensure_newer").start()
         self.api = mock.patch.object(release, "api", side_effect=self.answer).start()
         self.run = mock.patch.object(release, "run", side_effect=self.command).start()
 
@@ -202,6 +203,14 @@ class PublishTest(unittest.TestCase):
                 self.assertIn("upload", actions)
                 self.assertEqual("create" in actions, not entries)
 
+    def test_order_guard_blocks_old_artifacts_before_latest_is_changed(self):
+        self.order.side_effect = ValueError("A newer build is already public")
+        with self.assertRaisesRegex(ValueError, "newer build"):
+            release.publish(self.folder)
+        self.order.assert_called_once()
+        self.assertIn("download", self.mutations())
+        self.assertNotIn("edit", self.mutations())
+
     def test_corrupted_download_leaves_release_unpublished(self):
         self.corrupt = True
         with self.assertRaisesRegex(ValueError, "Checksum"):
@@ -212,6 +221,7 @@ class PublishTest(unittest.TestCase):
         self.entries = [published()]
         release.publish(self.folder)
         self.assertEqual(self.mutations(), ["download"])
+        self.order.assert_not_called()
 
     def test_incomplete_public_release_is_never_overwritten(self):
         self.entries = [published() | {"assets": []}]
