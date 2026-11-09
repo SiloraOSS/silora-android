@@ -10,6 +10,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import org.siloserver.silo.common.admin.AdminMenuPreferences
 import org.siloserver.silo.common.profiles.ProfileLaunchPreferences
 import org.siloserver.silo.model.server.ServerEntry
 import org.siloserver.silo.network.ServerRegistry
@@ -252,6 +253,7 @@ class AccountLocalData(
             // Silora's TV keyboard and remote choices carry the same account token.
             "silo_tv_search_keyboard",
             "silo_tv_remote_shortcuts",
+            AdminMenuPreferences.PREFS_NAME,
         ) + HASHED_CACHE_PREFS
 
         /**

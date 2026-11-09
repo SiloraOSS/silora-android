@@ -153,6 +153,7 @@ import org.siloserver.silo.common.player.audio.NightModeControl
 import org.siloserver.silo.common.player.audio.NightModeParameters
 import org.koin.compose.viewmodel.koinViewModel
 import org.siloserver.silo.common.watchparty.WatchPartyExperiment
+import org.siloserver.silo.common.admin.AdminMenuPreferences
 import org.siloserver.silo.viewmodel.HomeViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1067,6 +1068,8 @@ private fun TvGeneralSettingsPane(
     var showProfileLaunchPicker by remember { mutableStateOf(false) }
     var showHomeSectionsEditor by remember { mutableStateOf(false) }
     val titleArtStore: TitleArtStore = koinInject()
+    val adminMenuPreferences: AdminMenuPreferences = koinInject()
+    val showAdmin by adminMenuPreferences.visible.collectAsState(initial = adminMenuPreferences.isVisible())
     // Opening General is a refresh edge for a title art choice made on another
     // device. Kept out of the LazyColumn item, which re-enters composition on
     // scroll.
@@ -1166,6 +1169,20 @@ private fun TvGeneralSettingsPane(
             // Settings → Experimental (D1): device-local, never synced. Turning
             // Watch Party off hides every entry point and leaves any party.
             TvExperimentalSettingsGroup()
+        }
+        if (state.user?.role.equals("admin", ignoreCase = true) && state.isPrimaryProfile) {
+            item {
+                SettingsGroup(title = "Administrator") {
+                    SettingsToggleRow(
+                        label = "Show Admin in profile menu",
+                        checked = showAdmin,
+                        onCheckedChange = adminMenuPreferences::setVisible,
+                    )
+                    SettingsFooterText(
+                        text = "Shows Admin when you open the profile menu. Saved for this profile on this TV.",
+                    )
+                }
+            }
         }
         // No Library group — tvOS parity: Apple's TVSettingsView has no such
         // section (it is iOS-only). On TV these destinations live in the

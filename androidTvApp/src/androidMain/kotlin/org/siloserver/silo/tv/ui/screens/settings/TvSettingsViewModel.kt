@@ -109,6 +109,7 @@ class TvSettingsViewModel(
         val userError: String? = null,
         // Active profile identity for the tappable account header row.
         val profileName: String? = null,
+        val isPrimaryProfile: Boolean = false,
         val profileAvatar: ProfileAvatarRef = ProfileAvatarRef.None,
         val serverUrl: String = "",
         val serverName: String = "",
@@ -265,6 +266,7 @@ class TvSettingsViewModel(
                                 userLoading = false,
                                 userError = null,
                                 profileName = profile?.name,
+                                isPrimaryProfile = profile?.isPrimary == true,
                                 profileAvatar = profile?.avatarRef() ?: ProfileAvatarRef.None,
                             )
                         }

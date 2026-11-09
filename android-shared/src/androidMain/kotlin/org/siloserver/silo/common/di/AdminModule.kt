@@ -1,5 +1,6 @@
 package org.siloserver.silo.common.di
 
+import android.content.Context
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -7,6 +8,7 @@ import org.siloserver.silo.common.admin.AdminAccess
 import org.siloserver.silo.common.admin.AdminConsoleViewModel
 import org.siloserver.silo.common.admin.AdminDashboardViewModel
 import org.siloserver.silo.common.admin.AdminLogsViewModel
+import org.siloserver.silo.common.admin.AdminMenuPreferences
 import org.siloserver.silo.common.admin.AdminRequestsViewModel
 import org.siloserver.silo.common.admin.AdminService
 import org.siloserver.silo.common.admin.AdminTasksViewModel
@@ -16,6 +18,12 @@ import org.siloserver.silo.common.admin.AdminSpecLoader
 val adminModule = module {
     single { AdminSpecLoader(androidContext()) }
     single { AdminAccess(get(), get()) }
+    single {
+        AdminMenuPreferences(
+            androidContext().getSharedPreferences(AdminMenuPreferences.PREFS_NAME, Context.MODE_PRIVATE),
+            get(),
+        )
+    }
     single { AdminService(get(), get()) }
     viewModel { AdminConsoleViewModel(get(), get(), get()) }
     viewModel { AdminDashboardViewModel(get()) }

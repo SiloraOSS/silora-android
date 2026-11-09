@@ -1,9 +1,16 @@
 # Silora admin console
 
-Silora adds **Profile menu → Admin** on phone and TV for administrator
+Silora offers **Profile menu → Admin** on phone and TV for administrator
 accounts. The server requires the account’s primary profile for admin calls;
 the console prompts administrators on another profile to switch. The ordinary
 user Requests screens keep their request, cancellation and status controls.
+
+The administrator's primary profile can enable the menu entry with **Show Admin
+in profile menu** in **Settings → Administrator** on phone or **Settings →
+General → Administrator** on TV. It defaults off and saves separately for each
+server, account and profile on the current device. The setting stays available
+when the entry is hidden, so the administrator can enable it at any time. It controls
+menu visibility; server permissions still govern admin operations.
 
 Dashboard and now playing, request moderation, tasks/scans and logs have
 dedicated screens. Activity, People, Media and Server groups expose the other
@@ -28,9 +35,9 @@ on November 8, 2026. This is the `admin-console` entry in
 - `shared/.../admin/`: `AdminSpec`, `AdminCatalog`, `AdminForm`, `AdminDisplay`
   and the typed `AdminModels`; `network/apiv2/AdminV2Api.kt` executes calls.
 - `android-shared/.../common/admin/`: `AdminSpecLoader`, `AdminAccess`,
-  `AdminConsoleViewModel`, `AdminService`, the dashboard/requests/tasks/logs
-  view models and `AdminPresentation`. `common/di/AdminModule.kt` is loaded
-  by both applications.
+  `AdminMenuPreferences`, `AdminConsoleViewModel`, `AdminService`, the
+  dashboard/requests/tasks/logs view models and `AdminPresentation`.
+  `common/di/AdminModule.kt` is loaded by both applications.
 - Phone: `screens/admin/AdminConsoleScreen.kt`, `AdminHandBuiltScreens.kt`,
   `Route.AdminConsole`, and `LocalAdminConsole` in navigation/profile menu.
 - TV: `screens/admin/TvAdminConsoleScreen.kt`, `TvAdminHandBuiltScreens.kt`,

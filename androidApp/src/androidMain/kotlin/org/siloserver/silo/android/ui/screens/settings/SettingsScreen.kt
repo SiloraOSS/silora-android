@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material.icons.filled.Bookmark
@@ -57,6 +58,7 @@ import org.siloserver.silo.android.ui.theme.SiloOnSurface
 import org.siloserver.silo.android.ui.theme.SiloSecondaryText
 import org.siloserver.silo.android.ui.theme.SiloSettingsBackground
 import org.siloserver.silo.common.diagnostics.DiagnosticsAvailabilityUi
+import org.siloserver.silo.common.admin.AdminMenuPreferences
 import org.siloserver.silo.common.network.clientVersionLabel
 import org.siloserver.silo.common.settings.CardPresentationSupport
 import org.siloserver.silo.model.settings.LanguageOptions
@@ -116,6 +118,8 @@ fun SettingsScreen(
     val profileLaunchPreferences: org.siloserver.silo.common.profiles.ProfileLaunchPreferences =
         org.koin.compose.koinInject()
     val profileLaunchState by profileLaunchPreferences.state.collectAsState()
+    val adminMenuPreferences: AdminMenuPreferences = org.koin.compose.koinInject()
+    val showAdmin by adminMenuPreferences.visible.collectAsState(initial = adminMenuPreferences.isVisible())
 
     LaunchedEffect(state.loggedOut) {
         if (state.loggedOut) {
@@ -164,11 +168,14 @@ fun SettingsScreen(
     )
     val matchesAbout = search.matches("about", "version", versionLabel, "privacy", "policy", "information")
     val matchesSignOut = search.matches("sign out", "account")
+    val matchesAdministrator = state.user?.role.equals("admin", ignoreCase = true) &&
+        state.activeProfile?.isPrimary == true &&
+        search.matches("administrator", "admin", "console", "profile menu", "hide")
 
     val hasResults = matchesInterface || matchesNotifications || matchesProfileSelection || matchesPlayback || matchesSubtitles ||
         matchesDownloads || matchesWatchlist || matchesFavorites || matchesHistory || matchesCollections ||
         showDiagnostics || matchesServer || matchesPairDevice || matchesExperimental ||
-        matchesAbout || matchesSignOut || matchesSignIn
+        matchesAbout || matchesSignOut || matchesSignIn || matchesAdministrator
 
     Scaffold(
         topBar = {
@@ -365,6 +372,22 @@ fun SettingsScreen(
             if (matchesSignIn) {
                 item(key = "sign-in") {
                     SignInSection(viewModel = signInViewModel)
+                }
+            }
+
+            if (matchesAdministrator) {
+                item(key = "administrator") {
+                    SettingsSection(
+                        title = "Administrator",
+                        footer = "Shows Admin when you open the profile menu. Saved for this profile on this device.",
+                    ) {
+                        SettingsSwitchRow(
+                            label = "Show Admin in profile menu",
+                            icon = Icons.Filled.AdminPanelSettings,
+                            checked = showAdmin,
+                            onCheckedChange = adminMenuPreferences::setVisible,
+                        )
+                    }
                 }
             }
 

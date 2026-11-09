@@ -275,9 +275,8 @@ class SettingsViewModel(
 
             playerSettingsStore.refreshFromServer()
 
-            // The active profile is no longer resolved here. It existed only to
-            // decide the admin gate, which this screen no longer has; the
-            // profile-scoped *preferences* are resolved canonically below.
+            // The account card and admin-menu visibility control use the
+            // ActiveProfileStore above. Profile settings resolve below.
             loadProfileSettings()
         }
     }

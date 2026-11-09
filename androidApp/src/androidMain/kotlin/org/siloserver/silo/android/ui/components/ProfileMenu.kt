@@ -20,6 +20,7 @@ import org.siloserver.silo.android.R
 import org.siloserver.silo.android.ui.navigation.LocalAdminConsole
 import org.koin.compose.koinInject
 import org.siloserver.silo.android.ui.screens.profiles.ProfileAvatar
+import org.siloserver.silo.common.admin.AdminMenuPreferences
 import org.siloserver.silo.common.ui.components.avatarRef
 import org.siloserver.silo.common.ui.marquee.ServerBranding
 import org.siloserver.silo.model.profile.Profile
@@ -80,7 +81,9 @@ fun ProfileMenu(
     // jobs and the feature/account split would stop reading as a split. The
     // old menu drew its divider unconditionally, so a server with requests
     // disabled opened onto a stray rule above its first item.
-    val onAdminClick = LocalAdminConsole.current
+    val adminMenuPreferences: AdminMenuPreferences = koinInject()
+    val showAdmin by adminMenuPreferences.visible.collectAsState(initial = adminMenuPreferences.isVisible())
+    val onAdminClick = LocalAdminConsole.current.takeIf { showAdmin }
     val hasFeatureGroup = onRequestsClick != null || onWatchPartyClick != null || onAdminClick != null
 
     SiloDropdownMenu(

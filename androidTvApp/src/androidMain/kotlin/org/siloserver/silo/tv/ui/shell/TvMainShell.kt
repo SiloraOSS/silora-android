@@ -2,6 +2,7 @@ package org.siloserver.silo.tv.ui.shell
 
 import org.siloserver.silo.model.catalog.CatalogBoxSet
 import org.siloserver.silo.model.catalog.boxSetCard
+import org.siloserver.silo.common.admin.AdminMenuPreferences
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -260,8 +261,12 @@ fun TvMainShell(
     ) {
         value = runCatching { adminAccess.check() }.getOrDefault(org.siloserver.silo.common.admin.AdminAvailability.Unknown)
     }
-    val adminVisible = adminAvailability == org.siloserver.silo.common.admin.AdminAvailability.Available ||
-        adminAvailability == org.siloserver.silo.common.admin.AdminAvailability.NeedsPrimaryProfile
+    val adminMenuPreferences: AdminMenuPreferences = koinInject()
+    val showAdmin by adminMenuPreferences.visible.collectAsState(initial = adminMenuPreferences.isVisible())
+    val adminVisible = showAdmin && (
+        adminAvailability == org.siloserver.silo.common.admin.AdminAvailability.Available ||
+            adminAvailability == org.siloserver.silo.common.admin.AdminAvailability.NeedsPrimaryProfile
+        )
 
     // The raw list of libraries visible to this profile on TV, sorted by the
     // server's sort order (ebook-like libraries filtered out by visibleOnTv).
