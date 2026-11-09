@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -145,6 +146,21 @@ def release_for(tag):
     return next((release for page in pages for release in page if release["tag_name"] == tag), None)
 
 
+def wait_for_new_draft(tag):
+    # A successful create can precede visibility in GitHub's release list.
+    # Retry only a missing read; never repeat creation or suppress API errors.
+    for attempt in range(6):
+        existing = release_for(tag)
+        if existing is not None:
+            if existing["draft"]:
+                return existing
+            break
+        if attempt < 5:
+            print("Waiting for the new GitHub draft to appear...", flush=True)
+            time.sleep(2)
+    raise ValueError("Could not verify the new draft; inspect GitHub before retrying")
+
+
 def check_tag(tag, source, *, create=False):
     refs = api(f"git/matching-refs/tags/{tag}")
     ref = next((item for item in refs if item["ref"] == f"refs/tags/{tag}"), None)
@@ -191,9 +207,7 @@ def upload_and_dispatch(directory, info):
         if existing is None:
             gh("release", "create", tag, "--repo", REPO, "--verify-tag", "--draft",
                "--title", info["title"], "--notes-file", staged / "RELEASE_NOTES.md")
-            existing = release_for(tag)
-            if existing is None or not existing["draft"]:
-                raise ValueError("Could not verify the new draft; inspect GitHub before retrying")
+            existing = wait_for_new_draft(tag)
         present = verify_remote_subset(tag, staged, existing)
         missing = sorted(FILES - present)
         if missing:

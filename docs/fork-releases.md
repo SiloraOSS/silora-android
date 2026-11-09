@@ -169,6 +169,13 @@ newer build shipped while the PC was uploading, the older draft stays unpublishe
 build again before releasing. Matching interrupted drafts can be resumed by
 repeating the same local command. Existing public releases and conflicting assets
 are never replaced. A failed upload or dispatch leaves a draft for inspection.
+
+After creating a draft, the local publisher checks for it up to six times, waiting
+two seconds between checks (ten seconds of waiting total). This handles a short
+delay before GitHub's release list shows the draft. It retries only missing reads;
+API errors or an already-public release during this check stop publication. It
+never repeats draft creation during this wait.
+
 Follow the workflow link printed by the command for the final publication result.
 The existing daily/manual notification workflows keep their current scope; this
 new publish-only workflow does not send Discord notifications.

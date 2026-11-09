@@ -175,6 +175,7 @@ class FakeGitHubTests(ArchiveFixture, unittest.TestCase):
         self.remote = self.root / "remote"
         self.remote.mkdir()
         self.draft = None
+        self.hidden_draft_reads = 0
         self.ref = None
         self.commands = []
         self.latest_base = self.info["version_code_base"] - 1
@@ -192,9 +193,13 @@ class FakeGitHubTests(ArchiveFixture, unittest.TestCase):
             if "releases?" in path:
                 if self.draft is not None:
                     self.draft["assets"] = [{"name": p.name} for p in self.remote.iterdir()]
+                visible = self.draft
+                if visible is not None and self.hidden_draft_reads:
+                    self.hidden_draft_reads -= 1
+                    visible = None
                 return json.dumps([[{"tag_name": "previous", "draft": False,
                                      "prerelease": False, "published_at": "2026-11-07T00:00:00Z"}]
-                                   + ([self.draft] if self.draft else [])])
+                                   + ([visible] if visible else [])])
             if path.endswith("releases/latest"):
                 return json.dumps({"tag_name": "previous"})
             if "git/matching-refs" in path:
@@ -245,6 +250,43 @@ class FakeGitHubTests(ArchiveFixture, unittest.TestCase):
         release.upload_and_dispatch(self.archive, self.info)
         self.assertEqual(sum(c[:2] == ("release", "create") for c in self.commands), 1)
         self.assertEqual({p.name for p in self.remote.iterdir()}, release.FILES)
+
+    def test_delayed_new_draft_visibility_uploads_without_repeating_creation(self):
+        self.hidden_draft_reads = 2
+        with mock.patch.object(release.time, "sleep") as sleep:
+            release.upload_and_dispatch(self.archive, self.info)
+        self.assertEqual(sleep.call_args_list, [mock.call(2), mock.call(2)])
+        self.assertEqual(sum(c[:2] == ("release", "create") for c in self.commands), 1)
+        self.assertEqual({p.name for p in self.remote.iterdir()}, release.FILES)
+        self.assertEqual(sum(c[:2] == ("workflow", "run") for c in self.commands), 1)
+
+    def test_invisible_new_draft_stops_after_bounded_wait_without_uploading(self):
+        self.hidden_draft_reads = 100
+        with mock.patch.object(release.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "Could not verify the new draft"):
+                release.upload_and_dispatch(self.archive, self.info)
+        self.assertEqual(sleep.call_args_list, [mock.call(2)] * 5)
+        self.assertEqual(self.hidden_draft_reads, 94)
+        self.assertEqual(sum(c[:2] == ("release", "create") for c in self.commands), 1)
+        self.assertFalse(any(c[:2] in (("release", "upload"), ("workflow", "run")) for c in self.commands))
+        self.assertEqual(list(self.remote.iterdir()), [])
+
+    def test_new_draft_read_error_stops_without_retrying_or_uploading(self):
+        with mock.patch.object(release, "release_for", side_effect=[None, ValueError("API unavailable")]) as lookup, \
+             mock.patch.object(release.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "API unavailable"):
+                release.upload_and_dispatch(self.archive, self.info)
+        self.assertEqual(lookup.call_count, 2)
+        sleep.assert_not_called()
+        self.assertFalse(any(c[:2] in (("release", "upload"), ("workflow", "run")) for c in self.commands))
+
+    def test_new_release_that_is_already_public_stops_without_uploading(self):
+        with mock.patch.object(release, "release_for", side_effect=[None, {"draft": False}]), \
+             mock.patch.object(release.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "Could not verify the new draft"):
+                release.upload_and_dispatch(self.archive, self.info)
+        sleep.assert_not_called()
+        self.assertFalse(any(c[:2] in (("release", "upload"), ("workflow", "run")) for c in self.commands))
 
     def test_changed_draft_is_preserved_and_not_published(self):
         release.upload_and_dispatch(self.archive, self.info)
