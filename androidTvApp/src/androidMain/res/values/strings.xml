@@ -203,6 +203,5 @@
     <string name="marker_skip_recap">Skip Recap</string>
     <string name="marker_skip_credits">Skip Credits</string>
     <string name="settings_credits_skip_title">Skip Credits</string>
-    <string name="settings_credits_skip_description">Ask to Skip: show a Skip Credits button. Auto: skip each credits segment automatically. Off: play credits without a skip button. Saved for this profile on this device.</string>
-    <string name="settings_credits_skip_warning">Incorrectly marked episodes may skip content or cause playback issues. Use Auto at your own risk.</string>
+    <string name="settings_credits_skip_warning">Incorrectly marked episodes may skip content or cause playback issues. Use automatic skipping at your own risk.</string>
 </resources>

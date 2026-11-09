@@ -215,6 +215,8 @@ interface PlayerSettingsStore {
      * The server-stored keys this device holds its own value for, in the
      * active profile. A control whose key is absent follows the profile (or
      * the default); see [PlaybackSettingsKeys.hasDeviceOverride][org.siloserver.silo.model.settings.PlaybackSettingsKeys.hasDeviceOverride].
+     * A local three-way credits choice counts as an override of the server's
+     * credits boolean here, even though that choice is never sent to the server.
      */
     val deviceOverrideKeysFlow: Flow<Set<String>>
         get() = flowOf(emptySet())

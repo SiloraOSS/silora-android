@@ -517,7 +517,16 @@ class AndroidPlayerSettingsStore(
         profileScopedFlow(false) { p, s -> p.boolFor(s, PlaybackSettingsKeys.SubtitleMatchesDevice, false) }
 
     override val deviceOverrideKeysFlow: Flow<Set<String>> =
-        profileScopedFlow(emptySet()) { p, s -> p[deviceOverridesKey(s)].orEmpty() }
+        profileScopedFlow(emptySet()) { p, s ->
+            val keys = p[deviceOverridesKey(s)].orEmpty()
+            // The local three-way choice overrides the server's credits
+            // boolean without writing it. Include choices saved by older builds.
+            if (CreditsSkipMode.fromWire(p.stringFor(s, CREDITS_SKIP_MODE, "")) != null) {
+                keys + PlaybackSettingsKeys.AutoSkipCredits
+            } else {
+                keys
+            }
+        }
 
     override val showAudiobooksFlow: Flow<Boolean> =
         profileScopedFlow(false) { p, s -> p.boolFor(s, PlaybackSettingsKeys.NavShowAudiobooks, false) }
@@ -1113,6 +1122,7 @@ class AndroidPlayerSettingsStore(
         withScope { scope, store ->
             val unstored = keysUnstoredBy(scope.serverUrl)
             store.edit {
+                if (key == PlaybackSettingsKeys.AutoSkipCredits) resetCreditsSkipMode(it, scope)
                 clearDeviceOverride(it, scope, *keys.toTypedArray())
                 it[unconfirmedKeysKey(scope)] = it[unconfirmedKeysKey(scope)].orEmpty() - keys.toSet()
                 for (cleared in keys) {
@@ -1147,7 +1157,7 @@ class AndroidPlayerSettingsStore(
                 it.remove(booleanPreferencesKey(scope.keyPrefix + AUDIO_NORMALIZATION_ENABLED))
                 it.remove(stringPreferencesKey(scope.keyPrefix + NIGHT_MODE_PARAMETERS))
                 it.remove(stringPreferencesKey(scope.keyPrefix + NEXT_UP_PROMPT_MODE))
-                it.remove(stringPreferencesKey(scope.keyPrefix + CREDITS_SKIP_MODE))
+                resetCreditsSkipMode(it, scope)
                 it.remove(booleanPreferencesKey(scope.keyPrefix + MATCH_CONTENT_RESOLUTION))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.PictureInPictureEnabled))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.ForceHdrPassthrough))
@@ -1361,6 +1371,17 @@ class AndroidPlayerSettingsStore(
     private suspend fun writeStringLocal(key: String, value: String) {
         withScope { scope, store ->
             store.edit { it[stringPreferencesKey(scope.keyPrefix + key)] = value }
+        }
+    }
+
+    private fun resetCreditsSkipMode(prefs: androidx.datastore.preferences.core.MutablePreferences, scope: Scope) {
+        val key = stringPreferencesKey(scope.keyPrefix + CREDITS_SKIP_MODE)
+        // An empty scoped slot masks an unscoped legacy choice without
+        // deleting that choice for another server or device.
+        if (scope.keyPrefix.isNotEmpty() && prefs[stringPreferencesKey(CREDITS_SKIP_MODE)] != null) {
+            prefs[key] = ""
+        } else {
+            prefs.remove(key)
         }
     }
 

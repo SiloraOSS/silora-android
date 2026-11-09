@@ -385,17 +385,18 @@ fun PlaybackEpisodesSection(
             onUseProfileSetting = { onUseProfileSetting(PlaybackSettingsKeys.IntroSkipMode) },
         )
 
-        SettingsDropdownRow(
+        ProfileLayeredDropdownRow(
             label = stringResource(R.string.settings_credits_skip_title),
             value = creditsSkipMode.label,
             options = CreditsSkipMode.entries.map { it.label },
+            overridden = overridden(PlaybackSettingsKeys.AutoSkipCredits),
             onOptionSelected = { label ->
                 CreditsSkipMode.entries.firstOrNull { it.label == label }?.let(onCreditsSkipModeChanged)
             },
-            description = stringResource(R.string.settings_credits_skip_description) +
-                if (creditsSkipMode == CreditsSkipMode.Auto) {
-                    "\n" + stringResource(R.string.settings_credits_skip_warning)
-                } else "",
+            onUseProfileSetting = { onUseProfileSetting(PlaybackSettingsKeys.AutoSkipCredits) },
+            description = if (creditsSkipMode == CreditsSkipMode.Auto) {
+                stringResource(R.string.settings_credits_skip_warning)
+            } else null,
         )
 
         SettingsDropdownRow(

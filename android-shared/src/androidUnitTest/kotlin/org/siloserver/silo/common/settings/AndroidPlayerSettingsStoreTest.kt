@@ -333,6 +333,7 @@ class AndroidPlayerSettingsStoreTest {
         store.setCreditsSkipMode(CreditsSkipMode.Off)
         store.refreshFromServer()
         assertEquals(CreditsSkipMode.Off, store.creditsSkipModeFlow.first())
+        assertTrue(PlaybackSettingsKeys.AutoSkipCredits in store.deviceOverrideKeysFlow.first())
         assertTrue(store.autoSkipCreditsFlow.first(), "The local mode must not change the server boolean")
         store.setCreditsSkipMode(CreditsSkipMode.Ask)
         api.effective = mapOf(stored(PlaybackSettingsKeys.AutoSkipCredits, JsonPrimitive(false)))
@@ -342,6 +343,57 @@ class AndroidPlayerSettingsStoreTest {
         store.refreshFromServer()
         assertEquals(CreditsSkipMode.Auto, store.creditsSkipModeFlow.first())
         assertTrue(fakeFlusher.calls.isEmpty(), "The three-way mode must stay on this device")
+    }
+
+    @Test
+    fun `using the profile credits setting clears the local mode and follows later profile changes`() = runTest {
+        val key = PlaybackSettingsKeys.AutoSkipCredits
+        val api = FakeSettingsApi(mapOf(stored(key, JsonPrimitive(false), SettingScope.PROFILE.wire)))
+        val store = newStore(repository = SettingsRepository(api), deviceId = "device")
+        store.refreshFromServer()
+        assertFalse(key in store.deviceOverrideKeysFlow.first())
+
+        for (auto in listOf(true, false)) {
+            store.setCreditsSkipMode(CreditsSkipMode.Off)
+            assertTrue(key in store.deviceOverrideKeysFlow.first())
+            api.effective = mapOf(stored(key, JsonPrimitive(auto), SettingScope.PROFILE.wire))
+            store.resetDeviceSetting(key)
+            assertEquals(CreditsSkipMode.fromLegacyBoolean(auto), store.creditsSkipModeFlow.first())
+            assertFalse(key in store.deviceOverrideKeysFlow.first())
+            assertTrue(fakeFlusher.calls.last().isDelete)
+            assertEquals(key, fakeFlusher.calls.last().key)
+        }
+
+        api.effective = mapOf(stored(key, JsonPrimitive(true), SettingScope.PROFILE.wire))
+        store.refreshFromServer()
+        assertEquals(CreditsSkipMode.Auto, store.creditsSkipModeFlow.first())
+        assertFalse(key in store.deviceOverrideKeysFlow.first())
+        assertTrue(fakeFlusher.calls.all { it.isDelete }, "Local modes must never write the server boolean")
+    }
+
+    @Test
+    fun `resetting scoped credits masks a legacy choice only on the current device`() = runTest {
+        val backing = PreferenceDataStoreFactory.create(
+            produceFile = { File(tempFolder.root, "legacy_credits.preferences_pb") },
+        )
+        backing.edit { it[stringPreferencesKey("silora.credits_skip_mode")] = "off" }
+        var device = "device-a"
+        val store = AndroidPlayerSettingsStore(
+            context = mockContextStub(), legacyCache = fakeLegacyCache,
+            getActiveProfileId = { activeProfileId }, getServerUrl = { serverUrl },
+            getDeviceId = { device }, serverSettingsFlusher = fakeFlusher,
+            dataStoreFactory = { _, _ -> backing },
+        )
+        assertEquals(CreditsSkipMode.Off, store.creditsSkipModeFlow.first())
+        assertTrue(PlaybackSettingsKeys.AutoSkipCredits in store.deviceOverrideKeysFlow.first())
+        store.resetDeviceSetting(PlaybackSettingsKeys.AutoSkipCredits)
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
+        assertFalse(PlaybackSettingsKeys.AutoSkipCredits in store.deviceOverrideKeysFlow.first())
+        device = "device-b"
+        assertEquals(CreditsSkipMode.Off, store.creditsSkipModeFlow.first())
+        device = "device-a"
+        store.resetAllDeviceSettings()
+        assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
     }
 
     @Test
@@ -365,6 +417,7 @@ class AndroidPlayerSettingsStoreTest {
             store.setCreditsSkipMode(mode)
             assertEquals(mode, newStore().creditsSkipModeFlow.first())
         }
+        store.setCreditsSkipMode(CreditsSkipMode.Off)
         profile = "profile-b"
         assertEquals(CreditsSkipMode.Ask, store.creditsSkipModeFlow.first())
         profile = "profile-a"

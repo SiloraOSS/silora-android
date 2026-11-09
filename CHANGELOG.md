@@ -4,6 +4,31 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-08 — align Skip Credits with Skip Intros
+
+Phone and TV **Skip Credits** now offers **Use profile setting**, **Never**,
+**Ask to skip**, and **Skip automatically**, in that order. Removed the option
+descriptions and explanatory footer; the existing automatic-skip warning stays
+under the setting when automatic skipping is active. Matt requested profile
+inheritance, matching labels/order and removal of the descriptions.
+
+Explicit choices stay local to the account, profile, server and device, with
+their existing saved values preserved. **Use profile setting** clears the local
+mode and any device override of the server's credits boolean. The profile's
+boolean maps enabled to automatic skipping and disabled to asking. Existing
+local choices appear as overrides after an update, and resetting a legacy
+choice on one device leaves other devices' choices intact.
+
+Validation: all 2,369 shared release unit tests and all 90 player-settings store
+release tests passed, including profile inheritance, later profile changes,
+local persistence and legacy reset isolation. `git diff --check` passed.
+Full phone/TV release lint passed with no unsuppressed errors (phone: 93
+warnings, 4 hints; TV: 98 warnings, 8 hints). Signed, minified release builds
+passed signature, application ID, non-debuggable flag and version verification.
+APKs, matching R8 mappings, metadata and checksums are in
+`dist/local-2026-11-09.025209/`. Matt tested the changes and confirmed they work
+on November 8, 2026. No push, release or PR occurred.
+
 ## 2026-11-08 — import Edrock’s admin console
 
 Cherry-picked edrock200’s ten commits from `3cb8886ed` through `3792ac473`,

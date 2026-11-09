@@ -1475,7 +1475,6 @@ private fun TvPlaybackSettingsPane(
                     value = state.creditsSkipMode.label,
                     onClick = { activePicker = PlaybackPicker.CreditsSkipMode },
                 )
-                SettingsFooterText(text = stringResource(R.string.settings_credits_skip_description))
                 if (state.creditsSkipMode == CreditsSkipMode.Auto) {
                     SettingsFooterText(text = stringResource(R.string.settings_credits_skip_warning))
                 }
@@ -1703,16 +1702,27 @@ private fun TvPlaybackSettingsPane(
                 onDismiss = { activePicker = null },
             )
         }
-        PlaybackPicker.CreditsSkipMode -> TvSettingsPickerSheet(
-            title = stringResource(R.string.settings_credits_skip_title),
-            options = CreditsSkipMode.entries.map { PickerOption(it.wireValue, it.label, it.description) },
-            selectedId = state.creditsSkipMode.wireValue,
-            onSelect = { id ->
-                CreditsSkipMode.fromWire(id)?.let(onCreditsSkipModeChanged)
-                activePicker = null
-            },
-            onDismiss = { activePicker = null },
-        )
+        PlaybackPicker.CreditsSkipMode -> {
+            val (options, selectedId) = profileLayered(
+                PlaybackSettingsKeys.AutoSkipCredits,
+                CreditsSkipMode.entries.map { PickerOption(it.wireValue, it.label) },
+                state.creditsSkipMode.wireValue,
+            )
+            TvSettingsPickerSheet(
+                title = stringResource(R.string.settings_credits_skip_title),
+                options = options,
+                selectedId = selectedId,
+                onSelect = { id ->
+                    if (id == UseProfileSettingId) {
+                        onUseProfileSetting(PlaybackSettingsKeys.AutoSkipCredits)
+                    } else {
+                        CreditsSkipMode.fromWire(id)?.let(onCreditsSkipModeChanged)
+                    }
+                    activePicker = null
+                },
+                onDismiss = { activePicker = null },
+            )
+        }
         PlaybackPicker.ResumeRewind -> TvSettingsPickerSheet(
             title = "Rewind on Resume",
             options = ResumeRewindOptions.map { PickerOption(it.toString(), resumeRewindLabel(it)) },
