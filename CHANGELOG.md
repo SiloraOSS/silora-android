@@ -4,6 +4,27 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-08 — choose GitHub or PC release builds
+
+Added `./release.sh github` to start the existing manual GitHub build and
+`./release.sh local <archive> --publish` to publish the exact signed phone/TV
+APKs built and tested on the PC. Local verification checks signatures, package
+identity, versions, source provenance, full-lint evidence, matching mappings
+and checksums. The default local command previews without writing to GitHub.
+
+A small publish-only workflow verifies uploaded bytes under the existing release
+lock. It prevents older builds from replacing a newer Latest release, resumes
+matching drafts, and preserves published tags/assets. Existing GitHub build
+workflows, schedules, signing secrets and notification scope stay unchanged.
+Local builds now retain publication evidence alongside their existing archive.
+Older archives without that evidence need rebuilding with full lint.
+
+Validation: 23 local-publisher tests, ten local-build tests and 31 existing
+fork-release tests passed, including simulated upload/read-back/publication,
+partial-draft recovery, byte preservation and stale-build rejection. Workflow
+YAML, shell syntax and the shared lock were checked. No app code changed and
+no new public release was created for verification.
+
 ## 2026-11-08 — align Skip Credits with Skip Intros
 
 Phone and TV **Skip Credits** now offers **Use profile setting**, **Never**,

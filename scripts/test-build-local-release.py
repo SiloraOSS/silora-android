@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest import mock
 
@@ -57,6 +58,40 @@ class LocalReleaseTests(unittest.TestCase):
         with mock.patch.object(build, "capture", return_value="Signer #1 certificate SHA-256 digest: abcdef\n"):
             with self.assertRaisesRegex(ValueError, "signing certificate does not match"):
                 build.verify_apks({"ANDROID_HOME": "/sdk"}, {}, "123456")
+
+    def test_archived_apks_are_verified_instead_of_current_build_outputs(self):
+        commands = []
+        info = {"version_code_base": 400_000_000, "version_name": "fixture"}
+        def capture(command, **kwargs):
+            commands.append(command)
+            if command[1] == "verify":
+                return "Signer #1 certificate SHA-256 digest: abcdef\n"
+            field = command[2]
+            return {"application-id": "org.silora.app", "debuggable": "false",
+                    "version-code": "800000001", "version-name": "fixture"}[field]
+        with mock.patch.object(build, "capture", side_effect=capture):
+            build.verify_apks({"ANDROID_HOME": "/sdk"}, info, "abcdef", ("tv",), apk_directory=Path("/archive"))
+        self.assertTrue(all(command[-1] == "/archive/silora-tv.apk" for command in commands))
+
+    def test_source_status_separates_untracked_notes_from_compilation_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+            git("init", "--quiet")
+            (root / "build.gradle.kts").write_text("// tracked build input")
+            git("add", "build.gradle.kts")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "-m", "fixture")
+            (root / "notes.txt").write_text("unrelated local notes")
+            with mock.patch.object(build, "ROOT", root):
+                self.assertEqual(build.source_status(), {"tracked_tree_dirty": False, "untracked_build_inputs": False})
+                (root / "shared").mkdir()
+                source = root / "shared/Extra.kt"
+                source.write_text("// affects compilation")
+                self.assertTrue(build.source_status()["untracked_build_inputs"])
+                source.unlink()
+                (root / "build.gradle.kts").write_text("// uncommitted change")
+                self.assertTrue(build.source_status()["tracked_tree_dirty"])
 
     def test_wrong_apk_version_is_rejected(self):
         def capture(command, **kwargs):

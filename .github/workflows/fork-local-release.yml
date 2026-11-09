@@ -1,0 +1,51 @@
+name: Silora Publish Local Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Verified local draft tag (created by release.sh local)
+        required: true
+        type: string
+      source_sha:
+        description: Exact source SHA verified on the PC
+        required: true
+        type: string
+      manifest_sha256:
+        description: SHA-256 of the locally verified checksum manifest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize publication with GitHub builds, without compiling the PC build again.
+concurrency:
+  group: silora-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'SiloraOSS/silora-android' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out trusted release tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Check publish tooling
+        run: python3 scripts/test-local-release.py
+
+      - name: Verify the uploaded PC build and publish it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCAL_TAG: ${{ inputs.tag }}
+          LOCAL_SOURCE: ${{ inputs.source_sha }}
+          LOCAL_MANIFEST: ${{ inputs.manifest_sha256 }}
+        run: |
+          python3 scripts/local-release.py finalize \
+            --tag "$LOCAL_TAG" --source "$LOCAL_SOURCE" --manifest-sha256 "$LOCAL_MANIFEST"

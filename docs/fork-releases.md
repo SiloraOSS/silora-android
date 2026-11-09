@@ -93,6 +93,65 @@ The daily workflow recognizes complete releases with the new tags and existing
 If the next daily sync produces the same source files, it skips the build as
 usual. The daily schedule and upstream sync behavior stay unchanged.
 
+## Choose GitHub compilation or publish a PC build
+
+Both routes remain available. Choose separately for each release:
+
+| Route | Command | Compilation |
+| --- | --- | --- |
+| GitHub build | `./release.sh github` | GitHub compiles and publishes through Silora Manual Release. |
+| PC build | `./release.sh local dist/local-YYYY-MM-DD.HHMMSS --publish` | Publishes the exact archived APKs; GitHub only verifies the upload and makes the release public. |
+
+You can still start **Silora Manual Release** from GitHub's Actions page.
+`./release.sh github --tests` enables its full-test checkbox;
+`./release.sh github --dry-run` prints the dispatch command without starting it.
+
+For the PC route, commit the source first, then build both apps with full lint:
+
+```sh
+./build.sh --release=both --lint       # Add --tests when you want the full test suite
+# Test the APKs in the printed dist/local-... folder, then push their source commit.
+./release.sh local dist/local-YYYY-MM-DD.HHMMSS             # Verify and preview only
+./release.sh local dist/local-YYYY-MM-DD.HHMMSS --publish   # Upload and queue publication
+```
+
+Use the actual folder printed by the build. Publishing does not rebuild, change
+APK versions, push source, merge upstream, or choose an arbitrary newest folder.
+It verifies both archived APKs against the persistent local signing key, package
+ID, version and non-debuggable flag, and checks both R8 mappings and checksums.
+Build metadata records lint/test choices and source cleanliness. Tracked source
+changes or untracked build inputs prevent publication; unrelated untracked notes
+can remain. Older archives without this evidence need a new build with `--lint`.
+Phone-only and TV-only local builds remain useful for device testing; public
+Latest releases require both so both permanent APK links keep working.
+
+The local command needs `gh` authenticated for `SiloraOSS/silora-android`, the
+local signing directory, a JDK and Android SDK. The source commit must already
+be included in GitHub `main`. This publisher and its workflow must be pushed to
+`main` before the first PC release.
+
+After uploading, **Silora Publish Local Build** runs a small publish-only job
+under the same `silora-release` lock as the existing release workflows. It
+checks the source tag and every downloaded file against the checksum manifest
+verified on the PC, then publishes a regular Latest release. It runs no Gradle
+compilation and needs no signing secrets. The wait is upload time, runner startup,
+verification and any release job already holding the lock.
+
+The release includes the original APKs and matching mappings, `build-info.json`,
+`SHA256SUMS` and release notes. Only publication metadata is restamped in a
+private copy; the original archive and APK bytes stay unchanged. Tags use the
+existing `build-YYYY-MM-DD.HHMMSS.NUMBER` format with a deterministic build-time
+suffix, so daily change detection recognizes the release.
+
+Publication checks version codes again after acquiring the release lock. If a
+newer build shipped while the PC was uploading, the older draft stays unpublished;
+build again before releasing. Matching interrupted drafts can be resumed by
+repeating the same local command. Existing public releases and conflicting assets
+are never replaced. A failed upload or dispatch leaves a draft for inspection.
+Follow the workflow link printed by the command for the final publication result.
+The existing daily/manual notification workflows keep their current scope; this
+new publish-only workflow does not send Discord notifications.
+
 ## Published releases
 
 Each dated release includes:

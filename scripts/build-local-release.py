@@ -61,6 +61,19 @@ def signing_environment(directory):
     return env, hashlib.sha256(certificate).hexdigest()
 
 
+def source_status():
+    return {
+        "tracked_tree_dirty": bool(capture(["git", "diff", "--name-only", "HEAD"]).strip()),
+        "untracked_build_inputs": any(
+            path.split("/", 1)[0] in {
+                "androidApp", "androidTvApp", "android-shared", "shared", "libass-bridge",
+                "gradle", "scripts", "baselineprofile", "baselineprofile-tv",
+            } or path.endswith((".gradle", ".gradle.kts", ".properties"))
+            for path in capture(["git", "ls-files", "--others", "--exclude-standard"]).splitlines()
+        ),
+    }
+
+
 def build_metadata():
     # Fetch only into the same private namespace used by CI. Never merge,
     # switch branches, or change the working files being built.
@@ -79,17 +92,19 @@ def build_metadata():
         "run_number": None,
         "local_build": True,
         "working_tree_dirty": bool(capture(["git", "status", "--porcelain"]).strip()),
+        **source_status(),
     })
     return info
 
 
-def verify_apks(env, info, certificate_sha256, targets=("phone", "tv")):
+def verify_apks(env, info, certificate_sha256, targets=("phone", "tv"), *, apk_directory=None):
     sdk = Path(env["ANDROID_HOME"])
     apksigner = sdk / "build-tools/35.0.0/apksigner"
     analyzer = sdk / "cmdline-tools/latest/bin/apkanalyzer"
     for target in targets:
         module, offset = MODULES[target]
-        apk = ROOT / module / f"build/outputs/apk/release/{module}-universal-release.apk"
+        apk = (Path(apk_directory) / f"silora-{target}.apk" if apk_directory is not None
+               else ROOT / module / f"build/outputs/apk/release/{module}-universal-release.apk")
         signed = capture([str(apksigner), "verify", "--verbose", "--print-certs", str(apk)], env=env)
         fingerprints = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]+)$",
                                   signed, re.MULTILINE)
@@ -163,7 +178,7 @@ def main():
         return
     tasks = []
     if args.tests:
-        for test in ("test-fork-release.py", "test-build-local-release.py"):
+        for test in ("test-fork-release.py", "test-build-local-release.py", "test-local-release.py"):
             subprocess.run([sys.executable, str(ROOT / "scripts" / test)], cwd=ROOT, env=env, check=True)
         tasks.append("test")
     if args.lint:
@@ -175,6 +190,19 @@ def main():
         "-PallowDebugReleaseSigning=false", "--parallel", "--console=plain",
     ], cwd=ROOT, env=env, check=True)
     verify_apks(env, info, fingerprint, targets)
+    # Preserve publication evidence with the exact archived binaries. Unrelated
+    # untracked notes do not change compiled inputs; untracked source does.
+    current_status = source_status()
+    for field, dirty in current_status.items():
+        info[field] = info[field] or dirty
+    info["tracked_tree_dirty"] = info["tracked_tree_dirty"] or (
+        capture(["git", "rev-parse", "HEAD"]).strip() != info["source_sha"]
+    )
+    info["validation"] = {
+        "release_lint": args.lint,
+        "unit_tests": args.tests,
+        "signing_certificate_sha256": fingerprint,
+    }
     output = package_release(info, targets)
     print(f"Verified APKs, R8 mappings, and checksums: {output}", flush=True)
 
