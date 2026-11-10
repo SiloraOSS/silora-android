@@ -4,6 +4,95 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-10 12:55 PST — upstream 09f43a215
+
+**Merge inputs:** `main`; fork before `4fb46a09a37a8fe81542033df2701f3f6df0489e`;
+upstream `09f43a2158326afca9864d00788b7019c18fa8fe`. Seven incoming commits add profile app
+languages, the translation catalog, translated screens/shared messages,
+locale-aware formatting, debug pseudo-locales and Arabic TV layout fixes.
+
+**Upstream commits added:**
+
+- `a57894556` feat(i18n): apply the profile's app language and ship the translation catalog (#868)
+- `59f15e534` feat(i18n): translate settings, playback, browse, account and shell screens (#869)
+- `6af97fe0c` feat(i18n): offer pseudo-locales in the debug App language picker (#870)
+- `edfa7681b` feat(i18n): translate text built in the shared module (#871)
+- `c0fd4ff85` feat(i18n): format dates, numbers and durations in the app language (#872)
+- `d2e639476` fix(i18n): fix layouts and gaps found in translation QA (#873)
+- `09f43a215` fix(i18n): keep Android TV text beside its labels and digits consistent in Arabic (#874)
+
+**Silora merge decisions:**
+
+- Accepted upstream's app-language settings, identity-scoped store/startup
+  bindings, translated UI/shared message types, formatting and TV label/digit
+  fixes. Adapted the fork's affected call sites to resource IDs and indexed
+  pickers without changing stored choices, preference keys or wire values.
+- Resolved 42 conflicted files. Retained `identity` through distinct `silora_`
+  resources derived from the catalog's translated strings and plural forms;
+  the 11 upstream catalog/metadata files remain byte-identical. Kept Silo
+  server, hosted diagnostics, Roku and protocol identities. Fork-only controls
+  and phone-versus-server sign-in help have English fallback resources.
+  `scripts/sync-silora-strings.py` and `docs/i18n.md` document regeneration.
+- Retained `hevc-levels`, `night-mode`, `tv-display` and `tv-subtitle-size`:
+  existing storage/runtime behavior, Night Mode controls/focus, independent
+  display switches and Extra small TV subtitles remain. Phone's subtitle
+  picker still starts at Small.
+- Retained `tv-remote`, `tv-keyboard`, `tv-voice` and `input-scope`: existing
+  App/System keyboard/editing behavior, profile/account isolation, long-press
+  mappings, controller/overlay voice search, microphone permission and service
+  query remain. Supplied resources to the remote subtitle shortcut; the unused
+  upstream legacy voice helper stays deleted. The deferred device-confirmation
+  condition has not changed.
+- Retained `up-next-setting`, `up-next-fixes` and `credits-auto-skip`: custom
+  trigger/timing choices, end-state artwork, cancellation/countdown behavior,
+  four Skip Credits choices, profile reset, local scope and warning remain.
+  Retained `ai-subtitles`, `tv-live-ai-subtitles` and `trailers`, including
+  server audio ordinals, bounded create/replan guards, language aliases, live
+  cue/job cleanup, embedded/local trailer preference and external fallback.
+- Retained `admin-console`, ordinary Requests scope/server gating, and the
+  Watch Party experimental gate. No fork feature was retired or replaced and
+  no unexplained product override was adopted.
+- `release-tooling`: Matt explicitly requested disabling the inherited Android
+  Builds workflow during this run. GitHub confirms `android-build.yml` is
+  `disabled_manually`; Silora Automation Release remains active. Kept the
+  upstream catalog-check source and every Silora signing, test, lint, mapping,
+  dependency-verification and publication safeguard. No notification workflow
+  or desktop schedule was changed.
+
+**Validation:**
+
+- Required JDK 21 command passed: `./build.sh --release=both --tests --lint
+  --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing`.
+  Both R8-optimized release APKs passed persistent-key signature, package,
+  version and non-debuggable checks; archived checksums and matching R8
+  mappings verified.
+- Gradle XML reports contain 12,749 variant cases, zero failures/errors/skips:
+  shared 2,409 debug + 2,409 release; android-shared 2,293 debug + 2,293 release;
+  phone 953 debug + 953 release; TV 1,435 debug; libass bridge 2 debug + 2
+  release. TV release host tests remain disabled by the existing configuration;
+  its debug host suite ran. Full phone/TV release lint passed with the existing
+  baselines unchanged.
+- All 88 local release-tooling tests passed, plus 34 automation-release,
+  17 local-notification and 10 daily-notification tests. Build supply-chain,
+  branded-resource consistency, staged whitespace and source/resource checks
+  passed. `actionlint` is unavailable.
+- Fresh upstream catalog regeneration could not run: the installed GitHub login
+  cannot access the private `Silo-Server/silo-translations` repository. Verified
+  committed catalog bytes against the pinned official upstream instead; Matt's
+  explicit workflow-disable decision above removes the inherited push gate.
+- Repaired merge adapter compilation errors and updated the upstream push test
+  to expect the retained Silora identity, then reran the full required command.
+  The initial sandbox cache-lock failure was resolved with reviewed access to
+  the existing Gradle cache, without changing build/signing/check requirements.
+- The MPV text guard has unchanged `rampVolume` substring and attribution-comment
+  false positives. Reviewed both baseline files and checked APK archive contents
+  for MPV artifacts; none are present.
+- The pre-commit build compiled staged tree `0d43b8f07bb38a9e9e711d54329ab901fdeda30a`.
+  Its provenance records the old parent HEAD and a dirty merged tree. Only
+  inventory/changelog documentation follows those checks. Exact-SHA artifact
+  verification follows the merge commit before push.
+- No device, server, microphone or playback testing was performed.
+
 ## 2026-11-09 13:04 PST — upstream 075e37d6a
 
 **Merge inputs:** `main`; fork before `27193f9df9d35c586dd145dd97f816e74d9c1f8a`;

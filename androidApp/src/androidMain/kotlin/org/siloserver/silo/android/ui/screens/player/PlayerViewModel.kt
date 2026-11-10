@@ -1,5 +1,6 @@
 package org.siloserver.silo.android.ui.screens.player
 
+import org.siloserver.silo.common.i18n.EnglishText
 import org.siloserver.silo.common.settings.overlayPendingChoice
 import org.siloserver.silo.common.diagnostics.DiagnosticsPlaybackLogger
 import org.siloserver.silo.common.diagnostics.DiagnosticsSeekEvent
@@ -10,9 +11,13 @@ import org.siloserver.silo.common.player.failureDiagnostics
 import org.siloserver.silo.common.player.failureClassification
 import android.os.SystemClock
 import android.util.Log
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import org.siloserver.silo.android.BuildConfig
+import org.siloserver.silo.common.R as CommonR
 import org.siloserver.silo.common.downloads.DownloadEnqueuer
 import org.siloserver.silo.common.downloads.OfflineMediaResolver
 import org.siloserver.silo.common.network.ServerReachabilityMonitor
@@ -64,6 +69,7 @@ import org.siloserver.silo.common.player.video.NextUpTransitionGate
 import org.siloserver.silo.common.player.video.VideoPlayerRouteArgs
 import org.siloserver.silo.common.player.video.VideoPlayerUiState
 import org.siloserver.silo.common.player.video.serverTerminalUserMessage
+import org.siloserver.silo.common.player.video.terminalUserMessageRes
 import org.siloserver.silo.common.settings.LetterboxExpansion
 import org.siloserver.silo.common.settings.PlayerSettingsStore
 import org.siloserver.silo.common.settings.dolbyVisionPolicySnapshot
@@ -145,7 +151,6 @@ import org.siloserver.silo.network.ApiResult
 import org.siloserver.silo.common.player.AutoPlayGuard
 import org.siloserver.silo.common.player.MountedSubtitleTrack
 import org.siloserver.silo.network.ServerRegistry
-import org.siloserver.silo.network.errorMessage
 import org.siloserver.silo.playback.audioTrackFingerprint
 import org.siloserver.silo.playback.encodeSubtitleIdentityPreference
 import org.siloserver.silo.playback.nextEpisodeAfter
@@ -203,6 +208,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.siloserver.silo.playback.orNullIfBlank
 import java.util.concurrent.atomic.AtomicBoolean
+import org.siloserver.silo.common.i18n.UiText
+import org.siloserver.silo.common.i18n.text
+import org.siloserver.silo.network.isTimeout
+import org.siloserver.silo.common.i18n.LocaleFormat
+import org.siloserver.silo.common.i18n.currentNumberLocale
 
 /**
  * ViewModel for the video player screen.
@@ -216,6 +226,72 @@ import java.util.concurrent.atomic.AtomicBoolean
  * timer, and which intros the viewer has already decided) is owned by
  * [IntroAutoSkipController].
  */
+/**
+ * Text the player screen shows from its state: a catalog message, resolved in
+ * composition so it follows the app language, or text that arrived already
+ * written (a server's or a library's message), shown as it is.
+ */
+sealed interface PlayerMessage {
+    data class Res(@StringRes val id: Int, val args: List<String> = emptyList()) : PlayerMessage
+    data class Raw(val text: String) : PlayerMessage
+    /** A catalog message after a technical code that is shown as written, such as "identity_changed: ". */
+    data class Coded(val code: String, val message: Res) : PlayerMessage
+    /** Text the shared module names (an app-built error's [ApiResult.Error.text]), with its [english] for logs. */
+    data class Shared(val text: UiText, val english: String) : PlayerMessage
+}
+
+@Composable
+fun PlayerMessage.text(): String = when (this) {
+    is PlayerMessage.Res -> stringResource(id, *args.toTypedArray())
+    is PlayerMessage.Raw -> text
+    is PlayerMessage.Coded -> code + message.text()
+    is PlayerMessage.Shared -> text.text()
+}
+
+/** [PlayerMessage.text] outside composition, for text built when an event happens. */
+fun PlayerMessage.text(context: android.content.Context): String = when (this) {
+    is PlayerMessage.Res -> context.getString(id, *args.toTypedArray())
+    is PlayerMessage.Raw -> text
+    is PlayerMessage.Coded -> code + message.text(context)
+    is PlayerMessage.Shared -> text.text(context)
+}
+
+/**
+ * A failed subtitle-tools request: the server's message as written, the
+ * shared network text for a request with no answer, else [fallback].
+ */
+private fun ApiResult<*>.subtitleToolsError(@StringRes fallback: Int): PlayerMessage = when (this) {
+    is ApiResult.Error -> text?.let { PlayerMessage.Shared(it, message) }
+        ?: message.takeIf { it.isNotBlank() }?.let(PlayerMessage::Raw) ?: PlayerMessage.Res(fallback)
+    is ApiResult.NetworkError -> PlayerMessage.Res(if (isTimeout) CommonR.string.catalog_error_timeout else CommonR.string.catalog_error_network)
+    is ApiResult.Success -> PlayerMessage.Res(fallback)
+}
+
+/**
+ * An episode's line in the media notification, "Series - S01E02", kept in
+ * parts so the season and episode tag is translated where it is shown.
+ */
+data class MobileEpisodeSubtitle(val seriesTitle: String, val season: Int, val episode: Int)
+
+/** [PlayerViewModel.PlayerUiState.subtitle] for display: the episode line in the app language, else as stored. */
+@Composable
+internal fun PlayerViewModel.PlayerUiState.displaySubtitle(): String = subtitleEpisode?.let {
+    it.seriesTitle + " - " + stringResource(
+        CommonR.string.catalog_episodeTag,
+        LocaleFormat.codeNumber(it.season, minDigits = 2),
+        LocaleFormat.codeNumber(it.episode, minDigits = 2),
+    )
+} ?: subtitleYear?.let { LocaleFormat.integer(it, currentNumberLocale()) } ?: subtitle
+
+/** For logs and the debug test hook: the message in English, as before the catalog (the resource id without one). */
+internal val PlayerMessage.debugText: String
+    get() = when (this) {
+        is PlayerMessage.Res -> EnglishText.string(id, *args.toTypedArray()) ?: "res:$id"
+        is PlayerMessage.Raw -> text
+        is PlayerMessage.Coded -> code + message.debugText
+        is PlayerMessage.Shared -> english
+    }
+
 /** A transient remote "display_message"; [id] makes repeats re-trigger the toast. */
 data class RemoteMessage(val id: Long, val text: String)
 
@@ -393,12 +469,12 @@ class PlayerViewModel(
 
     companion object {
         private const val TAG = "PlayerViewModel"
-        const val SERVER_UNREACHABLE_MESSAGE =
-            "Can't reach server — check your connection."
+        val SERVER_UNREACHABLE_MESSAGE = PlayerMessage.Res(CommonR.string.player_error_serverUnreachable)
         // Error screens say what happened in plain words; the request URL and
         // the library's exception text go to the log only.
-        private const val PLAYBACK_FAILED_MESSAGE = "Playback failed. Please try again."
-        private const val SEEK_FAILED_MESSAGE = "Couldn't seek. Please try again."
+        private val PLAYBACK_FAILED_MESSAGE = PlayerMessage.Res(CommonR.string.player_error_playbackFailed)
+        private val SEEK_FAILED_MESSAGE = PlayerMessage.Res(CommonR.string.player_error_seekFailed)
+        private val SEEK_UNSUPPORTED_MESSAGE = PlayerMessage.Res(CommonR.string.player_error_seekUnsupported)
         private const val CONTROLS_AUTO_HIDE_MS = 3_000L
         // Record a durable position roughly every 10s of content time (matches the
         // server reporter cadence) to bound DB/outbox churn.
@@ -411,8 +487,8 @@ class PlayerViewModel(
         private const val BUFFERING_RESTORE_POLL_MS = 250L
         // Up-next auto-play countdown length (matches TV's NEXT_UP_COUNTDOWN_SECONDS).
         const val UP_NEXT_COUNTDOWN_SECONDS = 10
-        const val SHUFFLE_CONTINUE_FAILED = "Couldn't continue the shuffle."
-        const val SHUFFLE_PICK_FAILED = "Couldn't pick another."
+        val SHUFFLE_CONTINUE_FAILED = CommonR.string.upNext_shuffleContinueFailed
+        val SHUFFLE_PICK_FAILED = CommonR.string.upNext_pickAnotherFailed
         /** iOS resolveOnDeckItems: section pools feeding the On Deck carousel. */
         // Stored orientation-mode values — raw-value parity with iOS
         // `PlayerOrientationMode` so the device-scoped setting round-trips.
@@ -441,7 +517,17 @@ class PlayerViewModel(
         /** An episode the profile has not started (spoiler protection). */
         val isUnwatchedEpisode: Boolean = false,
         val imageIsEpisodeStill: Boolean? = null,
+        /**
+         * The parts of an episode's [subtitle] ("S2·E4 — Title"); the card
+         * builds the line from these in the app language. [subtitle] keeps
+         * the English form.
+         */
+        val episodeLine: OnDeckEpisodeLine? = null,
+        /** The release year of a title that isn't an episode; the card formats it when drawn (D77). */
+        val year: Int? = null,
     )
+
+    data class OnDeckEpisodeLine(val season: Int, val episode: Int, val title: String?)
 
     data class NextEpisodeInfo(
         val contentId: String,
@@ -479,12 +565,12 @@ class PlayerViewModel(
         val scopeLabel: String? = null,
         val pickingAnother: Boolean = false,
         /** A transient failure to continue or pick another. */
-        val message: String? = null,
+        @StringRes val message: Int? = null,
     )
 
     data class PlayerUiState(
         val isLoading: Boolean = true,
-        val error: String? = null,
+        val error: PlayerMessage? = null,
         /**
          * Distinct "Can't reach server" state (issue #33): when true, [error]
          * carries the reachability message and the error surface offers Retry
@@ -498,9 +584,13 @@ class PlayerViewModel(
          * version keeps playing underneath, so the viewer isn't dropped to a
          * black screen for a switch that simply couldn't be honored.
          */
-        val versionSwitchMessage: String? = null,
+        val versionSwitchMessage: PlayerMessage? = null,
         val title: String = "",
         val subtitle: String = "",
+        /** Set when [subtitle] is an episode line; [displaySubtitle] shows it translated. */
+        val subtitleEpisode: MobileEpisodeSubtitle? = null,
+        /** Set when [subtitle] is a title's year; [displaySubtitle] writes it in the app's digits (D77). */
+        val subtitleYear: Int? = null,
         val seriesTitle: String? = null,
         /** Catalog item type ("movie", "episode", …), for the controls' "MOVIE · 2026" line. */
         val contentType: String? = null,
@@ -1181,7 +1271,7 @@ class PlayerViewModel(
         val searchAttempted: Boolean = false,
         val searchResults: List<SubtitleResult> = emptyList(),
         val searchWarnings: List<String> = emptyList(),
-        val searchError: String? = null,
+        val searchError: PlayerMessage? = null,
         /** "{provider}:{id}" of the result currently downloading; null otherwise. */
         val downloadingKey: String? = null,
         /** One-shot: a download finished and was auto-selected — sheet dismisses on this. */
@@ -1189,9 +1279,14 @@ class PlayerViewModel(
         /** Transcription quota; null = unlimited / not applicable / fetch failed (counter hidden). */
         val quota: SubtitleAiQuota? = null,
         val translateSubmitting: Boolean = false,
-        val translateError: String? = null,
+        val translateError: PlayerMessage? = null,
         /** In-flight AI job with live progress; null when idle. */
         val activeJob: SubtitleAiJob? = null,
+        /**
+         * Shown in place of [activeJob]'s empty progress message until the
+         * first progress update: the job runs without live delivery.
+         */
+        val activeJobNote: PlayerMessage? = null,
         /** One-shot: an AI job completed and its track was auto-selected — sheet dismisses on this. */
         val jobJustCompleted: Boolean = false,
     )
@@ -1421,7 +1516,7 @@ class PlayerViewModel(
             _uiState
                 .map { it.error }
                 .distinctUntilChanged()
-                .collect { org.siloserver.silo.common.player.debug.PlaybackDebugState.screenError = it }
+                .collect { org.siloserver.silo.common.player.debug.PlaybackDebugState.screenError = it?.debugText }
         }
         // Mirror the screen's position/duration too — the seek bar renders
         // from uiState, which can legitimately disagree with the raw player
@@ -1445,7 +1540,7 @@ class PlayerViewModel(
                     _uiState.update { current ->
                         if (current.error == null) {
                             current.copy(
-                                error = state.message,
+                                error = state.messageRes?.let { PlayerMessage.Res(it) } ?: PlayerMessage.Raw(state.message),
                                 showUpNext = false,
                                 isNextUpTransitioning = false,
                             )
@@ -1786,7 +1881,8 @@ class PlayerViewModel(
                             _uiState.update {
                                 it.copy(
                                     isLoading = false,
-                                    error = playbackState.message,
+                                    error = playbackState.messageRes?.let { PlayerMessage.Res(it) }
+                                        ?: MobilePlayerStartErrors.message(playbackState.message),
                                     showUpNext = false,
                                     isNextUpTransitioning = false,
                                 )
@@ -2105,6 +2201,8 @@ class PlayerViewModel(
                 seriesTitle = watchDetail?.seriesTitle,
                 contentType = watchDetail?.type ?: playbackState.contentType,
                 subtitle = watchDetail?.let { detail -> buildSubtitle(detail) } ?: playbackState.subtitle.orEmpty(),
+                subtitleEpisode = watchDetail?.let(::episodeSubtitle),
+                subtitleYear = watchDetail?.let(::subtitleYear),
                 artworkUrl = playbackState.artworkUrl,
                 sessionId = playbackState.sessionId
                     ?.also { retainedOwnedSessionId = it },
@@ -2392,8 +2490,9 @@ class PlayerViewModel(
         ) {
             return
         }
+        // The recovery request reports this to the server; it is never shown.
         val message = error.localizedMessage?.takeIf { msg -> msg.isNotBlank() }
-            ?: PLAYBACK_FAILED_MESSAGE
+            ?: "Playback failed. Please try again."
         val pendingSeekTarget = activeSeekTargetSec
         if (pendingSeekTarget != null &&
             (serverSeekRecoveryInFlight ||
@@ -2702,7 +2801,7 @@ class PlayerViewModel(
             currentCoroutineContext().ensureActive()
             if (recoveryGeneration != playbackRecoveryGeneration) return@launch
             if (queuedRequest.isNonfatalFailure(result)) {
-                showVersionSwitchMessage("Subtitles couldn't load — playback continues.")
+                showVersionSwitchMessage(PlayerMessage.Res(CommonR.string.player_notice_subtitlesFailedContinuing))
                 _uiState.update { it.copy(isLoading = false, isBuffering = false) }
                 return@launch
             }
@@ -2722,7 +2821,7 @@ class PlayerViewModel(
                             nextUpTransitionGate.cancel()
                             _uiState.update {
                                 it.copy(
-                                    error = "The server offered a different version than the Watch Party's.",
+                                    error = PlayerMessage.Res(CommonR.string.player_watchParty_versionMismatch),
                                     isLoading = false,
                                     isBuffering = false,
                                 )
@@ -2882,7 +2981,8 @@ class PlayerViewModel(
                     }
                     is VideoSessionStartV3.Terminal -> {
                         val failedSessionId = state.sessionId ?: return@launch
-                        val terminalMessage = serverTerminalUserMessage(decision.message)
+                        val terminalMessage = terminalUserMessageRes(decision)?.let { PlayerMessage.Res(it) }
+                            ?: PlayerMessage.Raw(serverTerminalUserMessage(decision.message))
                         val terminalStillCurrent = sessionLifecycle.stopTerminalSessionIfCurrent(
                             expectedSessionId = failedSessionId,
                             isCurrent = {
@@ -2917,7 +3017,7 @@ class PlayerViewModel(
                         nextUpTransitionGate.cancel()
                         _uiState.update {
                             it.copy(
-                                error = "This Silo server must be updated to support playback recovery.",
+                                error = PlayerMessage.Res(CommonR.string.player_error_recoveryUnsupported),
                                 isLoading = false,
                                 isBuffering = false,
                                 showUpNext = false,
@@ -3038,7 +3138,7 @@ class PlayerViewModel(
     ) {
         if (classification in PlaybackSessionManager.USER_INVALIDATION_CLASSIFICATIONS) {
             Log.w(TAG, "Invalidation replan failed ($classification): $detail")
-            if (!quiet) showVersionSwitchMessage("Couldn't apply the change — playback continues unchanged.")
+            if (!quiet) showVersionSwitchMessage(PlayerMessage.Res(CommonR.string.player_notice_changeFailed))
             _uiState.update { it.copy(isLoading = false, isBuffering = false) }
         } else {
             Log.w(TAG, "Recovery replan failed ($classification): $notice ($detail)")
@@ -3689,7 +3789,7 @@ class PlayerViewModel(
                 } else {
                     null
                 }
-                var failureMessage: String? = null
+                var failureMessage: PlayerMessage? = null
 
                 if (request.mode == ServerSeekRecoveryMode.REANCHOR) {
                     val result = playbackSessionManager.reanchorActiveVideoSession(
@@ -3718,11 +3818,11 @@ class PlayerViewModel(
                                 )
                             }
                             VideoSessionStartV3.ServerUpgradeRequired -> {
-                                failureMessage = "This Silo server does not support reliable seeking."
+                                failureMessage = SEEK_UNSUPPORTED_MESSAGE
                             }
                         }
                         is ApiResult.Error -> if (result.error == "seek_reanchor_not_supported") {
-                            failureMessage = "This Silo server does not support reliable seeking."
+                            failureMessage = SEEK_UNSUPPORTED_MESSAGE
                         } else {
                             pinnedRequest = PinnedSeekRecoveryRequest(
                                 classification = "seek_reanchor_failed",
@@ -3802,14 +3902,14 @@ class PlayerViewModel(
                         VideoSessionStartV3.ServerUpgradeRequired -> publishSeekFailure(
                             request,
                             recoveryGeneration,
-                            "This Silo server does not support reliable seeking.",
+                            SEEK_UNSUPPORTED_MESSAGE,
                         )
                     }
                     is ApiResult.Error -> publishSeekFailure(
                         request,
                         recoveryGeneration,
                         if (fallbackResult.error == "seek_reanchor_not_supported") {
-                            "This Silo server does not support reliable seeking."
+                            SEEK_UNSUPPORTED_MESSAGE
                         } else {
                             SEEK_FAILED_MESSAGE.also { Log.w(TAG, "Seek recovery failed: ${fallbackResult.message}") }
                         },
@@ -3847,7 +3947,7 @@ class PlayerViewModel(
     private fun publishSeekFailure(
         request: ServerSeekRecoveryRequest,
         recoveryGeneration: Long,
-        message: String,
+        message: PlayerMessage,
     ) {
         if (!isCurrentServerSeek(request, recoveryGeneration)) return
         if (request.mode == ServerSeekRecoveryMode.REANCHOR &&
@@ -3867,7 +3967,7 @@ class PlayerViewModel(
             seekRecoveryRollbackInvalidated = false
             positionReportsBlockedForPendingLoad = false
             awaitingMediaMountGeneration = null
-            Log.w(TAG, "seek_recovery action=rollback message=$message")
+            Log.w(TAG, "seek_recovery action=rollback message=${message.debugText}")
             DiagnosticsPlaybackLogger.seek(DiagnosticsSeekEvent.RolledBack)
             _uiState.update {
                 it.copy(
@@ -3903,7 +4003,7 @@ class PlayerViewModel(
             publishSeekFailure(
                 request,
                 recoveryGeneration,
-                "Seek recovery tried to change the selected media version.",
+                PlayerMessage.Res(CommonR.string.player_error_seekChangedVersion),
             )
             return
         }
@@ -4813,11 +4913,13 @@ class PlayerViewModel(
         )
         snapshot.failureMessage?.let {
             showVersionSwitchMessage(
-                if (snapshot.qualityChangeFailed) {
-                    "Couldn't change quality. Try again."
-                } else {
-                    "Couldn't apply subtitles — playback continues unchanged."
-                },
+                PlayerMessage.Res(
+                    if (snapshot.qualityChangeFailed) {
+                        CommonR.string.player_notice_qualityChangeFailed
+                    } else {
+                        CommonR.string.player_notice_subtitlesApplyFailed
+                    },
+                ),
             )
         }
         noteQualityCommitted(snapshot.transition.committed.qualityPreference)
@@ -5005,7 +5107,7 @@ class PlayerViewModel(
 
     private suspend fun recoverFromSubtitleAdoptionFailure(detail: String) {
         val state = _uiState.value
-        showVersionSwitchMessage("Couldn't finish the subtitle change — restarting playback.")
+        showVersionSwitchMessage(PlayerMessage.Res(CommonR.string.player_notice_subtitleChangeRestarting))
         // The restart ends this plan now, as any same-title restart does: the
         // undo pill goes before the session stops, so a Restore can't replan
         // the plan the stop is ending and lose its clear.
@@ -5631,7 +5733,7 @@ class PlayerViewModel(
                 // No capability probe exists: "no providers configured" arrives
                 // as a plain server error — surface its text verbatim.
                 is ApiResult.Error, is ApiResult.NetworkError -> _subtitleTools.update {
-                    it.copy(searchLoading = false, searchError = r.errorMessage("Subtitle search failed"))
+                    it.copy(searchLoading = false, searchError = r.subtitleToolsError(CommonR.string.player_subtitleTools_searchFailed))
                 }
             }
         }
@@ -5669,7 +5771,7 @@ class PlayerViewModel(
                     _subtitleTools.update { it.copy(downloadingKey = null, downloadCompleted = true) }
                 }
                 is ApiResult.Error, is ApiResult.NetworkError -> _subtitleTools.update {
-                    it.copy(downloadingKey = null, searchError = r.errorMessage("Subtitle download failed"))
+                    it.copy(downloadingKey = null, searchError = r.subtitleToolsError(CommonR.string.player_subtitleTools_downloadFailed))
                 }
             }
         }
@@ -5856,7 +5958,7 @@ class PlayerViewModel(
         aiJobHandle?.cancel()
         aiJobHandle = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
             val owner = subtitlesRepository.captureJobAuthority() ?: run {
-                _subtitleTools.update { it.copy(translateSubmitting = false, translateError = "Sign in before starting subtitle processing.") }
+                _subtitleTools.update { it.copy(translateSubmitting = false, translateError = PlayerMessage.Res(CommonR.string.player_subtitleTools_signInRequired)) }
                 return@launch
             }
             fun samePlayback() = generation == aiPlaybackGeneration && _uiState.value.mediaFileId == mediaFileId && _uiState.value.sessionId == state.sessionId
@@ -5880,27 +5982,28 @@ class PlayerViewModel(
             if (!ownsRequest()) return@launch
             when (result) {
                 is ApiResult.Success -> {
-                    val job = result.data.job.let { job ->
-                        if (!result.data.liveDeliveryAttached && job.progressMessage.isBlank()) job.copy(progressMessage = "Processing in background") else job
-                    }
+                    val job = result.data.job
+                    val note = PlayerMessage.Res(CommonR.string.player_subtitleTools_processingInBackground)
+                        .takeIf { !result.data.liveDeliveryAttached && job.progressMessage.isBlank() }
                     aiCancelOwner = job.id to owner
-                    _subtitleTools.update { it.copy(translateSubmitting = false, activeJob = job) }
+                    _subtitleTools.update { it.copy(translateSubmitting = false, activeJob = job, activeJobNote = note) }
                     val outcome = subtitlesRepository.pollJob(job.id, expectedScope = owner) { update ->
-                        if (samePlayback()) _subtitleTools.update { it.copy(activeJob = update) }
+                        if (samePlayback()) _subtitleTools.update { it.copy(activeJob = update, activeJobNote = null) }
                     }
                     if (!ownsRequest()) return@launch
                     when (outcome) {
                         is SubtitlesRepository.SubtitleJobOutcome.Completed -> {
                             doRefreshSubtitles(autoSelectSubtitleId = outcome.resultSubtitleId)
-                            if (ownsRequest()) _subtitleTools.update { it.copy(activeJob = null, jobJustCompleted = true) }
+                            if (ownsRequest()) _subtitleTools.update { it.copy(activeJob = null, activeJobNote = null, jobJustCompleted = true) }
                         }
                         is SubtitlesRepository.SubtitleJobOutcome.Failed -> {
-                            val message = outcome.message ?: "Job failed"
-                            _subtitleTools.update { it.copy(activeJob = null, translateError = message) }
+                            val message = outcome.message?.let(PlayerMessage::Raw)
+                                ?: PlayerMessage.Res(CommonR.string.player_subtitleTools_jobFailed)
+                            _subtitleTools.update { it.copy(activeJob = null, activeJobNote = null, translateError = message) }
                             _aiJobFailure.value = AiJobFailure(++aiJobFailureCounter, message)
                         }
                         SubtitlesRepository.SubtitleJobOutcome.Cancelled -> _subtitleTools.update {
-                            it.copy(activeJob = null)
+                            it.copy(activeJob = null, activeJobNote = null)
                         }
                     }
                 }
@@ -5909,11 +6012,11 @@ class PlayerViewModel(
                     // so the banner and disabled button match the error shown.
                     if (result.code == 429) refreshAiQuota()
                     _subtitleTools.update {
-                        it.copy(translateSubmitting = false, translateError = result.errorMessage("Failed to start AI job"))
+                        it.copy(translateSubmitting = false, translateError = result.subtitleToolsError(CommonR.string.player_subtitleTools_startFailed))
                     }
                 }
                 is ApiResult.NetworkError -> _subtitleTools.update {
-                    it.copy(translateSubmitting = false, translateError = result.errorMessage("Failed to start AI job"))
+                    it.copy(translateSubmitting = false, translateError = result.subtitleToolsError(CommonR.string.player_subtitleTools_startFailed))
                 }
             }
         }.also { job -> job.invokeOnCompletion { aiCreationInFlight = false } }
@@ -6508,7 +6611,7 @@ class PlayerViewModel(
         _uiState.update { it.copy(shuffle = null, nextEpisode = null, upNextCountdownSeconds = null) }
     }
 
-    private fun showShuffleMessage(message: String) {
+    private fun showShuffleMessage(@StringRes message: Int) {
         shuffleMessageJob?.cancel()
         _uiState.update { it.copy(shuffle = it.shuffle?.copy(message = message)) }
         shuffleMessageJob = viewModelScope.launch {
@@ -6699,7 +6802,7 @@ class PlayerViewModel(
                 it.copy(
                     isLoading = false,
                     versionSwitchMessage = null,
-                    error = "Failed to switch version: $rawReason",
+                    error = PlayerMessage.Res(CommonR.string.player_error_versionSwitchFailed, listOf(rawReason)),
                 )
             }
             return
@@ -6721,7 +6824,7 @@ class PlayerViewModel(
      * timer so a stale coroutine can never dismiss the current message early;
      * once armed the timer clears the message unconditionally.
      */
-    private fun showVersionSwitchMessage(message: String) {
+    private fun showVersionSwitchMessage(message: PlayerMessage) {
         versionSwitchMessageJob?.cancel()
         _uiState.update { it.copy(versionSwitchMessage = message) }
         versionSwitchMessageJob = viewModelScope.launch {
@@ -6730,13 +6833,13 @@ class PlayerViewModel(
         }
     }
 
-    private fun humanizeVersionSwitchFailure(raw: String): String = when {
+    private fun humanizeVersionSwitchFailure(raw: String): PlayerMessage = when {
         raw.contains("No lower resolution version", ignoreCase = true) ->
-            "That quality isn't available for this title."
+            PlayerMessage.Res(CommonR.string.player_notice_qualityUnavailable)
         raw.contains("transcod", ignoreCase = true) ->
-            "Couldn't switch quality — transcoding unavailable."
-        raw.isBlank() -> "Couldn't switch quality."
-        else -> "Couldn't switch quality: $raw"
+            PlayerMessage.Res(CommonR.string.player_notice_qualityNoTranscoding)
+        raw.isBlank() -> PlayerMessage.Res(CommonR.string.player_notice_qualitySwitchFailed)
+        else -> PlayerMessage.Res(CommonR.string.player_notice_qualitySwitchFailedReason, listOf(raw))
     }
 
     /** Dismisses the transient version-switch message. */
@@ -6848,6 +6951,18 @@ class PlayerViewModel(
         }
     }
 
+    /** The year [buildSubtitle] shows when the title isn't an episode. */
+    private fun subtitleYear(watchDetail: org.siloserver.silo.model.catalog.WatchDetail): Int? =
+        watchDetail.year.takeIf { episodeSubtitle(watchDetail) == null }
+
+    private fun episodeSubtitle(watchDetail: org.siloserver.silo.model.catalog.WatchDetail): MobileEpisodeSubtitle? {
+        val series = watchDetail.seriesTitle ?: return null
+        val season = watchDetail.seasonNumber ?: return null
+        val episode = watchDetail.episodeNumber ?: return null
+        return MobileEpisodeSubtitle(series, season, episode)
+    }
+
+    /** English, for state and logs; [displaySubtitle] shows the episode line translated. */
     private fun buildSubtitle(watchDetail: org.siloserver.silo.model.catalog.WatchDetail): String {
         return if (watchDetail.seriesTitle != null && watchDetail.seasonNumber != null && watchDetail.episodeNumber != null) {
             val seasonEp = "S${watchDetail.seasonNumber.toString().padStart(2, '0')}E${watchDetail.episodeNumber.toString().padStart(2, '0')}"
@@ -6988,6 +7103,9 @@ class PlayerViewModel(
                 error = null,
                 title = title,
                 subtitle = subtitle,
+                subtitleEpisode = watchDetail?.let(::episodeSubtitle),
+                // A movie's stored download subtitle is its year as digits.
+                subtitleYear = if (watchDetail != null) subtitleYear(watchDetail) else sidecar.year?.takeIf { subtitle == it.toString() },
                 contentType = watchDetail?.type,
                 artworkUrl = artworkUrl,
                 // Playback fields — file:// is read directly by Media3, no
@@ -7295,4 +7413,4 @@ internal fun keepsPickedQuality(
 }
 
 /** A failed AI subtitle job's reason; [id] keeps repeated identical reasons distinct. */
-data class AiJobFailure(val id: Long, val message: String)
+data class AiJobFailure(val id: Long, val message: PlayerMessage)

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import org.siloserver.silo.common.R
 import org.siloserver.silo.common.player.TvModeDetector
 import org.siloserver.silo.model.catalog.ItemVideo
 
@@ -42,6 +43,6 @@ fun openYoutubeTrailerExternally(context: Context, videoId: String) {
         runCatching { context.startActivity(intent) }.isSuccess
     }
     if (!opened) {
-        Toast.makeText(context, "No app is available to open this trailer", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.shell_trailer_noApp), Toast.LENGTH_SHORT).show()
     }
 }

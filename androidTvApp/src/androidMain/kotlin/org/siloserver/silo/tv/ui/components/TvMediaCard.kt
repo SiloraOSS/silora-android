@@ -5,6 +5,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
+import org.siloserver.silo.common.R as CommonR
 import org.siloserver.silo.common.ui.components.BoxSetSleeveColors
 import org.siloserver.silo.common.ui.components.boxSetSleeves
 import org.siloserver.silo.common.ui.components.SpoilerImage
@@ -62,6 +64,8 @@ import org.siloserver.silo.tv.ui.theme.RowDimens
 import org.siloserver.silo.tv.ui.theme.cardScaled
 import org.siloserver.silo.tv.ui.theme.siloCardDefaults
 import org.siloserver.silo.tv.ui.util.tvArtworkAspectRatioForMediaType
+import org.siloserver.silo.common.i18n.LocaleFormat
+import org.siloserver.silo.common.i18n.currentNumberLocale
 
 /**
  * The core focusable media card used throughout the TV app.
@@ -228,7 +232,7 @@ fun TvMediaCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Check,
-                                contentDescription = "Watched",
+                                contentDescription = stringResource(CommonR.string.shell_card_watched),
                                 tint = Color.Black,
                                 modifier = Modifier.size(watchedBadgeIconSize),
                             )
@@ -307,7 +311,7 @@ fun TvMediaCard(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        val metadata = caption ?: year?.takeIf { it > 0 }?.toString()
+        val metadata = caption ?: year?.takeIf { it > 0 }?.let { LocaleFormat.integer(it, currentNumberLocale()) }
         if (metadata != null) {
             Text(
                 text = metadata,

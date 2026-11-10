@@ -1,6 +1,9 @@
 package org.siloserver.silo.android.ui.screens.player
 
 import org.siloserver.silo.common.ui.LanguageNames
+import android.content.res.Resources
+import org.siloserver.silo.common.R as CommonR
+import org.siloserver.silo.common.i18n.LocaleFormat
 import org.siloserver.silo.model.playback.PlayerSubtitleInfo
 import org.siloserver.silo.model.subtitles.SubtitleAiJobKind
 import org.siloserver.silo.model.subtitles.SubtitleAiQuota
@@ -12,10 +15,6 @@ private val TRANSLATABLE_TEXT_CODECS = setOf("srt", "subrip", "vtt", "webvtt")
 private val BITMAP_CODECS = setOf(
     "pgs", "hdmv_pgs_subtitle", "dvd_subtitle", "dvdsub", "dvb_subtitle", "dvbsub",
 )
-
-/** Shown in place of the target language when the server cannot translate. */
-internal const val TRANSCRIBE_ONLY_NOTE =
-    "Subtitles are written in the spoken language. AI translation is turned off on this server."
 
 /** True when the server can use [track] as an AI translation source. */
 internal fun isTranslatableSource(track: PlayerSubtitleInfo): Boolean {
@@ -54,16 +53,29 @@ private fun isSameLanguage(source: String?, target: String): Boolean {
 }
 
 /** Quota counter line, wording pinned to the web modal + its period labels. */
-internal fun quotaLineText(quota: SubtitleAiQuota): String {
+internal fun quotaLineText(quota: SubtitleAiQuota, resources: Resources): String {
     val window = when (quota.period) {
-        "day" -> "24 hours"
-        "week" -> "7 days"
-        "month" -> "30 days"
+        "day" -> resources.getQuantityString(CommonR.plurals.player_aiTranslate_window_day, 24, 24)
+        "week" -> resources.getQuantityString(CommonR.plurals.player_aiTranslate_window_week, 7, 7)
+        "month" -> resources.getQuantityString(CommonR.plurals.player_aiTranslate_window_month, 30, 30)
         else -> quota.period
     }
     return if (quota.remaining <= 0) {
-        "You've used all ${quota.limit} transcriptions for the last $window. Try again later."
+        resources.getQuantityString(
+            CommonR.plurals.player_aiTranslate_quotaUsedUp,
+            quota.limit,
+            quota.limit,
+            window,
+            LocaleFormat.integer(quota.limit),
+        )
     } else {
-        "${quota.remaining} of ${quota.limit} transcriptions left for the last $window."
+        resources.getQuantityString(
+            CommonR.plurals.player_aiTranslate_quotaLeftWindow,
+            quota.limit,
+            LocaleFormat.integer(quota.remaining),
+            quota.limit,
+            window,
+            LocaleFormat.integer(quota.limit),
+        )
     }
 }

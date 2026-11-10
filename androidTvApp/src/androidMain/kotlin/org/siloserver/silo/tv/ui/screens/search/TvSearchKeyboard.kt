@@ -1,5 +1,7 @@
 package org.siloserver.silo.tv.ui.screens.search
 
+import androidx.compose.ui.res.stringResource
+import org.siloserver.silo.common.R as CommonR
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -45,6 +47,7 @@ internal fun TvSearchKeyboard(
     onClear: () -> Unit,
     onSearch: () -> Unit,
 ) {
+    val backspaceDescription = stringResource(CommonR.string.shell_keypad_backspace)
     var uppercase by remember { mutableStateOf(false) }
     var symbols by remember { mutableStateOf(false) }
     val rows = (if (symbols) {
@@ -97,7 +100,7 @@ internal fun TvSearchKeyboard(
                             }
                         },
                         modifier = Modifier.weight(if (key == "Space") 2f else 1f).height(34.dp)
-                            .semantics { if (key == "Delete") contentDescription = "Backspace" }
+                            .semantics { if (key == "Delete") contentDescription = backspaceDescription }
                             .focusRequester(own)
                             .onFocusChanged { if (rowIndex == 0 && column == 0) firstKeyFocused = it.isFocused }
                             .focusProperties {

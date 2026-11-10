@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.siloserver.silo.android.ui.theme.SiloSecondaryText
 import org.siloserver.silo.android.ui.theme.SiloSurfaceElevated
+import org.siloserver.silo.common.R as CommonR
 import org.siloserver.silo.common.ui.components.DeferImagePresentationWhileScrolling
 import org.siloserver.silo.common.ui.components.ThumbhashImage
 import org.siloserver.silo.common.ui.openYoutubeTrailer
@@ -44,6 +46,7 @@ import org.siloserver.silo.model.catalog.extraKindLabel
 import org.siloserver.silo.model.catalog.primaryTrailer
 import org.siloserver.silo.model.catalog.trailerRailDurationLabel
 import org.siloserver.silo.model.catalog.trailerRailEntries
+import org.siloserver.silo.common.i18n.text
 
 /**
  * "Trailers & More" section — header plus a horizontal rail of remote
@@ -70,7 +73,7 @@ fun TrailersRail(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = modifier,
     ) {
-        SectionHeader(title = "Trailers & More")
+        SectionHeader(title = stringResource(CommonR.string.detail_trailers))
         val rowState = rememberLazyListState()
         DeferImagePresentationWhileScrolling(rowState) {
         LazyRow(
@@ -110,14 +113,16 @@ private fun TrailerCard(
     entry: TrailerRailEntry,
     onClick: () -> Unit,
 ) {
-    val kindLabel = extraKindLabel(entry.kind)
+    val kindLabel = extraKindLabel(entry.kind).text()
+    val title = entry.title.text()
     val durationLabel = trailerRailDurationLabel(entry)
+    val cardDescription = stringResource(CommonR.string.detail_trailerCardDescription, title, kindLabel)
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .width(TrailerCardWidth)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "${entry.title}, $kindLabel" },
+            .semantics { contentDescription = cardDescription },
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -162,7 +167,7 @@ private fun TrailerCard(
                 maxLines = 1,
             )
             Text(
-                text = entry.title,
+                text = title,
                 fontSize = 14.sp,
                 lineHeight = 18.sp,
                 fontWeight = FontWeight.SemiBold,

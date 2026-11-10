@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="silora_cancel_autoplay">Cancel autoplay</string>
+    <string name="silora_extra_small">Extra small</string>
+    <string name="silora_time_remaining">Time remaining</string>
+    <string name="silora_hevc_level_limits_footer">Ignore HEVC Level Limits attempts playback even when a file\'s HEVC level exceeds the decoder\'s reported limit. Other compatibility checks still apply. Turn it off to use the decoder\'s reported levels. Files that exceed the decoder\'s actual capabilities may stutter or fail.</string>
+    <string name="silora_admin_menu_footer">Shows Admin when you open the profile menu. Saved for this profile on this TV.</string>
+    <string name="silora_match_frame_rate_footer">Match the video\'s frame rate. Resolution stays unchanged unless Match Content Resolution is on.</string>
+    <string name="silora_match_resolution_footer">Match the video\'s resolution. Refresh rate stays unchanged unless Match Content Frame Rate is on.</string>
+    <string name="silora_night_mode_footer">Softens loud scenes and raises quiet dialogue. Uses decoded audio instead of passthrough. Night Mode Settings tunes its compressor and limiter, and changes apply while you listen. Saved for this profile on this device.</string>
+    <string name="silora_play_trailer">Play Trailer</string>
+    <string name="silora_remote_shortcuts_title">Remote Shortcuts</string>
+    <string name="silora_remote_shortcuts_rail">Customize long presses</string>
+    <string name="silora_remote_shortcuts_blurb">Choose what holding a remote button does during video playback.</string>
+    <string name="silora_profiles_error_passwordReset">Your password needs to be reset. Use the Silora mobile app or your server\'s website to set a new one, then come back.</string>
+    <string name="silora_tvSignIn_error_networkEmailInUse">An account with your email already exists. Sign in to it with Silora on your phone or Silo on the web, connect %1$s in Sign-in settings, then try again.</string>
+</resources>

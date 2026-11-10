@@ -1,5 +1,8 @@
 package org.siloserver.silo.tv.ui.screens.search
 
+import org.siloserver.silo.common.i18n.LocaleFormat
+import org.siloserver.silo.common.i18n.UiText
+import org.siloserver.silo.common.i18n.text
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -129,6 +132,11 @@ import org.koin.compose.koinInject
 import org.siloserver.silo.common.ui.OnViewerAccessChanged
 import org.siloserver.silo.network.AccessChangeSignals
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import org.siloserver.silo.common.R as CommonR
+import androidx.annotation.StringRes
+import org.siloserver.silo.common.i18n.stringResourceWithNames
 
 internal fun shouldFocusSearchField(
     hasEnteredSearch: Boolean,
@@ -918,7 +926,7 @@ fun TvSearchScreen(
                     query = state.query,
                     requestsEnabled = requestsEnabled,
                     isLoading = requestState.isLoading,
-                    error = requestState.error,
+                    error = requestState.error?.text(),
                     hasSubmittedQuery = requestState.hasSubmittedQuery,
                     results = visibleRequestResults,
                     shouldShow = shouldShowRequestSection,
@@ -969,14 +977,14 @@ fun TvSearchScreen(
             emptyState = {
                 when {
                     state.query.isBlank() -> SearchFeedbackMessage(
-                        title = "Search your library",
-                        body = availableMediaDescription(state.availableMediaTypes),
+                        title = stringResource(CommonR.string.search_library),
+                        body = stringResource(availableMediaDescription(state.availableMediaTypes)),
                     )
                     state.isLoading -> Box(modifier = Modifier.height(64.dp))
                     state.error != null -> SearchFeedbackMessage(
-                        title = "Search is unavailable",
-                        body = state.error!!,
-                        actionLabel = "Try again",
+                        title = stringResource(CommonR.string.search_error),
+                        body = state.error?.text().orEmpty(),
+                        actionLabel = stringResource(CommonR.string.common_tryAgain),
                         actionFocusRequester = feedbackActionFocusRequester,
                         actionUpFocusRequester = if (state.people.isNotEmpty()) {
                             firstPersonFocusRequester
@@ -997,8 +1005,8 @@ fun TvSearchScreen(
                     // already says no titles matched.
                     state.people.isNotEmpty() -> Unit
                     else -> SearchFeedbackMessage(
-                        title = "No matches for “${state.query}”",
-                        body = "Try a shorter title or a different filter.",
+                        title = stringResourceWithNames(CommonR.string.search_noMatches, state.query),
+                        body = stringResource(CommonR.string.search_noMatchesBody),
                     )
                 }
             },
@@ -1070,7 +1078,7 @@ private fun TvRequestSearchSection(
             .padding(top = Spacing.md, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        TvSectionHeader(title = "Available to request")
+        TvSectionHeader(title = stringResource(CommonR.string.search_requests_title))
         when {
             results.isNotEmpty() -> {
                 LazyRow(
@@ -1118,9 +1126,9 @@ private fun TvRequestSearchSection(
                     }
                 }
             }
-            isLoading -> RequestSearchFeedbackRow("Checking requestable titles...", showProgress = true)
+            isLoading -> RequestSearchFeedbackRow(stringResource(CommonR.string.search_requests_checking), showProgress = true)
             error != null -> RequestSearchFeedbackRow(error)
-            hasSubmittedQuery -> RequestSearchFeedbackRow("No requestable matches found.")
+            hasSubmittedQuery -> RequestSearchFeedbackRow(stringResource(CommonR.string.search_requests_empty))
         }
     }
 }
@@ -1239,7 +1247,7 @@ private fun SearchStage(
             singleLine = true,
             placeholder = {
                 Text(
-                    text = searchFieldPrompt(mediaTypes),
+                    text = stringResource(searchFieldPrompt(mediaTypes)),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.56f),
                 )
@@ -1358,7 +1366,7 @@ private fun SearchStage(
                 selectedContainerColor = Color.Transparent,
                 selectedContentColor = Color.White,
                 icon = Icons.Filled.Close,
-                contentDescription = "Clear search",
+                contentDescription = stringResource(CommonR.string.search_clear),
                 onClick = onClearQuery,
                 modifier = Modifier
                     .focusRequester(clearButtonFocusRequester)
@@ -1382,7 +1390,7 @@ private fun SearchStage(
                 },
             contentPadding = PaddingValues(0.dp),
         ) {
-            androidx.tv.material3.Icon(Icons.Filled.Mic, contentDescription = "Voice search", modifier = Modifier.size(24.dp))
+            androidx.tv.material3.Icon(Icons.Filled.Mic, contentDescription = stringResource(CommonR.string.search_voice), modifier = Modifier.size(24.dp))
         }
         }
 
@@ -1423,7 +1431,7 @@ private fun SearchStage(
                         },
                     )
                 TvFilterChip(
-                    text = type.label,
+                    text = stringResource(type.label),
                     selected = mediaType == type,
                     onClick = { onMediaTypeChanged(type) },
                     modifier = chipModifier,
@@ -1517,43 +1525,58 @@ private fun SearchFeedbackMessage(
     }
 }
 
-private fun searchFieldPrompt(mediaTypes: List<TvSearchMediaType>): String =
-    "Search ${availableMediaNames(mediaTypes)}"
+/** The media types the search covers, as one whole message per combination the chips allow. */
+private enum class TvSearchScope { Library, Video, Audiobooks, VideoAndAudiobooks }
 
-private fun availableMediaDescription(mediaTypes: List<TvSearchMediaType>): String =
-    "Find ${availableMediaNames(mediaTypes)} in one place."
-
-private fun availableMediaNames(mediaTypes: List<TvSearchMediaType>): String {
-    val names = mediaTypes
-        .filterNot { it == TvSearchMediaType.All }
-        .map { it.label.lowercase() }
-
-    return when (names.size) {
-        0 -> "your library"
-        1 -> names.single()
-        2 -> names.joinToString(" and ")
-        else -> names.dropLast(1).joinToString(", ") + ", and ${names.last()}"
+/**
+ * Video search always offers Movies and Series together (both need a video
+ * library), so the scope is decided by video and audiobooks alone.
+ */
+private fun searchScope(mediaTypes: List<TvSearchMediaType>): TvSearchScope {
+    val video = TvSearchMediaType.Movies in mediaTypes || TvSearchMediaType.Series in mediaTypes
+    val audiobooks = TvSearchMediaType.Audiobooks in mediaTypes
+    return when {
+        video && audiobooks -> TvSearchScope.VideoAndAudiobooks
+        video -> TvSearchScope.Video
+        audiobooks -> TvSearchScope.Audiobooks
+        else -> TvSearchScope.Library
     }
 }
 
+@StringRes
+private fun searchFieldPrompt(mediaTypes: List<TvSearchMediaType>): Int = when (searchScope(mediaTypes)) {
+    TvSearchScope.Library -> CommonR.string.search_library
+    TvSearchScope.Video -> CommonR.string.search_prompt_video
+    TvSearchScope.Audiobooks -> CommonR.string.search_prompt_audiobooks
+    TvSearchScope.VideoAndAudiobooks -> CommonR.string.search_prompt_videoAndAudiobooks
+}
+
+@StringRes
+private fun availableMediaDescription(mediaTypes: List<TvSearchMediaType>): Int = when (searchScope(mediaTypes)) {
+    TvSearchScope.Library -> CommonR.string.search_scope_library
+    TvSearchScope.Video -> CommonR.string.search_scope_video
+    TvSearchScope.Audiobooks -> CommonR.string.search_scope_audiobooks
+    TvSearchScope.VideoAndAudiobooks -> CommonR.string.search_scope_videoAndAudiobooks
+}
+
+@Composable
 private fun searchStatusText(
     query: String,
     total: Int,
     isSearching: Boolean,
-    error: String?,
+    error: UiText?,
     isPartialCount: Boolean,
     isEstimatedCount: Boolean = false,
     hasPeople: Boolean = false,
 ): String? = when {
     query.isBlank() -> null
-    isSearching -> "Searching…"
-    error != null -> "Couldn't update results"
-    total == 0 && hasPeople -> "No matching titles"
-    total == 0 -> "No results"
-    isEstimatedCount && !isPartialCount -> "About $total results"
-    total == 1 -> "1 result"
-    isPartialCount -> "$total+ results"
-    else -> "$total results"
+    isSearching -> stringResource(CommonR.string.search_searching)
+    error != null -> stringResource(CommonR.string.search_updateFailed)
+    total == 0 && hasPeople -> stringResource(CommonR.string.search_noMatchingTitles)
+    total == 0 -> stringResource(CommonR.string.search_empty)
+    isEstimatedCount && !isPartialCount -> pluralStringResource(CommonR.plurals.search_resultAbout, total, total, LocaleFormat.integer(total))
+    isPartialCount && total != 1 -> pluralStringResource(CommonR.plurals.search_resultPartial, total, total, LocaleFormat.integer(total))
+    else -> pluralStringResource(CommonR.plurals.search_result, total, total)
 }
 
 /*

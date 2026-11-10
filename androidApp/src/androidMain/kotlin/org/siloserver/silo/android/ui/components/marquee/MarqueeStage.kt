@@ -1,5 +1,7 @@
 package org.siloserver.silo.android.ui.components.marquee
 
+import org.siloserver.silo.common.R as CommonR
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -105,7 +107,7 @@ fun MarqueeStage(
 fun MarqueeWordmark(width: Dp = 150.dp) {
     Image(
         painter = painterResource(R.drawable.silo_wordmark),
-        contentDescription = "Silora",
+        contentDescription = stringResource(CommonR.string.silora_app_name),
         contentScale = ContentScale.Fit,
         modifier = Modifier.width(width),
     )

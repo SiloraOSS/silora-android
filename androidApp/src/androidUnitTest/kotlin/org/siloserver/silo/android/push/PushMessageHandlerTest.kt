@@ -78,7 +78,7 @@ class PushMessageHandlerTest {
         assertEquals(3, notifications.size)
         for (notification in notifications) {
             assertNull(tapExtras(notification).getString(PushNotificationPresenter.EXTRA_NAV_ROUTE))
-            assertEquals("Silo notification", notification.extras.getString(Notification.EXTRA_TITLE))
+            assertEquals("Silora notification", notification.extras.getString(Notification.EXTRA_TITLE))
         }
     }
 
