@@ -40,7 +40,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.snapshotFlow
@@ -76,27 +75,14 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.PlatformTextInputInterceptor
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.core.app.ActivityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import android.Manifest
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-import android.content.Intent
-import android.content.pm.PackageManager
-import androidx.core.net.toUri
-import android.provider.Settings
 import org.siloserver.silo.tv.data.preferences.TvSearchKeyboardStore
 import org.siloserver.silo.tv.data.preferences.TvSearchKeyboardMode
 import kotlinx.coroutines.awaitCancellation
@@ -238,9 +224,6 @@ fun TvSearchScreen(
     val activeSearchFieldFocusRequester = searchFieldFocusRequester ?: internalSearchFieldFocusRequester
     val keyboardController = LocalSoftwareKeyboardController.current
     val firstKeyboardKeyFocusRequester = remember { FocusRequester() }
-    val microphoneFocusRequester = remember { FocusRequester() }
-    var microphoneFocused by remember { mutableStateOf(false) }
-    var restoreMicrophoneFocus by remember { mutableIntStateOf(0) }
     var hasEnteredSearch by rememberSaveable { mutableStateOf(false) }
     var lastSearchEntryRequest by rememberSaveable { mutableIntStateOf(0) }
     var keyboardState by remember { mutableStateOf(TvSearchKeyboardState()) }
@@ -323,48 +306,31 @@ fun TvSearchScreen(
         }
         viewModel.submitSearch()
     }
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val voiceScope = rememberCoroutineScope()
-    val onVoiceResult by rememberUpdatedState<(String) -> Unit> { query ->
-        updateInput(TextFieldValue(query, TextRange(query.length)))
-        submitCurrentSearch()
-    }
-    val voiceController = remember(context, voiceScope) {
-        TvSearchVoiceController(voiceScope, { createTvSpeechSession(context) }, { onVoiceResult(it) })
-    }
-    val voiceState by voiceController.state.collectAsState()
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (voiceController.state.value?.phase == TvVoicePhase.Permission) {
-            if (granted) voiceController.start() else {
-                val activity = context.searchActivity()
-                voiceController.permissionDenied(
-                    permanent = activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO),
-                )
-            }
-        }
-    }
+    var voiceUnavailable by remember { mutableStateOf(false) }
+    val voiceSearch = rememberTvVoiceSearch(
+        prompt = stringResource(CommonR.string.search_voicePromptTv),
+        onResult = { spoken ->
+            val query = spoken.take(TV_SEARCH_QUERY_MAX_LENGTH)
+            voiceUnavailable = false
+            updateInput(TextFieldValue(query, TextRange(query.length)))
+            submitCurrentSearch()
+        },
+        onUnavailable = { voiceUnavailable = true },
+    )
     fun startVoiceSearch() {
         pendingSearchFocus = false
         setKeyboardOpen(false)
         keyboardController?.hide()
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            voiceController.start()
-        } else {
-            voiceController.awaitPermission()
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
+        voiceSearch.start()
     }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val reportInputOverlay by rememberUpdatedState(onInputOverlayChanged)
-    LaunchedEffect(appKeyboardOpen, voiceState != null) {
-        reportInputOverlay(appKeyboardOpen || voiceState != null)
+    LaunchedEffect(appKeyboardOpen) {
+        reportInputOverlay(appKeyboardOpen)
     }
-    DisposableEffect(lifecycleOwner, voiceController) {
+    DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP ||
-                (event == Lifecycle.Event.ON_PAUSE && voiceController.state.value?.phase != TvVoicePhase.Permission)
-            ) {
-                voiceController.cancel()
+            if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_PAUSE) {
                 setKeyboardOpen(false)
                 keyboardController?.hide()
             }
@@ -372,17 +338,8 @@ fun TvSearchScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            voiceController.cancel()
             reportInputOverlay(false)
         }
-    }
-    LaunchedEffect(restoreMicrophoneFocus) {
-        if (restoreMicrophoneFocus > 0) requestFocusUntilObserved(
-            maxAttempts = TvContentInitialFocusMaxAttempts,
-            awaitAttempt = { withFrameNanos { } },
-            requestFocus = microphoneFocusRequester::requestFocus,
-            isFocused = { microphoneFocused },
-        )
     }
     // Same precedence as the post-search handoff below: people (the row
     // nearest the chips), results, then the error's "Try again", then the
@@ -753,7 +710,7 @@ fun TvSearchScreen(
             .onPreviewKeyEvent { event ->
                 // Physical typing also works while a key in the dock has focus.
                 val native = event.nativeKeyEvent
-                val canType = keyboardMode == TvSearchKeyboardMode.App && voiceState == null &&
+                val canType = keyboardMode == TvSearchKeyboardMode.App &&
                     (appKeyboardOpen || focusedRegion == TvSearchFocusRegion.Field)
                 if (!canType || native.isCtrlPressed || native.isAltPressed) return@onPreviewKeyEvent false
                 val codePoint = native.unicodeChar
@@ -867,8 +824,12 @@ fun TvSearchScreen(
                     onSearch = ::submitCurrentSearch,
                     appKeyboardMode = keyboardMode == TvSearchKeyboardMode.App,
                     firstKeyboardKeyFocusRequester = firstKeyboardKeyFocusRequester,
-                    microphoneFocusRequester = microphoneFocusRequester,
-                    onMicrophoneFocusChanged = { microphoneFocused = it },
+                    voiceSearchAvailable = voiceSearch.isAvailable,
+                    voiceUnavailableMessage = if (voiceUnavailable) {
+                        stringResource(CommonR.string.search_voiceUnavailableTv)
+                    } else {
+                        null
+                    },
                     onVoiceSearch = ::startVoiceSearch,
                     onMediaTypeChanged = viewModel::onMediaTypeChanged,
                     isKeyboardOpen = isKeyboardOpen,
@@ -1023,27 +984,6 @@ fun TvSearchScreen(
         }
     }
     }
-    voiceState?.let { listening ->
-        val cancelVoice: () -> Unit = {
-            voiceController.cancel()
-            restoreMicrophoneFocus++
-        }
-        TvSearchVoiceOverlay(
-            state = listening,
-            onCancel = cancelVoice,
-            onRetry = ::startVoiceSearch,
-            onOpenSettings = {
-                cancelVoice()
-                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
-            },
-        )
-    }
-}
-
-private fun Context.searchActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.searchActivity()
-    else -> null
 }
 
 @Composable
@@ -1201,8 +1141,8 @@ private fun SearchStage(
     onSearch: () -> Unit,
     appKeyboardMode: Boolean,
     firstKeyboardKeyFocusRequester: FocusRequester,
-    microphoneFocusRequester: FocusRequester,
-    onMicrophoneFocusChanged: (Boolean) -> Unit,
+    voiceSearchAvailable: Boolean,
+    voiceUnavailableMessage: String?,
     onVoiceSearch: () -> Unit,
     onMediaTypeChanged: (TvSearchMediaType) -> Unit,
     isKeyboardOpen: Boolean,
@@ -1213,7 +1153,13 @@ private fun SearchStage(
     val mediaTypes = availableMediaTypes
     val fieldShape = RoundedCornerShape(14.dp)
     val clearButtonFocusRequester = remember { FocusRequester() }
+    val voiceButtonFocusRequester = remember { FocusRequester() }
     val canClear = query.isNotEmpty()
+    val fieldRightFocusRequester = when {
+        voiceSearchAvailable -> voiceButtonFocusRequester
+        canClear -> clearButtonFocusRequester
+        else -> null
+    }
     var selectArmed by remember { mutableStateOf(false) }
 
     // Wait for the editable field to compose before asking the system IME
@@ -1319,11 +1265,11 @@ private fun SearchStage(
                             true
                         }
                         appKeyboardMode && event.key == Key.DirectionUp && isKeyboardOpen -> true
-                        event.key == Key.DirectionRight && (!isKeyboardOpen || appKeyboardMode) -> {
+                        event.key == Key.DirectionRight && (!isKeyboardOpen || appKeyboardMode) &&
+                            fieldRightFocusRequester != null -> {
                             if (event.type == KeyEventType.KeyDown) {
-                                val target = if (canClear) clearButtonFocusRequester else microphoneFocusRequester
-                                target.claimFocusOrReport(
-                                    target = if (canClear) "search_clear_button" else "search_microphone",
+                                fieldRightFocusRequester.claimFocusOrReport(
+                                    target = if (voiceSearchAvailable) "search_voice_button" else "search_clear_button",
                                     action = "field_right",
                                 )
                             }
@@ -1350,7 +1296,7 @@ private fun SearchStage(
                 }
                 .focusProperties {
                     down = if (appKeyboardMode && isKeyboardOpen) firstKeyboardKeyFocusRequester else firstFilterChipFocusRequester
-                    right = if (canClear) clearButtonFocusRequester else microphoneFocusRequester
+                    fieldRightFocusRequester?.let { right = it }
                     if (appKeyboardMode && isKeyboardOpen) up = FocusRequester.Cancel
                 },
             colors = tvOutlinedTextFieldColors(
@@ -1360,6 +1306,24 @@ private fun SearchStage(
                 unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
             ),
         )
+        if (voiceSearchAvailable) {
+            TvHeroToggleIconButton(
+                selected = false,
+                selectedContainerColor = Color.Transparent,
+                selectedContentColor = Color.White,
+                icon = Icons.Filled.Mic,
+                contentDescription = stringResource(CommonR.string.search_voice),
+                onClick = onVoiceSearch,
+                modifier = Modifier
+                    .focusRequester(voiceButtonFocusRequester)
+                    .focusProperties {
+                        left = searchFieldFocusRequester
+                        if (canClear) right = clearButtonFocusRequester
+                        if (appKeyboardMode && isKeyboardOpen) up = FocusRequester.Cancel
+                    },
+                downFocusRequester = if (appKeyboardMode && isKeyboardOpen) firstKeyboardKeyFocusRequester else firstFilterChipFocusRequester,
+            )
+        }
         if (canClear) {
             TvHeroToggleIconButton(
                 selected = false,
@@ -1371,27 +1335,20 @@ private fun SearchStage(
                 modifier = Modifier
                     .focusRequester(clearButtonFocusRequester)
                     .focusProperties {
-                        left = searchFieldFocusRequester
-                        right = microphoneFocusRequester
+                        left = if (voiceSearchAvailable) voiceButtonFocusRequester else searchFieldFocusRequester
                         if (appKeyboardMode && isKeyboardOpen) up = FocusRequester.Cancel
                     },
                 downFocusRequester = if (appKeyboardMode && isKeyboardOpen) firstKeyboardKeyFocusRequester else firstFilterChipFocusRequester,
             )
         }
-        Button(
-            onClick = onVoiceSearch,
-            modifier = Modifier.size(52.dp).focusRequester(microphoneFocusRequester)
-                .onFocusChanged { onMicrophoneFocusChanged(it.isFocused) }
-                .focusProperties {
-                    left = if (canClear) clearButtonFocusRequester else searchFieldFocusRequester
-                    right = FocusRequester.Cancel
-                    down = if (appKeyboardMode && isKeyboardOpen) firstKeyboardKeyFocusRequester else firstFilterChipFocusRequester
-                    if (appKeyboardMode && isKeyboardOpen) up = FocusRequester.Cancel
-                },
-            contentPadding = PaddingValues(0.dp),
-        ) {
-            androidx.tv.material3.Icon(Icons.Filled.Mic, contentDescription = stringResource(CommonR.string.search_voice), modifier = Modifier.size(24.dp))
         }
+
+        voiceUnavailableMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.72f),
+            )
         }
 
         LazyRow(

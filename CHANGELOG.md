@@ -4,6 +4,87 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-11 — use upstream voice service on newer Google TVs
+
+Voice search now returns spoken text on the Android 14 Google TV Streamer.
+Matt approved extending upstream's direct recognition-service helper after the
+unchanged upstream activity failed there, then confirmed the trial worked.
+
+- Select upstream's service helper for Google's TV recognizer on Android 11 and
+  later when the service is available. Keep upstream's activity path for other
+  providers, older Android and service-unavailable cases.
+- Remove the API-30 cap from TV microphone permission so the helper can request
+  it on Android 14. Keep the optional microphone feature and both speech queries.
+- Reuse upstream's dialog, recognition callbacks and cleanup. The removed Silora
+  controller and overlay stay retired. Use the existing Silora translation for
+  the permission-denial message.
+- The signed trial at `dist/local-2026-11-11.184425/` was installed as
+  `org.silora.app` alongside the unchanged upstream comparison app. The dedicated
+  test account signed in successfully. Permission denial showed the explanation;
+  after granting access, Matt said “hello,” the dialog closed, “hello” appeared
+  in the editable search field and results loaded. System logs identify
+  `callingApp: org.silora.app` and a final recognition result.
+
+Validation: all 1,427 TV host tests passed; full release lint, signed assembly,
+signature/application/version checks and archive checksums passed for the trial.
+The final signed APK with the permission-message name correction passed the
+same checks and was installed from `dist/local-2026-11-11.185305/silora-tv.apk`
+(TV version code `854395171`). On that exact APK, Back canceled the listening
+dialog and the speech service closed its microphone. Matt then confirmed
+“Star Wars” worked: the dialog closed, the editable query became “Star Wars,”
+results loaded and the system logs identify Silora as the direct service caller.
+No fresh Shield test has been performed; its existing Android 11 service path
+remains selected. Phone code is unchanged. Matt requested committing the validated
+change locally; no push or publication was requested.
+
+See the [device investigation](docs/maintenance/2026-11-11-streamer-voice-investigation.md)
+for the baseline failure, successful service-path trial and evidence limits.
+
+## 2026-11-11 — adopt upstream TV voice search
+
+Retired the fork's `tv-voice` implementation at Matt's request after he tested
+upstream and confirmed the microphone-button search works.
+
+- Restored `TvVoiceSearch.kt` and `LegacyTvVoiceSearch.kt` unchanged from upstream
+  `09f43a215`, including PR #830's activity launch/result handling, PR #860's
+  Android 11 Google recognition-service fallback and PR #869's translated text.
+- Removed the fork speech controller, overlay, permission/settings flow and
+  eight tests tied to that controller. Restored upstream's recognition-activity
+  query and API-30 cap on `RECORD_AUDIO`, retaining its service query and optional
+  microphone feature for Android 11.
+- Adopted upstream's mic button, availability check and translated unavailable
+  message. Spoken text updates the editable field and submits library/request
+  searches through the existing keyboard integration and query-length limit.
+  App/System keyboard preferences and request-search deduplication remain.
+- Marked `tv-voice` superseded in the fork inventory and maintenance checklist.
+
+Validation: all 1,427 TV host tests passed with no failures, errors or skips.
+The existing configuration disables TV release host tests, so the supported
+`:androidTvApp:testDebugUnitTest` task ran without building a debug APK.
+Full TV release lint passed with no errors, and the optimized, signed TV APK
+built successfully. Signature, application ID, version and archived checksums
+passed verification. Both voice helpers match upstream byte for byte; the
+packaged manifest has both speech queries and the API-30 microphone permission
+cap. The R8 mapping includes both upstream paths and no retired fork controller
+or overlay.
+
+APK, matching R8 mapping and source provenance:
+`dist/local-2026-11-11.181516/`. Visible version: `1.2.0 (31) (silora:11112026)`;
+TV version code: `854390633`. The build includes these uncommitted source
+changes and records that state. Matt's upstream test is owner-reported; this
+Silora APK has not been microphone-tested on a device. No commit, push or
+publication was performed.
+
+Later device check: Matt clarified that upstream works on his Android 11 Shield
+but fails on his Android 14 Google TV Streamer. A live test on the unchanged
+upstream APK reproduced the failure: the speech engine reports final results
+while Google's recognition activity remains open with no text. TiviMate works
+on that Streamer and calls the recognition service directly. Upstream's existing
+direct-service helper is restricted to Android 11. The adoption remains local
+and uncommitted; no new source workaround was applied. See the
+[device investigation](docs/maintenance/2026-11-11-streamer-voice-investigation.md)
+for evidence, limitations and the next implementation test.
+
 ## 2026-11-10 12:55 PST — upstream 09f43a215
 
 **Merge inputs:** `main`; fork before `4fb46a09a37a8fe81542033df2701f3f6df0489e`;

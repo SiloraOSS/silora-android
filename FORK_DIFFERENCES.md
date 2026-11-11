@@ -46,7 +46,7 @@ competing product requirements to that checklist.
 | `tv-subtitle-size` | TV has an Extra small subtitle choice. Preserve local persistence, server-compatible Small wire fallback and existing phone sizes. | `eae382b4b` |
 | `tv-remote` | Customizable long presses provide playback shortcuts while ordinary short presses and contextual action limits remain intact. Preserve playback-options focus handling; a Stats shortcut opens playback information, not an admin dashboard. | `04ef9c483`, `64a6d3b14` |
 | `tv-keyboard` | Search offers App/System keyboards with System as default and automatic opening off by default. Preserve physical typing, explicit keyboard opening, cursor state, clearing and focus handoffs. | `1d8fc7a5f`, `a42991501`, `660758013`, `bcf487826` |
-| `tv-voice` | Retain Silora’s in-app speech controller and overlay after the upstream activity-based recognizer failed to return search text on Shield and onn devices. Matt reproduced the failure with unchanged upstream source on his onn 4K Pro and reports that the prior Silora implementation works. Preserve microphone permission handling, cancellation/lifecycle cleanup, final-query submission and mic-focus return. Matt requested this fallback on November 6, 2026; revisit upstream only after an official build is confirmed to complete spoken searches on the affected device. | `dc03dfaa7`, `a42991501`; restored controller/overlay and eight existing session tests; current request in this chat |
+| `tv-google-voice` | Use upstream's direct recognition-service helper for Google's TV recognizer on Android 11 and later when a recognition service is available. Keep the activity fallback for other providers/older Android and when the service is unavailable. Request microphone permission on newer Android too. Matt requested this trial on November 11, 2026 after the unchanged upstream activity failed on the Android 14 Streamer; he confirmed voice search works with the trial. Preserve upstream's dialog, cancellation, permission/error handling and query submission. | `TvVoiceSearch.kt` (`SDK_INT >= R`), `LegacyTvVoiceSearch.kt`, TV manifest; [device investigation](docs/maintenance/2026-11-11-streamer-voice-investigation.md) |
 | `input-scope` | Supporting storage for `tv-keyboard` and `tv-remote`: save only App/System keyboard choice, automatic keyboard opening, and long-press mappings separately per server/login/profile. This adds no menu or standalone setting. Preserve migration, switching and account-removal cleanup. | `a19729d21`; account integration in `73c46323f` |
 | `trailers` | Embedded YouTube previews, external fallback and TV controls keep trailers accessible from movie/series details. Prefer local trailers and retain attribution. | `bac06a7c7` |
 | `ai-subtitles` | Preserve the four fixes for server audio ordinals, bounded uncertain-create fencing, missing-row replanning and language-alias normalization. Retire individual workarounds when a verified upstream replacement supplies the same behavior. | `5536474b3` |
@@ -58,31 +58,28 @@ competing product requirements to that checklist.
 | `release-tooling` | Matt requested disabling the inherited Android Builds push/PR workflow on November 10, 2026; its GitHub state is `disabled_manually`. Keep the separate Silora release workflows and their required checks. Preserve persistent signed phone/TV builds, version metadata, APK verification, matching R8 mappings, release workflows and configured notification behavior. Matt requested a per-release choice of GitHub compilation or publishing the exact verified PC APKs on November 8, 2026; retain both routes, the shared release lock and rejection of stale builds across all publication routes. Matt also requested `./helper.sh` to run full local lint/tests and publish that invocation’s exact build without entering its dated path. The local publisher waits briefly for a newly created draft to appear in GitHub’s release list, retrying only missing reads without repeating creation. This entry does not authorize publishing, messaging, changing schedules/destinations or exposing signing material. | `bf8304d5b`, `5f68d3c69`, `74ea34c8a`, `8005d02c1`, `7d7b9bb72`, `2b958c5c2`, `198f651f4`; `release.sh`, `scripts/local-release.py`, `fork-local-release.yml`, `test-local-release.py`, `scripts/release-order.py`, `helper.sh`, `scripts/test-build-and-publish.py` |
 | `fork-maintenance` | Maintain this reviewed inventory and the upstream-merge skill. Explain meaningful conflict decisions by feature ID; follow upstream outside intentional differences and do not treat inherited instructions as proof of a user customization. | November 6, 2026 authorization in this chat; `AGENTS.md`, `.agents/skills/silora-upstream-merge/SKILL.md` |
 
-## Deferred upstream replacement
+## Superseded differences
 
-The November 6 retirement of `tv-voice` was reversed later that day at Matt’s
-request. [Upstream PR #830](https://github.com/Silo-Server/silo-android/pull/830)
-(`4fb8f1b59`) remains in the ancestry, but its activity-based voice path is not
-used. The source/manifest audit found no missing upstream voice code or
-permission. Matt then reproduced the same failure on an onn 4K Pro (Android 14)
-using the unchanged upstream comparison build at `f13a2652a`. He reports that
-the microphone works in other apps and with the prior Silora implementation.
-The failure therefore reproduces without Silora patches; our merge and keyboard
-adaptations are not required to trigger it. The exact recognizer/provider
-failure has not been traced. The earlier retirement and audit records remain
-in `CHANGELOG.md`.
+| ID | Replacement and reason | Implementation references |
+| --- | --- | --- |
+| `tv-voice` | Superseded on November 11, 2026 at Matt's request after he confirmed upstream voice search on his Android 11 Shield. Use upstream's recognizer helpers, with the newer Google TV compatibility extension tracked as `tv-google-voice`. The fork controller, overlay and session tests are removed. Keep spoken-query submission integrated with the App/System keyboard controls. | Upstream PR #830 (`4fb8f1b59`), PR #860 (`484b55da5`) and translated helpers from PR #869 (`59f15e534`); `TvVoiceSearch.kt`, `LegacyTvVoiceSearch.kt`, `TvSearchScreen.kt` and the TV manifest |
 
-Revisit the replacement after an official build is available and confirmed to
-recognize speech, return the final text to search and submit the query on the
-affected device. Merely merging the PR, publishing a release, or opening its
-recognizer does not establish that replacement works.
+The November 6 fallback and November 9/10 merge decisions are historical.
+Both helpers came from upstream `09f43a215`; the active `tv-google-voice`
+compatibility change now extends its service path to Google on Android 11 and
+later. The manifest retains recognition-activity and service queries and
+optional microphone hardware, with `RECORD_AUDIO` available on newer Android.
+Earlier failure evidence remains in `CHANGELOG.md` and the
+[November 6 audit](docs/maintenance/2026-11-06-voice-and-merge-audit.md).
 
-The November 9 merge includes upstream PR #860 (`484b55da5`) in history. Its
-Android 11 Google recognition-service fallback does not establish that the
-activity path works on the affected Android 14 device. Keep Silora's controller
-and overlay, unrestricted microphone permission and recognition-service query;
-the unused upstream activity and legacy helper remain excluded. No new device
-voice test was performed during that merge.
+Matt later clarified that the November 11 success was on his Android 11 Shield.
+The unchanged upstream APK still fails on his Android 14 Google TV Streamer;
+TiviMate works there through a direct recognition-service call. Upstream's
+direct-service helper currently runs only on Android 11. Matt then approved
+extending upstream's own service helper and confirmed the
+trial returned spoken text and search results on the Streamer. See the
+[device investigation](docs/maintenance/2026-11-11-streamer-voice-investigation.md).
+This finding does not authorize restoring the retired fork controller/overlay.
 
 Requests navigation has no fork override and must not be reintroduced from old
 merge logs or instruction text.

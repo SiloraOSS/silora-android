@@ -72,8 +72,8 @@ including contextual limits on actions such as Next Episode. Follow
 Keep App/System search keyboard selection, System as the default, and optional
 automatic keyboard opening (default off). Follow `TvSearchKeyboardStore.kt`,
 `TvSearchKeyboard.kt`, `TvSearchScreen.kt`, `TvSearchTextEditing.kt`, and their
-shell/settings integration. Preserve the in-app voice integration described
-below alongside those keyboard controls.
+shell/settings integration. Keep upstream voice search integrated with those
+keyboard controls, as described below.
 
 `input-scope` is the storage detail for keyboard mode, automatic opening and
 remote mappings, not a separate product feature. These values are local per
@@ -82,34 +82,49 @@ values only to the adopting account and responds to identity switches. Follow it
 integration in `AndroidTvModule.kt` and `AccountLocalData.kt`; retain the account
 isolation/adoption cases in `TvProfileInputPreferencesTest.kt`.
 
-## TV voice search (`tv-voice`)
+## TV voice search (superseded `tv-voice`)
 
-Retain `TvSearchVoiceController.kt`, `TvSearchVoiceOverlay.kt` and their
-`TvSearchScreen.kt` integration while upstream PR #830 is deferred. The local
-`SpeechRecognizer` delivers final text directly to the editable field and the
-normal search submission path. Partial results stay in the overlay. Preserve
-the runtime `RECORD_AUDIO` request, denial/settings flow, optional microphone
-feature and `android.speech.RecognitionService` package-visibility query.
+Matt requested retiring the fork implementation on November 11, 2026 after
+confirming upstream voice search on his Android 11 Shield. Follow upstream here;
+do not restore `TvSearchVoiceController.kt`, `TvSearchVoiceOverlay.kt` or their
+session tests from older fork commits or merge resolutions.
 
-Keep session cancellation on pause/stop/disposal (except the permission-dialog
-pause), late-callback fencing, timeouts, empty-result handling, query length
-limits, keyboard closure, overlay Back ownership and microphone focus return.
-The eight existing `TvSearchVoiceControllerTest` cases cover the session logic;
-they do not prove microphone capture on a real TV. Retain upstream’s identical
-in-flight request-search deduplication when voice submits immediately.
+`TvVoiceSearch.kt` and `LegacyTvVoiceSearch.kt` come from upstream `09f43a215`:
+PR #830's recognizer activity, PR #860's Google service fallback and PR #869's
+translated prompts/errors. Keep both manifest queries
+(`android.speech.action.RECOGNIZE_SPEECH` and `android.speech.RecognitionService`)
+and optional microphone hardware. The active `tv-google-voice` extension below
+widens the Google service path and microphone permission to newer Android.
 
-Matt reproduced the failure on his onn 4K Pro with unchanged upstream source
-at `f13a2652a` and reports that the prior Silora implementation works. Preserve
-the inventory’s fallback decision: the failure does not require fork patches.
-Do not re-adopt the recognizer-activity helper merely because it is present
-upstream; revisit it after an official build completes a spoken search on the
-affected device.
+Preserve the `tv-keyboard` integration: close the selected keyboard before voice
+launch, update its editable field/cursor on a nonempty spoken result, enforce
+the normal query limit and submit library/request searches. Keep upstream's
+availability-based mic visibility, unavailable message and in-flight
+request-search deduplication. The November 6 failure and November 9/10 deferral
+records are historical.
 
-Upstream PR #860 (`484b55da5`) adds a service fallback only for Android 11 with
-Google's recognizer. The November 9 merge retains Silora's path on all supported
-TV versions, including Android 14, and excludes the unused `TvVoiceSearch.kt`
-and `LegacyTvVoiceSearch.kt`. Do not cap `RECORD_AUDIO` at API 30: Silora uses
-the service on newer versions too. This merge supplies no new device evidence.
+The later November 11 device check reproduced failure in the unchanged upstream
+activity on Matt's Android 14 Streamer. The active `tv-google-voice` compatibility
+change below addresses that path with upstream's service helper.
+
+## Google TV speech-service compatibility (`tv-google-voice`)
+
+Matt approved extending upstream's service helper on November 11, 2026 and
+confirmed successful spoken-query entry and results on the Android 14 Streamer.
+For Google's selected activity provider (`com.google.android.katniss`) on API 30
+and later, use `LegacyTvVoiceSearch.kt` when a recognition service is available.
+Keep the upstream activity fallback for other providers, older Android and
+service-unavailable cases. The TV manifest must make `RECORD_AUDIO` available
+on newer Android so upstream's runtime permission request works there.
+
+Preserve upstream's recognition/session lifecycle and query submission, plus
+the existing Silora translation for the microphone-permission message. This is
+a small compatibility extension to upstream's helper, not a restoration of the
+retired fork controller/overlay. Keep App/System keyboard integration and
+in-flight request-search deduplication. Retire this extension when upstream
+supplies the same behavior. Evidence and limits are in
+`docs/maintenance/2026-11-11-streamer-voice-investigation.md`; the Shield's existing
+API-30 path remains selected, but no fresh Shield device test was performed.
 
 ## Trailers (`trailers`)
 

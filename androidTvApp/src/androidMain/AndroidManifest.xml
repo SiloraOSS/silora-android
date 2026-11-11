@@ -10,10 +10,18 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
-    <uses-feature android:name="android.hardware.microphone" android:required="false" />
-
-    <!-- The in-app SpeechRecognizer uses a recognition service, not an activity. -->
+    <!--
+        Package visibility for the system speech recogniser. From Android 11 an
+        app cannot see packages it has not declared an interest in, so without
+        this the availability check comes back empty on every modern device and
+        the voice affordance silently never appears. Silo asks the recogniser to
+        listen. Google TV on Android 11 and later uses the recognition service
+        directly to avoid permission and result-delivery failures in its activity.
+    -->
     <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
@@ -21,6 +29,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
