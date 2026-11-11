@@ -1740,7 +1740,13 @@ class TvPlayerViewModel(
         onCommittedPlaybackFailure = { message ->
             _uiState.update { it.copy(error = message) }
         },
-        hasMountableTracks = { _uiState.value.subtitleTracks.isNotEmpty() },
+        // Until the screen applies a pending mount, subtitleTracks still lists
+        // the previous item's tracks (onTransportMountApplied clears them), and
+        // counting those would start the mount deadline before the new item
+        // has any.
+        hasMountableTracks = {
+            !transportMountGate.suppressPositionReports && _uiState.value.subtitleTracks.isNotEmpty()
+        },
         isLocallyMountable = { identity ->
             val state = _uiState.value
             isTvLocallyMountable(

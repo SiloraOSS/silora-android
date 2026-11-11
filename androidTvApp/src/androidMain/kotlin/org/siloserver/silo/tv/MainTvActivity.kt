@@ -54,6 +54,7 @@ import org.siloserver.silo.network.ServerRegistry
 import org.siloserver.silo.tv.ui.focus.TvFocusLog
 import org.siloserver.silo.network.TokenManager
 import org.siloserver.silo.network.requiresApproval
+import org.siloserver.silo.repository.AccountProfilesRefresher
 import org.siloserver.silo.repository.AuthRepository
 import org.siloserver.silo.repository.PersonalDataRepository
 import org.siloserver.silo.repository.ProfileRepository
@@ -62,6 +63,8 @@ import org.siloserver.silo.repository.port.HomeCachePort
 import org.siloserver.silo.tv.cast.TvSiloCastReceiver
 import org.siloserver.silo.common.profiles.ProfileLaunchBehavior
 import org.siloserver.silo.common.profiles.ProfileLaunchPreferences
+import org.siloserver.silo.common.profiles.ProfileSelectionPrompt
+import org.siloserver.silo.common.profiles.profileSelectionPrompt
 import org.siloserver.silo.tv.profiles.TvActiveProfileReset
 import org.siloserver.silo.tv.profiles.noAccountOpenButAnotherSignedIn
 import org.siloserver.silo.tv.profiles.onlyOpenTile
@@ -74,6 +77,7 @@ import org.siloserver.silo.tv.ui.navigation.TvAppNavigation
 import org.siloserver.silo.tv.ui.navigation.TvRoute
 import org.siloserver.silo.tv.ui.screens.player.TvPlayerRemoteKeyBridge
 import org.siloserver.silo.tv.ui.theme.SiloTvTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -283,8 +287,26 @@ class MainTvActivity : ComponentActivity() {
         val monitor = get<ServerReachabilityMonitor>(ServerReachabilityMonitor::class.java)
         monitor.startForeground()
         lifecycleScope.launch(Dispatchers.IO) { refresher.refreshIfStale() }
+        // A return to Silo: the open account's profiles may have changed
+        // elsewhere. The launch refreshes every account once its start
+        // route is resolved.
+        if (hasResolvedLaunchProfile) refreshOpenAccountProfiles()
         // A language chosen in system settings while Silo was away.
         get<AppLanguageStore>(AppLanguageStore::class.java).check(this)
+    }
+
+    /** Brings the open account's cached profiles and profile limit up to date, in the background. */
+    private fun refreshOpenAccountProfiles() {
+        val accountId = get<ServerRegistry>(ServerRegistry::class.java).activeAccountId.value ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                get<AccountProfilesRefresher>(AccountProfilesRefresher::class.java).refresh(accountId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Best effort: the cached list and limit stand.
+            }
+        }
     }
 
     // Before Android 13 the app language is applied here (from 13 the
@@ -422,10 +444,22 @@ class MainTvActivity : ComponentActivity() {
             authRepository.refreshActiveServerName(knownContract = knownContract)
         }
         // Accounts saved before multiple accounts existed lack their server
-        // user, which tells a new sign-in apart from a saved account. Best
-        // effort, never awaited.
+        // user, which tells a new sign-in apart from a saved account. Then
+        // every account's cached profiles and profile limit: an account
+        // whose only profile opens without the picker never loads them
+        // there, and the profile menu's row reads both. Best effort, never
+        // awaited.
         lifecycleScope.launch(Dispatchers.IO) {
             runCatching { authRepository.backfillAccountIdentities() }
+            if (processStart) {
+                try {
+                    get<AccountProfilesRefresher>(AccountProfilesRefresher::class.java).refreshAll()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Best effort: the cached lists and limits stand.
+                }
+            }
         }
 
         val cleartextConsent = get<org.siloserver.silo.network.CleartextOriginConsent>(
@@ -472,8 +506,13 @@ class MainTvActivity : ComponentActivity() {
             }
         }
 
+        val savedAccounts = registry.accounts.value.size
         val profileId = tokenManager.getProfileId()
         if (profileId.isNullOrBlank()) {
+            // No profile is open. When Profile Selection asks and several
+            // accounts are saved, Change Account takes the picker's place.
+            val prompt = profileSelectionPrompt(requiresSelection, savedAccounts, onlyProfileNeedsNoChoice = false)
+            if (prompt == ProfileSelectionPrompt.ChangeAccount) return TvRoute.ChangeAccount().route
             // The open account's only profile, with no PIN, opens without
             // the picker (spec §4.2).
             if (registry.onlyOpenTile() != null) SignInHandoff.skipsSingleProfilePicker = true
@@ -490,19 +529,31 @@ class MainTvActivity : ComponentActivity() {
         // whose away interval ran out while Silo was closed. A later Activity
         // in this process (Back left Silo, then it was reopened) follows the
         // return rule the away tracker evaluated in onStart. Either way the
-        // profile is cleared here, before the picker loads, and losing its PIN
-        // proof makes a protected profile ask for its PIN again.
-        // The open account's only profile, with no PIN, is never asked for (spec §4.2).
-        if (requiresSelection && registry.onlyOpenTileIsActive(tokenManager)) {
+        // profile is cleared here, before the next screen loads, and losing
+        // its PIN proof makes a protected profile ask for its PIN again.
+        val prompt = profileSelectionPrompt(
+            selectionRequired = requiresSelection,
+            savedAccounts = savedAccounts,
+            onlyProfileNeedsNoChoice = registry.onlyOpenTileIsActive(tokenManager),
+        )
+        if (prompt != ProfileSelectionPrompt.None) {
+            get<TvActiveProfileReset>(TvActiveProfileReset::class.java).clearActiveProfile()
+            // Several accounts are saved: whose account comes first, with no
+            // profile open while Change Account shows.
+            return if (prompt == ProfileSelectionPrompt.ChangeAccount) {
+                TvRoute.ChangeAccount().route
+            } else {
+                TvRoute.ProfileSelection.route
+            }
+        }
+        // With one account saved, its only profile, with no PIN, is never
+        // asked for (spec §4.2).
+        if (requiresSelection) {
             launchPreferences.clearBackgroundedAt()
             get<ProfileAwayTracker>(ProfileAwayTracker::class.java).onSelectionHandled()
-            return TvRoute.Main.route
+        } else if (processStart) {
+            launchPreferences.clearBackgroundedAt()
         }
-        if (requiresSelection) {
-            get<TvActiveProfileReset>(TvActiveProfileReset::class.java).clearActiveProfile()
-            return TvRoute.ProfileSelection.route
-        }
-        if (processStart) launchPreferences.clearBackgroundedAt()
 
         return TvRoute.Main.route
     }

@@ -4,6 +4,66 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-11 14:34 PST — upstream c2ad874cd
+
+**Merge inputs:** `main`; fork before `74795fb930d361cd6d962f404ef6156f00ea8c4c`;
+upstream `c2ad874cd296e2e017cbb26baef07eeada6d91ec`. Six upstream commits align poster overlays
+with the web, open Change Account when launch policy asks with several saved
+accounts, choose Add/Switch Profile by profile count, refine the TV profile menu,
+and correct the embedded-subtitle mount deadline.
+
+**Upstream commits added:**
+
+- `48015d4ee` docs(agents): tell contributor agents to treat the code as someone else's (#878)
+- `2d3620d50` feat(overlays): match the web's poster overlay layout on phone and TV (#882)
+- `ce24a6b5c` feat(accounts): open Change Account at launch when several accounts are saved (#880)
+- `8b9b3f017` feat(profiles): offer Switch Profile or Add Profile by profile count (#881)
+- `84ea05a6b` fix(tv): match the Apple TV profile menu's header line, Sign Out colour and divider (#883)
+- `c2ad874cd` fix(tv): start the embedded subtitle mount deadline on the new mount's tracks (#879)
+
+**Silora merge decisions:**
+
+- Resolved two navigation conflicts (`admin-console`): provide both phone
+  composition locals and both TV callbacks, keeping the gated Admin console
+  alongside upstream's Add Profile flow. Retained the default-off, device-local
+  visibility setting and administrator/primary-profile access checks.
+- Adopted upstream poster layouts, watched/progress badges, overlay settings,
+  profile-count/limit handling, verified primary-profile Add flow, account launch
+  policy, TV menu order/header/divider/red Sign Out and mount-deadline gate.
+  Requests keeps upstream server gating; Watch Party remains experimental.
+- Retained Silora identity/resources (`identity`), the newer Google TV direct
+  speech-service extension (`tv-google-voice`), App/System keyboard and scoped
+  input preferences (`tv-keyboard`, `input-scope`). The superseded `tv-voice`
+  controller and overlay remain removed.
+- Preserved Night Mode, HEVC level controls, independent TV display matching,
+  Extra small subtitles, remote shortcuts, trailers, AI workarounds/live cues,
+  custom Up Next/artwork and Skip Credits. The only incoming TV player change
+  waits for the new transport mount before starting its subtitle deadline.
+- Retained signed release tooling, strict dependency verification, R8/mappings,
+  fork maintenance rules and the upstream README with its Silora link. Integrated
+  upstream's contributor-scope instructions. No fork feature retired or new
+  product override introduced.
+
+**Validation:**
+
+- `git diff --cached --check`, clean conflict index, staged/working-tree parity,
+  affected-fork source review and `scripts/sync-silora-strings.py --check` passed.
+  All ten changed official catalog/metadata files match pinned upstream.
+- `./build.sh --release=both --tests --lint --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing`
+  passed with JDK 21. All 12,915 Gradle variant cases passed with zero failures,
+  errors or skips: shared, android-shared, phone and libass debug/release host
+  tests, plus 1,427 TV debug host cases. Existing configuration disables TV
+  release host tests; no debug APK was built.
+- 149 release/notification script tests passed. Full phone/TV release lint
+  passed with warnings and no errors; lint baselines were unchanged. Strict
+  supply-chain checks, optimized signed phone/TV assembly, application/version/
+  non-debuggable/signature checks and archived APK/mapping checksums passed.
+- Pre-commit APKs compiled staged tree `87d523928ea3f4faafa67b851d8df07652d5a819`;
+  their build metadata records the pre-merge parent. Exact-commit artifact
+  verification remains a separate required gate before pushing or handoff.
+  Unrelated untracked files were preserved and are not build inputs.
+- No device, server, playback or voice testing occurred in this automation run.
+
 ## 2026-11-11 — use upstream voice service on newer Google TVs
 
 Voice search now returns spoken text on the Android 14 Google TV Streamer.
