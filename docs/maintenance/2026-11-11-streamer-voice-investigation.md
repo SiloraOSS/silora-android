@@ -9,8 +9,10 @@ in the Silo test.
 
 The initial investigation narrowed the failure to the activity-based recognition
 path. The approved direct-service trial below then returned spoken text and
-search results. Google's internal activity failure remains unexplained; this is
-not evidence of a device-wide Android 14 speech failure.
+search results. A subsequent inspection of the installed Google APK found that
+its final-result callback sets an activity result without finishing the activity.
+This explains the stalled handoff; it is not evidence of a device-wide Android 14
+speech failure.
 
 ## Source and device
 
@@ -84,6 +86,57 @@ manifest also caps Silo's own `RECORD_AUDIO` permission at API 30.
 The initial recommendation was to test upstream's existing service helper on
 the Streamer with microphone permission available on API 34. Matt approved that
 test. The old Silora controller and overlay have not been restored.
+
+## Follow-up: Google's result callback does not finish its activity
+
+At Matt's request, the installed Google TV provider was inspected without
+modifying it or changing device settings. Its version remains
+`7.55.87+1001226628.05`, version code `15040529`. The pulled base APK has SHA-256
+`0bd136519790666234a89bdce0457df466424a9e3df16797c226183bb223a372`.
+Apktool 2.9.3 disassembled its DEX bytecode locally. The APK and disassembly remain
+private under the evidence directory's `provider-analysis/` subdirectory.
+
+The installed bytecode establishes this call path:
+
+1. `VoiceInputActivity.onResume()` creates a standard `SpeechRecognizer`, sets
+   listener `kiv`, and passes the incoming activity intent to `startListening()`.
+2. `kiv.onResults(Bundle)` reads `results_recognition`, stops listening, clears
+   the listener and resets the microphone animation. It creates an intent with
+   `android.speech.extra.RESULTS` and calls `setResult(-1, intent)` on the activity
+   (`-1` is `RESULT_OK`).
+3. That callback then invokes `kiw.a()`. This helper only calls
+   `overridePendingTransition(0, 0)` and returns. It does **not** call `finish()`
+   or schedule another operation that finishes the activity.
+4. The activity's own `finish()` override does call its superclass and then
+   `kiw.a()`, but the result callback never invokes that override. The complete
+   superclass chain was checked: it does not override `setResult()` or
+   `overridePendingTransition()` to add a hidden finish operation.
+
+Android's [Activity.finish() contract](https://developer.android.com/reference/android/app/Activity#finish())
+states that finishing the activity propagates its result to the caller.
+Setting the result alone does not close the activity. The missing finish in
+Google's callback therefore explains the observed combination of completed
+recognition, an open Google screen and no result delivered to Silo. The
+10:33:07.942 system log also records a redundant `stopListening` immediately
+after the engine's final result, consistent with the callback's stop call.
+The actual callback bundle was not captured, and no modified Google APK was
+installed to test a repair.
+
+The empty Google text field has a related explanation. Its partial-result
+callback updates the field, but its final-result callback does not. Upstream
+Silo does not request `EXTRA_PARTIAL_RESULTS`, and Google forwards that intent
+unchanged. Android documents partial results as
+[disabled by default](https://developer.android.com/reference/android/speech/RecognizerIntent#EXTRA_PARTIAL_RESULTS).
+Thus the blank editor does not establish that transcription failed. Requesting
+partial results might improve that editor's feedback, but would not add the
+missing activity finish and was not tested as a workaround.
+
+The direct-service helper bypasses this defective result wrapper and receives
+`RecognitionListener.onResults()` in Silora itself. Both paths use the supported
+`SpeechRecognizer` API underneath; "Legacy" is the upstream helper's name, not
+an indication that Android has deprecated that API. The defect is established
+for this installed Google provider version. Its introduction date and behavior
+in other provider versions or Android releases remain unverified.
 
 ## Approved direct-service trial
 
