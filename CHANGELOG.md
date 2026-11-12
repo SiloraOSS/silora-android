@@ -4,6 +4,68 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-12 13:14 PST — upstream 7afdf3d69
+
+**Merge inputs:** `main`; fork before `f389ca4227c402493a9c1dc1f5844de20c21b695`;
+upstream `7afdf3d69c9fc85dabe5d0d67a22d1af62699140`. Five commits add title-order
+letter jumps on phone/tablet, moving end-time labels on phone/TV, deliberate
+viewer activity resets for TV's still-watching count, contributor evidence rules
+and public translation checks.
+
+**Upstream commits added:**
+
+- `69e142cd6` fix(tv): reset the still-watching count when the viewer pauses or seeks (#876)
+- `2b523311f` feat(browse): jump to a letter in title-ordered library grids on phone and tablet (#888)
+- `e8c10f1db` fix(player): keep the end time moving while paused and add it to phones (#875)
+- `8bad0f006` ci: require evidence on every pull request and close contributors' drafts (#894)
+- `7afdf3d69` ci: check translations without a silo-translations token (#895)
+
+**Silora merge decisions:**
+
+- No textual conflicts. Accepted upstream library paging/letter rails and
+  server-unsupported fallback, shared end-time clock and Watch Party 1x label,
+  viewer-action resets and auto-advance handoff counting.
+- Adapted `credits-auto-skip` to upstream's non-viewer seek path so automatic
+  credit skips do not reset the still-watching count. Manual seeks still count
+  as viewer activity. Preserved custom trigger/timing, next-item artwork,
+  dismissal/end-countdown guards and manual TV Up Next (`up-next-setting`,
+  `up-next-fixes`), plus TV AI workarounds and live cues (`ai-subtitles`,
+  `tv-live-ai-subtitles`).
+- Retained Night Mode, HEVC controls, independent display matching, Extra small
+  TV subtitles, remote shortcuts, App/System keyboard and scoped input settings,
+  trailers, opt-in/scoped Admin, Silora identity and the Google TV voice-service
+  extension. The superseded voice controller/overlay remain removed. All 275
+  nonoverlapping fork paths retain their pre-merge content/deletion state.
+- Integrated upstream contributor/evidence instructions and public-catalog
+  checks while retaining fork maintenance/product exposure and Silora resources.
+  Excluded two upstream-generated Python cache files under `scripts/__pycache__`
+  to keep generated output out of the source tree. No new product override or
+  feature retirement; signed release tooling and notifications are unchanged.
+
+**Validation:**
+
+- Source/fork audit, clean conflict index, staged/working-tree parity and
+  `git diff --cached --check` passed. Complete translation regeneration from
+  pinned `local-bb5a6783406c` matched; temporary Node 22.18 supplied the required
+  runtime. `scripts/sync-silora-strings.py --check` passed.
+- `./build.sh --release=both --tests --lint --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing`
+  passed with JDK 21. All 12,965 Gradle variant cases passed with zero failures,
+  errors or skips: shared, android-shared, phone and libass debug/release host
+  tests, plus 1,427 TV debug host cases. Existing configuration disables TV
+  release host tests; no debug APK was built.
+- 176 release, notification and CI-routing/result script tests passed. Full
+  phone/TV release lint passed with no errors and unchanged baselines. Strict
+  dependency/supply-chain checks, R8, signed phone/TV assembly, package/version/
+  non-debuggable/signature checks and archived APK/mapping checksums passed.
+- Pre-commit APKs compiled staged tree `350d550ceeadc859e182954f5efe09ef84e239af`;
+  their metadata records the pre-merge parent. Exact-commit artifact verification
+  remains a separate required gate before pushing or handoff. The initial
+  sandbox cache-lock failure was repaired through reviewed host cache access;
+  no checks were weakened. Unrelated untracked files remain intact and are not
+  build inputs. `actionlint` was unavailable; workflow YAML/supply-chain checks
+  passed.
+- No device, server, playback or voice testing occurred in this automation run.
+
 ## 2026-11-11 14:34 PST — upstream c2ad874cd
 
 **Merge inputs:** `main`; fork before `74795fb930d361cd6d962f404ef6156f00ea8c4c`;
