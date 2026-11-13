@@ -4,6 +4,66 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-13 13:07 PST — upstream 4686d6dd8
+
+**Merge inputs:** `main`; fork before `628082ce60f67eb048045bc270a15bbfcc02a62d`;
+upstream `4686d6dd81c3185bdf4e38b589dedb84086246a4`. Six commits keep Version Auto
+within the chosen edition on phone/TV, improve watch-progress contrast on bright
+artwork, add TV keyboard Space-bar pause/resume, change the Version icon, and
+update cross-client parity guidance and the addressable lock.
+
+**Upstream commits added:**
+
+- `9ce12edf1` docs: require parity issues in the other Silo clients (#897)
+- `466c31968` feat(detail): keep Version Auto inside the chosen edition on phone and TV (#899)
+- `e1d8f4e94` build(deps): bump addressable from 2.9.0 to 2.9.1 (#904)
+- `f65fe6917` feat(android): make watch-progress bars visible on bright artwork (#902)
+- `a09cd3e66` fix(tv): let the keyboard Space bar pause and resume playback (#844)
+- `4686d6dd8` fix(detail): use a several-videos icon for the Version selector (#905)
+
+**Silora merge decisions:**
+
+- No textual conflicts. Accepted upstream edition-scoped Auto selection,
+  quality/history/multipart handling, file-specific track resets and matching
+  Play/Download selection. Retained phone/TV trailer actions (`trailers`).
+- Accepted the shared outlined progress pill, badge clearance and Version icon.
+  Preserved next-item artwork and end-countdown cancellation while updating
+  the phone Up Next card's progress bar (`up-next-setting`, `up-next-fixes`).
+- Accepted TV Space-bar pause/resume with repeat/key-up consumption and
+  Ctrl/Alt/Meta shortcut guards. Retained remote long-press behavior, modal and
+  Up Next ownership, automatic credits skipping, and live AI subtitle overlays
+  (`tv-remote`, `credits-auto-skip`, `tv-live-ai-subtitles`, `ai-subtitles`).
+- Integrated upstream parity instructions while retaining fork product exposure
+  and maintenance rules (`fork-maintenance`). This merge adds no new product
+  override or cross-client implementation; the upstream changes retain their
+  original contribution ownership.
+- Preserved all seven overlapping fork deltas and all 275 nonoverlapping fork
+  paths, including intentional deletions. Night Mode, HEVC/display/subtitle
+  controls, App/System keyboard and scoped input preferences, Google TV voice,
+  opt-in/scoped Admin, Silora identity and signed release/notification tooling
+  remain intact. No active difference was retired; the superseded fork voice
+  controller and overlay remain removed.
+
+**Validation:**
+
+- Source/fork audit, clean conflict index, staged/working-tree parity and
+  `git diff --cached --check` passed. Silora derived-resource check passed.
+- `./build.sh --release=both --tests --lint --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing`
+  passed with JDK 21. All 12,992 Gradle variant cases passed with zero failures,
+  errors or skips, plus 149 release/notification script tests. Shared,
+  android-shared, phone and libass debug/release host suites ran; TV used its
+  debug host suite (1,428 cases), as release host tests remain disabled by the
+  existing configuration.
+- Full phone/TV release lint passed with existing baselines unchanged. Strict
+  dependency verification/supply-chain checks, R8 optimization, persistent
+  release signatures, package/version/non-debuggable checks, and archived
+  APK/matching-mapping SHA-256 checks passed.
+- The pre-commit build compiled staged tree `247e4d4be06a8eca0e19f4433e706ed4858ba550`;
+  its provenance records the pre-merge HEAD and a dirty tracked tree. This log
+  is the only subsequent source change; exact-commit build/provenance checks
+  are required before push. Unrelated untracked files remain preserved.
+- No device, server, playback or voice testing was performed.
+
 ## 2026-11-12 13:14 PST — upstream 7afdf3d69
 
 **Merge inputs:** `main`; fork before `f389ca4227c402493a9c1dc1f5844de20c21b695`;

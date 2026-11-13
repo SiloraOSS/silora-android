@@ -47,10 +47,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -1306,7 +1306,7 @@ fun VersionPillButton(
             .height(36.dp)
             .clickable(onClick = onClick),
     ) {
-        // iOS PhoneVersionPillButton: leading stack icon 13pt (0.78), label
+        // iOS PhoneVersionPillButton: leading version icon 13pt (0.78), label
         // 12pt medium (0.7), value 13pt semibold, chevron 10pt (0.6).
         Row(
             modifier = Modifier.padding(horizontal = 14.dp),
@@ -1314,7 +1314,7 @@ fun VersionPillButton(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(
-                imageVector = Icons.Filled.Layers,
+                imageVector = Icons.Filled.VideoLibrary,
                 contentDescription = null,
                 tint = SiloOnOpaqueControl.copy(alpha = 0.78f),
                 modifier = Modifier.size(13.dp),
