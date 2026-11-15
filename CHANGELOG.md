@@ -4,6 +4,72 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-14 17:36 PST — upstream 73e55b96b
+
+**Merge inputs:** `main`; fork before `5fd18307fd09eddd4f69249c44a2970bfe102969`;
+upstream `73e55b96bcbc8e75d98d81657cc4c7db7fc79ad2`. Six upstream commits add web-aligned
+browse sorts, scale card badges with text/poster size, group large counts,
+fix invitation token transport and claim retries, and resolve the Compose
+Gradle plugin from Maven Central without changing dependency verification.
+Recovery: `refs/codex/upstream-merge/20261115T011740Z`.
+
+**Upstream commits added:**
+
+- `cc4fd6662` fix(overlays): scale card badges with text size and poster size (#912)
+- `a0391bf5c` build: take the Compose Gradle plugin from Maven Central only (#918)
+- `a60dac2d0` feat(browse): match the web client's sort options on phone and TV (#843)
+- `b2b0fb565` fix(i18n): group thousands in collection, Browse and person counts (#916)
+- `a9c8fa4cf` fix(auth): send the invitation token in the request body (#920)
+- `73e55b96b` fix(auth): let an invitee retry an invitation claim the server refused (#923)
+
+**Silora merge decisions:**
+
+- No textual conflicts. Accepted upstream sort fields, media relevance,
+  rating-source visibility, per-field directions and saved-list/collection
+  ordering. Kept server/account/profile refresh and stale-response guards.
+- Retained Silora application identity (`identity`), opt-in/scoped Admin menu
+  and API binding (`admin-console`), and TV search keyboard/voice ownership
+  (`tv-keyboard`, `tv-google-voice`, `input-scope`) in the overlapping files.
+  Upstream rating capability refresh runs alongside the existing feature stores.
+- Preserved all four overlapping fork deltas and 278 other fork paths.
+  Night Mode, HEVC/display/subtitle controls, remote shortcuts, trailers,
+  AI/live subtitles, Up Next, Skip Credits and signed release/notification
+  tooling remain intact. The retired fork voice controller stays removed.
+  No active difference was retired and no new product override was added.
+- Kept upstream's generated translation catalog byte-identical, together with
+  Silora's separate derived identity resources and i18n documentation.
+- Corrected one existing Android test harness after validation found a
+  `ConcurrentModificationException`: the main-thread-only letter pager was
+  called from IO while an unconfined dispatcher could resume on other threads.
+  Tests now keep pager calls and ViewModel resumptions on one real main thread;
+  the cached-index assertion still precedes release of the blocked fresh read.
+  Production pager code and assertions remain intact. This test-only correction
+  has no Apple, Roku or Web implementation work; inherited features retain
+  upstream contribution ownership.
+
+**Validation:**
+
+- Fork/source audit, conflict-index check, staged/working-tree parity and
+  `git diff --cached --check` passed. Fresh translation installation matched
+  `2026.11.14-d36b68d`; Silora derived-resource check passed.
+- `./build.sh --release=both --tests --lint --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing`
+  passed with JDK 21: 12,056 Gradle variant cases, zero failures/errors/skips,
+  plus 149 release/notification script tests. Shared, android-shared and
+  libass debug/release suites ran. Phone (982) and TV (1,428) used debug host
+  suites; upstream disables phone release host tests for its debug-only Compose
+  test manifest, matching TV's existing configuration. Both release apps compiled.
+- Full release lint passed with unchanged baselines. Strict supply-chain and
+  dependency verification, R8, persistent release signatures, `org.silora.app`,
+  version/non-debuggable checks, and APK/matching-mapping checksums passed.
+- The first sandbox attempt stopped at the read-only Gradle cache lock; host
+  cache access resolved it. The first full run found the test-harness error
+  above. All seven focused letter-index cases and the full required command
+  passed after correction; no checks or signing safeguards were weakened.
+- Pre-commit APKs compiled staged tree `aaf0812e1080323b2345572fe16d1e95366a6496`
+  while HEAD still named the old parent. This entry is the only later tree
+  change. Exact committed-source artifacts are verified separately before push.
+  No device, server, playback or voice validation was performed.
+
 ## 2026-11-13 13:07 PST — upstream 4686d6dd8
 
 **Merge inputs:** `main`; fork before `628082ce60f67eb048045bc270a15bbfcc02a62d`;

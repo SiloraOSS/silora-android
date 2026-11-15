@@ -14,9 +14,9 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -31,7 +31,7 @@ import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.putJsonObject
 import org.siloserver.silo.android.ui.screens.libraries.LibrariesSubtab
 import org.siloserver.silo.android.ui.screens.libraries.LibrariesViewModel
-import org.siloserver.silo.android.ui.screens.libraries.LibraryBrowseSort
+import org.siloserver.silo.catalog.sort.CatalogSortField
 import org.siloserver.silo.catalog.filter.CatalogFilterState
 import org.siloserver.silo.network.SiloJson
 import org.siloserver.silo.network.api.CatalogApi
@@ -41,6 +41,7 @@ import org.siloserver.silo.repository.CatalogRepository
 import org.siloserver.silo.repository.PersonalDataRepository
 import org.siloserver.silo.repository.SectionRepository
 import java.util.Collections
+import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -134,6 +135,7 @@ class CatalogLetterIndexViewModelTest {
         server.lettersGate = gate
         val second = BrowseViewModel(server.catalog, SavedStateHandle(mapOf("libraryId" to "1")))
         second.applyFilterState(titleOrder)
+        awaitState("cached letter index") { second.letterJump.value != null }
         assertNotNull(second.letterJump.value, "the rail shows before the fresh index arrives")
         awaitState("fresh letters request") { server.lettersRequests.size == 2 }
         gate.complete(Unit)
@@ -158,14 +160,14 @@ class CatalogLetterIndexViewModelTest {
         awaitState("first page") { viewModel.uiState.value.catalogItems.isNotEmpty() }
         assertNull(viewModel.letterJump.value)
 
-        viewModel.selectBrowseSort(LibraryBrowseSort.Title)
+        viewModel.selectBrowseSort(CatalogSortField.Title)
         awaitState("letter index") { viewModel.letterJump.value != null }
         assertEquals("1", server.lettersRequests.single()["library_id"])
         assertEquals("asc", server.lettersRequests.single()["order"])
         assertEquals("100", server.catalogRequests.last { it["seek"] == null }["limit"])
         assertEquals(210, jumpPosition { viewModel.letterJumpPosition("M") })
 
-        viewModel.selectBrowseSort(LibraryBrowseSort.RecentlyAdded)
+        viewModel.selectBrowseSort(CatalogSortField.DateAdded)
         assertNull(viewModel.letterJump.value)
     }
 
@@ -202,16 +204,21 @@ class CatalogLetterIndexViewModelTest {
     }
 
     private fun runCatalogTest(block: suspend TestScope.() -> Unit) = runTest {
-        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
-        try {
-            block()
-        } finally {
-            Dispatchers.resetMain()
+        val testScope = this
+        // The pager is main-thread confined. MockEngine resumes on real IO
+        // threads, so use one real main thread for calls and resumptions alike.
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { main ->
+            Dispatchers.setMain(main)
+            try {
+                withContext(main) { testScope.block() }
+            } finally {
+                Dispatchers.resetMain()
+            }
         }
     }
 
-    /** A jump's brief wait for its titles runs in real time, like the mock engine. */
-    private suspend fun jumpPosition(read: suspend () -> Int?): Int? = withContext(Dispatchers.IO) { read() }
+    /** Stay on the pager's main thread; its dispatcher uses real-time waits. */
+    private suspend fun jumpPosition(read: suspend () -> Int?): Int? = read()
 
     /**
      * Wait for the view model to reach a state, in real time: the Ktor mock
