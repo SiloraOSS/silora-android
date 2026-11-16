@@ -179,4 +179,22 @@ class SubtitleAiCreateV2Test {
             assertEquals(1,sends); assertEquals(0,updates)
         } finally { c.close() }
     }
+
+    @Test fun retryAfterUncertaintyAdoptsOnlyTheNewestRunningOrCompletedMatchingJob() {
+        val translate = SubtitleTranslateRequest(42, "transcribe_translate", -1, targetLanguage = "en", startPosition = 0.0)
+        fun aiJob(id: Long, status: String, result: Int? = null, kind: String = "transcribe_translate", target: String = "en", source: Int = -1) =
+            SubtitleAiJob(id = id, mediaFileId = 42, kind = kind, sourceIndex = source, targetLanguage = target, status = status, resultSubtitleId = result)
+        fun lost(request: SubtitleTranslateRequest, jobs: List<SubtitleAiJob>) = SubtitleAiCreateV2Api.lostJobFor(request, jobs)
+        assertNull(lost(translate, emptyList()))
+        assertEquals(5L, lost(translate, listOf(aiJob(3, "completed", 7), aiJob(5, "running")))?.id)
+        assertEquals(5L, lost(translate, listOf(aiJob(5, "queued")))?.id)
+        assertEquals(6L, lost(translate, listOf(aiJob(3, "running"), aiJob(6, "completed", 9)))?.id)
+        assertNull(lost(translate, listOf(aiJob(3, "completed", 7), aiJob(6, "failed"))), "the newest attempt failed: send a new one")
+        assertNull(lost(translate, listOf(aiJob(6, "cancelled"))))
+        assertNull(lost(translate, listOf(aiJob(6, "completed", null))))
+        assertNull(lost(translate, listOf(aiJob(6, "running", kind = "transcribe"))))
+        assertNull(lost(translate, listOf(aiJob(6, "running", target = "sl"))))
+        assertNull(lost(translate, listOf(aiJob(6, "running", source = 2))))
+        assertEquals(6L, lost(translate, listOf(aiJob(6, "running", target = "EN")))?.id)
+    }
 }

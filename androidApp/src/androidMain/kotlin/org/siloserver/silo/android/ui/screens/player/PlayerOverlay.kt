@@ -731,6 +731,16 @@ fun PlayerOverlay(
             )
         }
 
+        // Fork: once a running AI job's first lines arrive, close the sheet so
+        // they show over the picture.
+        val liveSubtitleHasCues = viewModel.liveSubtitle.collectAsState().value?.cues?.isNotEmpty() == true
+        LaunchedEffect(liveSubtitleHasCues) {
+            if (liveSubtitleHasCues && aiTranslateVisible) {
+                aiTranslateVisible = false
+                viewModel.onTranslateSheetClosed()
+            }
+        }
+
         if (aiTranslateVisible) {
             AiTranslateSheet(
                 tools = subtitleTools,

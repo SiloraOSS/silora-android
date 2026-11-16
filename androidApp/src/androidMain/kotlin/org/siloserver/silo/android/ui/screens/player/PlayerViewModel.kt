@@ -184,6 +184,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import org.siloserver.silo.model.subtitles.SubtitleAiJobKind
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.isActive
@@ -469,6 +470,9 @@ class PlayerViewModel(
 
     companion object {
         private const val TAG = "PlayerViewModel"
+        // Fork: how long a finished live track draws if the job poll never
+        // loads the finished subtitle (it normally takes a second or two).
+        private const val LIVE_SUBTITLE_COMPLETED_GRACE_MS = 15_000L
         val SERVER_UNREACHABLE_MESSAGE = PlayerMessage.Res(CommonR.string.player_error_serverUnreachable)
         // Error screens say what happened in plain words; the request URL and
         // the library's exception text go to the log only.
@@ -1719,6 +1723,7 @@ class PlayerViewModel(
         submitDownloadRunPosition()
         browseLibraryId = libraryId
         aiPlaybackGeneration++
+        clearLiveSubtitle()
         val normalizedPreferredQuality = VideoPlayerRouteArgs.normalizeQuality(preferredQuality)
         routeIntentState.beginLoad(
             contentId = contentId,
@@ -5177,6 +5182,8 @@ class PlayerViewModel(
         if (index != -1 && index !in state.subtitleTracks.indices) return
         // The viewer chose: a later local track discovery must not auto-select over it.
         localSubtitleState = localSubtitleState?.copy(autoSelectionPending = false)
+        // Fork: and the live AI lines give way to the pick.
+        dismissLiveSubtitleForSelection()
         val identity = state.subtitleTracks
             .getOrNull(index)
             ?.let(::mobileSubtitleIdentity)
@@ -5984,6 +5991,90 @@ class PlayerViewModel(
     private var aiCreationInFlight = false
     private var aiCancelOwner: Pair<Long, org.siloserver.silo.network.AuthScopeSnapshot>? = null
 
+    // Fork: live AI subtitles. The server streams a running job's output over
+    // the session socket, playhead first; the screen draws it until the
+    // finished track is loaded and selected through the normal path.
+    private val _liveSubtitle = MutableStateFlow<org.siloserver.silo.playback.LiveSubtitleTrack?>(null)
+    val liveSubtitle: StateFlow<org.siloserver.silo.playback.LiveSubtitleTrack?> = _liveSubtitle.asStateFlow()
+    private var liveSubtitleFallbackClear: kotlinx.coroutines.Job? = null
+    private var activeAiJobKind: String? = null
+    // Jobs whose live lines stay hidden: cancelled, finished, or the viewer
+    // picked another subtitle track or Off while they ran.
+    private val liveSubtitleDismissals = org.siloserver.silo.playback.LiveSubtitleDismissals()
+
+    /**
+     * Fork: applies one live AI subtitle event from the session socket. Events
+     * for another session, file or job are ignored.
+     */
+    internal fun applyLiveSubtitleEvent(event: org.siloserver.silo.playback.PlaybackLiveSubtitleEvent) {
+        val state = _uiState.value
+        if (event.sessionId != null && event.sessionId != state.sessionId) return
+        if (event.fileId != null && state.mediaFileId != null && event.fileId != state.mediaFileId) return
+        _subtitleTools.value.activeJob?.id?.let { if (it != event.jobId) return }
+        if (liveSubtitleDismissals.isDismissed(event.jobId)) return
+        val transcribing = activeAiJobKind == SubtitleAiJobKind.Transcribe
+        when (event) {
+            is org.siloserver.silo.playback.PlaybackLiveSubtitleEvent.Started -> {
+                liveSubtitleFallbackClear?.cancel()
+                _liveSubtitle.value = org.siloserver.silo.playback.LiveSubtitleTrack(
+                    sessionId = state.sessionId,
+                    jobId = event.jobId,
+                    trackKey = event.trackKey,
+                    language = event.language,
+                    label = event.label,
+                    total = event.totalCues,
+                    transcribing = transcribing,
+                )
+            }
+            is org.siloserver.silo.playback.PlaybackLiveSubtitleEvent.Cues -> {
+                val current = _liveSubtitle.value?.takeIf { it.jobId == event.jobId }
+                    ?: org.siloserver.silo.playback.LiveSubtitleTrack(
+                        sessionId = state.sessionId,
+                        jobId = event.jobId,
+                        trackKey = event.trackKey,
+                        transcribing = transcribing,
+                    )
+                _liveSubtitle.value = current.plus(event.cues, event.done, event.total)
+            }
+            is org.siloserver.silo.playback.PlaybackLiveSubtitleEvent.Completed -> {
+                _liveSubtitle.update { live -> live?.takeIf { it.jobId == event.jobId }?.copy(completed = true) ?: live }
+                liveSubtitleFallbackClear?.cancel()
+                liveSubtitleFallbackClear = viewModelScope.launch {
+                    delay(LIVE_SUBTITLE_COMPLETED_GRACE_MS)
+                    dismissLiveSubtitle(event.jobId)
+                }
+            }
+            is org.siloserver.silo.playback.PlaybackLiveSubtitleEvent.Failed -> dismissLiveSubtitle(event.jobId)
+        }
+    }
+
+    /** Stops drawing [jobId]'s live lines and ignores its later batches. */
+    private fun dismissLiveSubtitle(jobId: Long) {
+        liveSubtitleDismissals.dismiss(jobId)
+        clearLiveSubtitle(jobId)
+    }
+
+    /**
+     * The viewer picked a subtitle track or Off: hide the running job's live
+     * lines so the pick shows. The job keeps running and its finished track
+     * still lands in the list, without being selected over the pick.
+     */
+    private fun dismissLiveSubtitleForSelection() {
+        val jobId = _subtitleTools.value.activeJob?.id ?: _liveSubtitle.value?.jobId ?: return
+        dismissLiveSubtitle(jobId)
+    }
+
+    /** Stops drawing live AI subtitles (for [jobId] only, when given). */
+    fun clearLiveSubtitle(jobId: Long? = null) {
+        _liveSubtitle.update { live -> if (live == null || (jobId != null && live.jobId != jobId)) live else null }
+    }
+
+    /** Source (file) seconds for a player position, matching the live cues' clock. */
+    fun liveSubtitleSourceSeconds(playerPositionMs: Long): Double {
+        val seconds = playerPositionMs.coerceAtLeast(0L) / 1000.0
+        return _uiState.value.playbackPlan?.timeline?.sourcePositionForPlayer(seconds) ?: seconds
+    }
+
     fun startAiJob(kind: String, sourceIndex: Int, sourceLanguage: String, targetLanguage: String) {
         val generation = aiPlaybackGeneration
         val state = _uiState.value
@@ -6003,6 +6094,8 @@ class PlayerViewModel(
                 return samePlayback() && owner.isSameIdentityAs(now) && owner.profileId == now?.profileId && owner.profileToken == now?.profileToken
             }
             if (!ownsRequest()) return@launch
+            // Set before the request: the server's start event can beat its reply.
+            activeAiJobKind = kind
             val result = subtitlesRepository.translate(
                 SubtitleTranslateRequest(
                     mediaFileId = mediaFileId,
@@ -6022,24 +6115,36 @@ class PlayerViewModel(
                     val note = PlayerMessage.Res(CommonR.string.player_subtitleTools_processingInBackground)
                         .takeIf { !result.data.liveDeliveryAttached && job.progressMessage.isBlank() }
                     aiCancelOwner = job.id to owner
+                    // A repeat request can land on a job dismissed earlier.
+                    liveSubtitleDismissals.restore(job.id)
                     _subtitleTools.update { it.copy(translateSubmitting = false, activeJob = job, activeJobNote = note) }
                     val outcome = subtitlesRepository.pollJob(job.id, expectedScope = owner) { update ->
                         if (samePlayback()) _subtitleTools.update { it.copy(activeJob = update, activeJobNote = null) }
                     }
-                    if (!ownsRequest()) return@launch
+                    if (!ownsRequest()) {
+                        dismissLiveSubtitle(job.id)
+                        return@launch
+                    }
                     when (outcome) {
                         is SubtitlesRepository.SubtitleJobOutcome.Completed -> {
-                            doRefreshSubtitles(autoSelectSubtitleId = outcome.resultSubtitleId)
+                            // A viewer who picked another track while the job
+                            // ran keeps that pick; the new track is only listed.
+                            val keepPick = liveSubtitleDismissals.isDismissed(job.id)
+                            doRefreshSubtitles(autoSelectSubtitleId = outcome.resultSubtitleId.takeUnless { keepPick })
+                            // The finished track is selected now; stop drawing the live copy.
+                            dismissLiveSubtitle(job.id)
                             if (ownsRequest()) _subtitleTools.update { it.copy(activeJob = null, activeJobNote = null, jobJustCompleted = true) }
                         }
                         is SubtitlesRepository.SubtitleJobOutcome.Failed -> {
+                            dismissLiveSubtitle(job.id)
                             val message = outcome.message?.let(PlayerMessage::Raw)
                                 ?: PlayerMessage.Res(CommonR.string.player_subtitleTools_jobFailed)
                             _subtitleTools.update { it.copy(activeJob = null, activeJobNote = null, translateError = message) }
                             _aiJobFailure.value = AiJobFailure(++aiJobFailureCounter, message)
                         }
-                        SubtitlesRepository.SubtitleJobOutcome.Cancelled -> _subtitleTools.update {
-                            it.copy(activeJob = null, activeJobNote = null)
+                        SubtitlesRepository.SubtitleJobOutcome.Cancelled -> {
+                            dismissLiveSubtitle(job.id)
+                            _subtitleTools.update { it.copy(activeJob = null, activeJobNote = null) }
                         }
                     }
                 }
@@ -6062,6 +6167,9 @@ class PlayerViewModel(
     fun cancelAiJob() {
         val job = _subtitleTools.value.activeJob ?: return
         val owner = aiCancelOwner?.takeIf { it.first == job.id }?.second ?: return
+        // Hide the lines now; if the cancel fails the job stays listed as
+        // running in the sheet, so the viewer can cancel again.
+        dismissLiveSubtitle(job.id)
         viewModelScope.launch { subtitlesRepository.cancelJob(job.id, owner) }
     }
 

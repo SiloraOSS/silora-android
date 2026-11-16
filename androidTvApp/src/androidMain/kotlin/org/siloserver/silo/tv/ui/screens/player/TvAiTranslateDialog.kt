@@ -1,5 +1,6 @@
 package org.siloserver.silo.tv.ui.screens.player
 
+import org.siloserver.silo.common.player.aiTranscribePlan
 import android.content.res.Resources
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -380,17 +381,10 @@ fun TvAiTranslateDialog(
                                         val src = audioSources[
                                             audioSourcePos.coerceIn(0, audioSources.lastIndex),
                                         ]
-                                        val sameLanguage = tvIsSameLanguage(src.language, targetLanguage)
-                                        if (!canTranslateTranscript) {
-                                            onSubmit("transcribe", src.index, src.language, "")
-                                        } else {
-                                            onSubmit(
-                                                if (sameLanguage) "transcribe" else "transcribe_translate",
-                                                src.index,
-                                                src.language,
-                                                targetLanguage,
-                                            )
-                                        }
+                                        // Fork: untagged audio transcribes with the
+                                        // target as a hint instead of translating.
+                                        val plan = aiTranscribePlan(src.language, targetLanguage, canTranslateTranscript)
+                                        onSubmit(plan.kind, src.index, plan.sourceLanguage.orEmpty(), plan.targetLanguage)
                                     }
                                 },
                             )

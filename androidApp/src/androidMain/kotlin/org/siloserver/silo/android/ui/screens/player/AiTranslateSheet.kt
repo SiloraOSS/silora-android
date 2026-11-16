@@ -1,5 +1,6 @@
 package org.siloserver.silo.android.ui.screens.player
 
+import org.siloserver.silo.common.player.aiTranscribePlan
 import org.siloserver.silo.android.ui.components.SiloDropdownMenuItem
 import org.siloserver.silo.android.ui.components.SiloDropdownMenu
 import androidx.compose.foundation.background
@@ -241,16 +242,14 @@ fun AiTranslateSheet(
                         onClick = {
                             if (mode == AiMode.Audio) {
                                 val audio = audioTracks.getOrNull(audioPos) ?: return@Button
-                                val kind = if (canTranslateTranscript) {
-                                    transcribeKindFor(audio.language, targetLanguage)
-                                } else {
-                                    SubtitleAiJobKind.Transcribe
-                                }
+                                // Fork: untagged audio transcribes with the
+                                // target as a hint instead of translating.
+                                val plan = aiTranscribePlan(audio.language, targetLanguage, canTranslateTranscript)
                                 onSubmit(
-                                    kind,
+                                    plan.kind,
                                     audioPos, // audio source_index = list position (web parity)
-                                    audio.language.orEmpty(),
-                                    if (kind == SubtitleAiJobKind.Transcribe) "" else targetLanguage,
+                                    plan.sourceLanguage.orEmpty(),
+                                    plan.targetLanguage,
                                 )
                             } else {
                                 val source = sourceTracks.getOrNull(sourceTrackPos) ?: return@Button

@@ -14,4 +14,7 @@
     <string name="silora_remote_shortcuts_blurb">Choose what holding a remote button does during video playback.</string>
     <string name="silora_profiles_error_passwordReset">Your password needs to be reset. Use the Silora mobile app or your server\'s website to set a new one, then come back.</string>
     <string name="silora_tvSignIn_error_networkEmailInUse">An account with your email already exists. Sign in to it with Silora on your phone or Silo on the web, connect %1$s in Sign-in settings, then try again.</string>
+    <string name="silora_liveSubtitle_transcribing">Transcribing…</string>
+    <string name="silora_liveSubtitle_translating">Translating subtitles…</string>
+    <string name="silora_aiSubtitles_cancelFailed">Couldn\'t cancel AI subtitles. The job may still finish and add its track.</string>
 </resources>

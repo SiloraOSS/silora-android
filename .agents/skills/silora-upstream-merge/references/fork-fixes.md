@@ -134,51 +134,60 @@ attribution. Use an upstream equivalent if it preserves these behaviors.
 
 ## AI subtitles (`ai-subtitles`)
 
-Review `5536474b3` and current code before resolving these files. Prefer a
-verified upstream fix when it makes the local workaround unnecessary.
+The original four bug-fix goals remain active. Matt requested all subtitle
+updates from edrock v42 (`c934aaf7a`) on November 15, 2026; preserve the newer
+implementations rather than restoring the old retry/phone-language helpers.
 
 - TV **From audio** uses the playing file's server audio ordinals, not the
-  remuxed/transcoded ExoPlayer group ordinal. Follow
-  `TvPlayerViewModel.aiAudioSources()`, `TvAiTranslateDialog.kt`, and
-  `TvPlayerScreen.kt`.
-- `SubtitleAiCreateV2Api.kt` lifts an uncertain-create fence after 60 seconds
-  so a lost response does not block requests until app restart. Preserve
-  ownership/concurrency guards and upstream's duplicate-job semantics.
-- TV AI completion replans after five seconds if the new subtitle row is
-  still absent. Follow `TvPlayerViewModel.refreshSubtitles()` and preserve
-  session/ownership protections.
-- Phone `SubtitleAiSupport.transcribeKindFor()` normalizes language aliases
-  such as `eng`/`en` and avoids unnecessary same-language translation.
-  Unknown language codes must not silently count as English.
+  remuxed/transcoded player group ordinal. Follow
+  `TvPlayerViewModel.aiAudioSources()`, `TvAiTranslateDialog.kt` and its caller.
+- `SubtitleAiCreateV2Api.kt` fences uncertain creates for 60 seconds. After
+  that, a repeated intent first lists jobs through `SubtitleAiReadsV2Api.jobs`
+  with the captured auth scope and adopts a matching active/completed result.
+  A failed list stays fenced. Retain the four-argument DI binding in
+  `NetworkModule.kt`, profile ownership and single-attempt POST semantics.
+  `SubtitleAiCreateV2Test` covers matching-job selection and existing fencing.
+- TV uses the finished inventory row from `subtitle_translation_completed`
+  through `applyAiCompletedSubtitleTrack`/`applySubtitleReady`. Keep the older
+  five-second missing-row replan fallback for when both inventory events are
+  absent, with its session/ownership guards.
+- Phone and TV share `AiTranscribePlan.kt`: language aliases and regional
+  tags can match, tagged languages outside the display-name table remain
+  eligible for translation, and untagged audio transcribes with the target
+  as a hint. Translation-disabled servers still get plain transcription.
+  Keep `AiTranscribePlanTest` and `LanguageNames.isKnown`; the old phone-only
+  `transcribeKindFor()` is replaced, not a helper to restore during merges.
 
-## Live AI subtitles on TV (`tv-live-ai-subtitles`)
+## Live AI subtitles on phone and TV (`tv-live-ai-subtitles`)
 
-Matt adopted edrock200’s `20e85217c927e76fe34edd820608403f4847452b` as local
-`b812d6274` and requested recording it on November 8, 2026. This feature is
-separate from the four `ai-subtitles` workarounds above. Retire it when a
-verified upstream equivalent supplies the same live-subtitle behavior.
+Keep the stable manifest ID despite the expanded phone scope. The original TV
+feature came from edrock `20e85217c` as local `b812d6274`; the approved v42
+updates now share rendering, cue handling and transcription planning across
+both apps. They are separate from the request/selection fixes above.
 
-- `shared/.../playback/PlaybackLiveSubtitles.kt` decodes
-  `subtitle_translation_started`, `subtitle_translation_cues`,
-  `subtitle_translation_completed` and `subtitle_translation_failed` events.
-  `LiveSubtitleTrack` sorts/deduplicates batches and looks up cues in source-file
-  seconds. `PlaybackLiveSubtitlesTest` covers the decoder and cue-track logic.
-- `TvPlaybackRealtimeController` routes the decoded events to
-  `TvPlayerViewModel.applyLiveSubtitleEvent`. Keep its session/file/active-job
-  checks, `liveSubtitle` state and source-time mapping. The first nonempty cue
-  batch closes the AI dialog.
-- `TvLiveSubtitleOverlay.kt` draws current cues, displays “Translating subtitles…”
-  before any arrive, keeps lines clear of transport controls and hides under the HUD.
-  `TvPlayerScreen.kt` hides Media3’s subtitle view while the live track is active
-  and draws the overlay outside picture-in-picture.
-- The AI job poll’s existing finished-track refresh/selection path takes over
-  on completion; completion, failure and cancellation clear the live overlay
-  through `clearLiveSubtitle`. A completed realtime event also schedules a
-  15-second fallback clear. Preserve these handoff/cleanup hooks during merges.
+- `PlaybackLiveSubtitles.kt` decodes the four live lifecycle/cue events,
+  cleans subtitle markup, sorts/deduplicates cues, maps source-file seconds,
+  reports coverage and tracks dismissed job IDs. Preserve session/file/job
+  guards in both player models and routing in both realtime controllers.
+- Shared `android-shared/.../player/LiveSubtitleOverlay.kt` replaces the old
+  `TvLiveSubtitleOverlay.kt`. Keep phone/TV styles, viewer subtitle appearance,
+  frame-bound ticking, positioning above controls and the small waiting chip.
+  Its coverage callback hides Media3 subtitles only while live cues own the
+  slot and restores visibility on disposal/PiP/cast. TV's Extra small sizing
+  remains available through the shared appearance point-size mapping.
+- A subtitle selection or Off dismisses live lines without cancelling the
+  background job; completion lists the finished result without replacing that
+  manual choice. Cancellation and terminal outcomes dismiss live lines and
+  reject late batches. Reusing a job explicitly restores it. TV reports a
+  failed cancel. Keep the 15-second completed-event cleanup backstop.
+- The normal finished-track refresh/selection path remains the handoff.
+  Both apps close the AI sheet/dialog when the first live cues arrive.
+  New waiting/cancel messages use Silora resource names in `strings_silora.xml`;
+  do not import edrock's unrelated HEVC strings from `strings_fork.xml`.
 
-The decoder is shared, but live display is TV-only; the phone has no live
-subtitle overlay. It requires server realtime events. Decoder tests do not
-establish on-device cue timing or finished-track handoff.
+`PlaybackLiveSubtitlesTest` covers decoding, cleaned text, coverage and dismissal.
+These unit checks do not prove on-device cue timing, appearance, cancellation
+or the finished-track transition; those require server/device validation.
 
 ## Up Next (`up-next-setting`, `up-next-fixes`)
 

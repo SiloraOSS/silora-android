@@ -2364,12 +2364,14 @@ fun TvPlayerScreen(
     // Fork: a running AI translation's streamed lines, for this session only.
     val liveSubtitleTrack = viewModel.liveSubtitle.collectAsState().value
         ?.takeIf { it.sessionId == state.sessionId }
-    val liveSubtitleActive = liveSubtitleTrack != null
-    LaunchedEffect(playerViewRef, cueReachPx, state.hudOpen, liveSubtitleActive) {
+    // Set by the overlay while its lines own the subtitle slot; false before
+    // the first line, where the job has not reached, and in PiP.
+    var liveSubtitleCovering by remember { mutableStateOf(false) }
+    LaunchedEffect(playerViewRef, cueReachPx, state.hudOpen, liveSubtitleCovering) {
         val subtitleView = playerViewRef?.subtitleView ?: return@LaunchedEffect
         // While live AI lines are drawn, hide Media3's own cues so only one
         // set shows; the finished track takes over once it is selected.
-        subtitleView.visibility = if (state.hudOpen || liveSubtitleActive) {
+        subtitleView.visibility = if (state.hudOpen || liveSubtitleCovering) {
             android.view.View.INVISIBLE
         } else {
             android.view.View.VISIBLE
@@ -2577,13 +2579,16 @@ fun TvPlayerScreen(
                 }
 
                 if (!isInPictureInPictureMode && liveSubtitleTrack != null) {
-                    TvLiveSubtitleOverlay(
+                    org.siloserver.silo.common.player.LiveSubtitleOverlay(
                         track = liveSubtitleTrack,
                         positionSourceSeconds = {
                             viewModel.liveSubtitleSourceSeconds(mediaController?.currentPosition ?: 0L)
                         },
                         bottomLiftPx = cueReachPx,
                         hidden = state.hudOpen,
+                        style = org.siloserver.silo.common.player.LiveSubtitleOverlayStyle.Tv,
+                        appearance = subtitleAppearance,
+                        onCoveringChanged = { liveSubtitleCovering = it },
                     )
                 }
 

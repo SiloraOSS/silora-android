@@ -74,12 +74,41 @@ data class LiveSubtitleTrack(
     val done: Int = 0,
     val total: Int = 0,
     val completed: Boolean = false,
+    /** A plain transcription (no translation): the waiting text says so. */
+    val transcribing: Boolean = false,
 ) {
     /** Adds a batch, dropping exact repeats (a resent batch after a reconnect). */
     fun plus(batch: List<LiveSubtitleCue>, done: Int, total: Int): LiveSubtitleTrack {
         if (batch.isEmpty()) return copy(done = maxOf(this.done, done), total = maxOf(this.total, total))
         val merged = (cues + batch).distinct().sortedWith(compareBy({ it.startSeconds }, { it.endSeconds }))
         return copy(cues = merged, done = maxOf(this.done, done), total = maxOf(this.total, total))
+    }
+
+    /**
+     * Whether the live lines own the subtitle slot at [seconds]: a live cue
+     * shows there or one ends or starts within [gapSeconds]. The short pause
+     * between two live cues still counts, so the player's own subtitles do
+     * not flash up between lines; a region the job has not reached yet does not.
+     */
+    fun covers(seconds: Double, gapSeconds: Double = LIVE_SUBTITLE_COVER_GAP_SECONDS): Boolean {
+        if (cues.isEmpty()) return false
+        // First cue that starts after `seconds + gap`; only cues before it can
+        // be near enough.
+        val limit = seconds + gapSeconds
+        var lo = 0
+        var hi = cues.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (cues[mid].startSeconds <= limit) lo = mid + 1 else hi = mid
+        }
+        var i = lo - 1
+        var scanned = 0
+        while (i >= 0 && scanned < 8) {
+            if (cues[i].endSeconds + gapSeconds > seconds) return true
+            i--
+            scanned++
+        }
+        return false
     }
 
     /** Text of every cue showing at [seconds] (source time), in start order. */
@@ -106,6 +135,9 @@ data class LiveSubtitleTrack(
         return showing
     }
 }
+
+/** How long a pause between live cues still keeps the player's own subtitles hidden. */
+const val LIVE_SUBTITLE_COVER_GAP_SECONDS = 4.0
 
 private val LIVE_SUBTITLE_EVENTS = setOf(
     "subtitle_translation_started",
@@ -142,7 +174,7 @@ fun decodePlaybackLiveSubtitleEvent(name: String, payload: JsonObject): Playback
                 val end = (cue["end"] as? JsonPrimitive)?.doubleOrNull ?: return@mapNotNull null
                 val text = (cue["text"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
                 if (!start.isFinite() || !end.isFinite() || end <= start) return@mapNotNull null
-                LiveSubtitleCue(start, end, text)
+                LiveSubtitleCue(start, end, liveCueDisplayText(text))
             },
             done = int("done") ?: 0,
             total = int("total") ?: 0,
@@ -156,5 +188,60 @@ fun decodePlaybackLiveSubtitleEvent(name: String, payload: JsonObject): Playback
             message = str("message")?.takeIf { it.isNotBlank() },
         )
         else -> null
+    }
+}
+
+// Tags such as <i>, </b>, <font color="...">, WebVTT <c.yellow> and <v Name>.
+private val LIVE_CUE_TAG = Regex("""</?[A-Za-z][^<>]*>""")
+// WebVTT karaoke timestamps such as <00:01:02.500>.
+private val LIVE_CUE_TIMESTAMP = Regex("""<\d[\d:.]*>""")
+// ASS override blocks such as {\an8} or {\i1}.
+private val LIVE_CUE_ASS_OVERRIDE = Regex("""\{\\[^}]*\}""")
+
+/**
+ * Fork: the text to draw for a live cue. The server streams the source
+ * subtitle's lines verbatim, so SRT/WebVTT tags and ASS overrides would show
+ * literally; they are removed here (styling such as italics is dropped), ASS
+ * line breaks become newlines and the common HTML entities are decoded.
+ */
+fun liveCueDisplayText(raw: String): String {
+    if (raw.isEmpty()) return raw
+    return raw
+        .replace(LIVE_CUE_ASS_OVERRIDE, "")
+        .replace(LIVE_CUE_TAG, "")
+        .replace(LIVE_CUE_TIMESTAMP, "")
+        .replace("\\N", "\n")
+        .replace("\\n", "\n")
+        .replace("\\h", " ")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .lines()
+        .joinToString("\n") { it.trim() }
+        .trim('\n')
+}
+
+/**
+ * Fork: AI jobs whose live lines must not be drawn any more: the viewer
+ * cancelled the job, picked another subtitle track or Off while it ran, or
+ * its poll already reached a terminal state. Late batches for these jobs are
+ * dropped instead of bringing the overlay back. [restore] undoes it when the
+ * same job is started again (the server collapses a repeat request onto the
+ * running job). Keeps only the most recent [capacity] ids.
+ */
+class LiveSubtitleDismissals(private val capacity: Int = 16) {
+    private val ids = ArrayDeque<Long>()
+
+    fun dismiss(jobId: Long) {
+        if (jobId in ids) return
+        ids.addLast(jobId)
+        while (ids.size > capacity) ids.removeFirst()
+    }
+
+    fun isDismissed(jobId: Long): Boolean = jobId in ids
+
+    fun restore(jobId: Long) {
+        ids.remove(jobId)
     }
 }

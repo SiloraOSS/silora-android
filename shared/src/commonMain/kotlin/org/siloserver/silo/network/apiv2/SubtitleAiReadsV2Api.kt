@@ -52,8 +52,8 @@ class SubtitleAiReadsV2Api(private val client: HttpClient, private val tokens: T
         read<AiJobEnvelope, SubtitleAiJobResponse>("/api/v2/subtitles/ai/jobs/$id", scope) {
             val job = it.job.project(); require(job.id == id); SubtitleAiJobResponse(job)
         }
-    suspend fun jobs(mediaFileId: Int): ApiResult<SubtitleAiJobsResponse> =
-        read<AiJobsEnvelope, SubtitleAiJobsResponse>("/api/v2/subtitles/ai/jobs", null, { parameter("media_file_id", mediaFileId.toString()) }) {
+    suspend fun jobs(mediaFileId: Int, scope: AuthScopeSnapshot? = null): ApiResult<SubtitleAiJobsResponse> =
+        read<AiJobsEnvelope, SubtitleAiJobsResponse>("/api/v2/subtitles/ai/jobs", scope, { parameter("media_file_id", mediaFileId.toString()) }) {
             val jobs = it.jobs.map { wire -> wire.project() }
             require(jobs.all { job -> job.mediaFileId == mediaFileId } && jobs.map { job -> job.id }.distinct().size == jobs.size)
             SubtitleAiJobsResponse(jobs)

@@ -57,4 +57,48 @@ class PlaybackLiveSubtitlesTest {
         assertTrue(track.textAt(0.0).isEmpty())
         assertTrue(track.textAt(200.0).isEmpty())
     }
+
+    @Test fun stripsSubtitleMarkupFromLiveCues() {
+        assertEquals("Kje si bil?", liveCueDisplayText("<i>Kje si bil?</i>"))
+        assertEquals("Napis", liveCueDisplayText("{\\an8}Napis"))
+        assertEquals("Red text", liveCueDisplayText("<font color=\"#ff0000\">Red</font> <b>text</b>"))
+        assertEquals("Hello there", liveCueDisplayText("<v Bob><c.yellow>Hello</c> <00:00:01.500>there"))
+        assertEquals("one\ntwo", liveCueDisplayText("one\\Ntwo"))
+        assertEquals("a < b & c", liveCueDisplayText("a &lt; b &amp; c"))
+        assertEquals("3 < 4 > 2", liveCueDisplayText("3 < 4 > 2"))
+        assertEquals("", liveCueDisplayText("<i></i>"))
+    }
+
+    @Test fun decodedCuesCarryDisplayText() {
+        val event = decodePlaybackLiveSubtitleEvent(
+            "subtitle_translation_cues",
+            obj("""{"job_id":1,"cues":[{"start":1,"end":2,"text":"<i>Zdravo</i>"}]}"""),
+        )
+        assertEquals(listOf(LiveSubtitleCue(1.0, 2.0, "Zdravo")), assertIs<PlaybackLiveSubtitleEvent.Cues>(event).cues)
+    }
+
+    @Test fun dismissedJobsStayDismissedUntilRestored() {
+        val dismissals = LiveSubtitleDismissals(capacity = 2)
+        dismissals.dismiss(1)
+        assertTrue(dismissals.isDismissed(1))
+        assertTrue(!dismissals.isDismissed(2))
+        dismissals.restore(1)
+        assertTrue(!dismissals.isDismissed(1))
+        dismissals.dismiss(1)
+        dismissals.dismiss(2)
+        dismissals.dismiss(3)
+        assertTrue(!dismissals.isDismissed(1), "oldest id drops past capacity")
+        assertTrue(dismissals.isDismissed(2) && dismissals.isDismissed(3))
+    }
+
+    @Test fun coversLiveCuesAndShortPausesButNotUnfilledRegions() {
+        val track = LiveSubtitleTrack(sessionId = "s", jobId = 1, trackKey = "k")
+            .plus(listOf(LiveSubtitleCue(100.0, 102.0, "a"), LiveSubtitleCue(105.0, 107.0, "b")), done = 2, total = 10)
+        assertTrue(track.covers(101.0))
+        assertTrue(track.covers(103.5), "pause between two live cues")
+        assertTrue(track.covers(97.0), "just before the first live cue")
+        assertTrue(!track.covers(50.0), "region the job has not reached")
+        assertTrue(!track.covers(120.0))
+        assertTrue(!LiveSubtitleTrack(sessionId = "s", jobId = 1, trackKey = "k").covers(0.0))
+    }
 }

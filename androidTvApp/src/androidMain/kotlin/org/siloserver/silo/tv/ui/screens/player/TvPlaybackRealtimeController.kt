@@ -125,6 +125,12 @@ class TvPlaybackRealtimeController(
             else -> if (isPlaybackLiveSubtitleEvent(event.name)) {
                 // Fork: live AI subtitles, streamed while a translation runs.
                 decodePlaybackLiveSubtitleEvent(event)?.let(viewModel::applyLiveSubtitleEvent)
+                // The completed event carries the same inventory row as
+                // subtitle_ready, so a missed subtitle_ready no longer leaves
+                // the finished track unknown.
+                if (event.name == "subtitle_translation_completed" && event.payload["track"] != null) {
+                    viewModel.applyAiCompletedSubtitleTrack(decodePlaybackSubtitleReady(event))
+                }
             }
         }
     }

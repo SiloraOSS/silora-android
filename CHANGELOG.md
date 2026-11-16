@@ -4,6 +4,91 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-15 19:47 PST — edrock v42 AI subtitle updates
+
+Matt requested all current edrock updates for `ai-subtitles` and
+`tv-live-ai-subtitles`, including phone live display. Imported the seven source
+commits below from `edrock/feat/hevc-level-override-v42`, pinned to
+`c934aaf7ac0aef17881070c0a54ab4cdc56add36`, into Silora `main` from
+`6b4355aa8ed933451fd83f6be9fb12d7c743c646`. Recovery:
+`refs/codex/edrock-subtitles/20261116T033632Z`.
+
+**Source commits incorporated:**
+
+- `e5d9b430e` feat(subtitles): show live AI subtitles on the phone, and transcribe untagged audio without translating
+- `641a8993b` fix(subtitles): translate audio in languages the name table does not list
+- `867431510` fix(subtitles): strip subtitle markup from live AI lines
+- `0c541431a` fix(subtitles): let a subtitle pick or cancel dismiss the live AI lines
+- `cc25ac25d` fix(subtitles): hide player subtitles only while live AI lines show
+- `5dc3f0e10` fix(tv): add the finished AI track from the completed event
+- `37874ceaf` fix(subtitles): adopt the lost AI job instead of creating a second one
+
+**Integration decisions:**
+
+- `tv-live-ai-subtitles` now covers phone and TV; its stable ID keeps its TV
+  origin. Moved the old TV-only overlay into shared Android code and added
+  phone realtime/model/screen integration. Live lines follow subtitle appearance,
+  lift above controls, clean source markup and hide ordinary subtitles only
+  while live cues cover the subtitle slot. Disposal restores ordinary subtitles
+  for PiP/cast; waiting text occupies a small chip outside that slot.
+- Imported dismissed-job tracking: another subtitle selection or Off hides the
+  job's live lines and preserves that manual choice on completion. Cancel and
+  terminal outcomes reject late batches; an explicitly reused job is restored.
+  TV reports a failed cancel. Existing session/file/job and timeline guards stay.
+- `ai-subtitles` retains the server audio-ordinal fix and missing-row fallback.
+  The completed event now supplies its inventory row through the normal ready
+  path before the five-second TV replan fallback is needed. Kept the completed
+  live-track cleanup backstop.
+- Replaced the old phone-only language helper with edrock's shared phone/TV
+  `AiTranscribePlan`: aliases and region tags match; tagged languages outside
+  the display-name table remain translatable; untagged audio uses transcription
+  with the selected language as a hint. Translation-disabled servers keep plain
+  transcription. Imported the planner's tests and existing phone test update.
+- Uncertain-create recovery now lists jobs after the 60-second cooldown and
+  adopts a matching active/completed result before another create. A failed list
+  stays fenced. Kept the captured auth scope on job reads and wired the reads
+  dependency into `SubtitleAiCreateV2Api` through Koin. Source helpers, decoder,
+  recovery API and tests match pinned v42.
+- Adapted only the three subtitle messages to `silora_` keys in
+  `strings_silora.xml`. Excluded the unrelated HEVC strings sharing edrock's
+  resource file. The shared overlay matches v42 apart from those resource names;
+  TV Extra small remains supported by Silora's existing point-size mapping.
+  No HEVC, Admin, trailer, release-tooling, Night Mode, remote-shortcut, Up Next
+  or credits-setting implementation was changed. Reviewed overlapping player
+  files and preserved the remaining fork behavior.
+- Updated `FORK_DIFFERENCES.md`, the technical preservation checklist,
+  `README-SILORA.md` and FEATURES. Both subtitle IDs remain active because these
+  behaviors still differ from official upstream.
+- Other clients: Apple already has live AI cue coordination/rendering in
+  `LiveSubtitleCoordinator.swift` and `AetherSubtitleOverlay.swift` at
+  `7bb8fe3d78947c20266442463c0fe72bc0f979e0`; Web has its live-event/finished-track
+  path in `VideoPlayer.tsx`; Roku's current `docs/spec.md` defers subtitle
+  translation/sync (section 3.3). The Android adapter/renderer fixes remain
+  specific to this implementation. No cross-client PR or issue was opened.
+
+**Validation:**
+
+- Full command passed with JDK 21:
+  `./gradlew test :androidApp:lintRelease :androidTvApp:lintRelease :androidApp:compileReleaseKotlinAndroid :androidTvApp:compileReleaseKotlinAndroid --parallel --console=plain`.
+  The final run completed in 4m 10s. XML reports contain 12,229 variant cases,
+  zero failures/errors/skips: shared 2,535 each debug/release; android-shared
+  2,369 each debug/release; phone 982 debug host; TV 1,435 debug host; libass
+  two each debug/release. Phone/TV release host tasks remain disabled.
+- Both release apps compiled and passed full release lint with unchanged
+  baselines. Supply-chain, derived Silora resource, pinned-source, scope,
+  conflict-index and staged-diff checks passed. Imported tests cover cue
+  markup/coverage/dismissal, transcription planning and lost-job matching;
+  existing playback/settings/ownership suites ran as part of the full command.
+- The initial full pass failed in the unchanged
+  `CatalogLetterIndexViewModelTest` while setting `Dispatchers.Main` concurrently
+  with a dispatcher read. The same full command passed on the final staged tree
+  without modifying Browse code, that test or its assertions. An early staging
+  issue around the removed overlay/resource file was corrected before this run.
+- Runtime source tested: staged tree `b974957ba51d708a72623b376a0f5c8764211709`.
+  Only the manifest, maintenance docs and this log changed afterward. No new APK,
+  device/server AI job or real provider/quota operation was exercised. Changes
+  were committed locally; nothing was pushed, released or messaged externally.
+
 ## 2026-11-15 19:21 PST — edrock v42 Admin and trailer updates
 
 Imported the missing Admin console and trailer updates from

@@ -182,6 +182,12 @@ private const val ROOM_EVENT_NOTICE_MS = 4_000L
 /** Room position samples: fresh enough that drift decisions (0.35 s deadband) are not skewed. */
 private const val ROOM_ENGINE_SAMPLE_MS = 100L
 
+/**
+ * Fork: how far live AI subtitle lines rise while the controls show, enough
+ * to clear the seek bar and transport row at the bottom of the screen.
+ */
+private val LIVE_SUBTITLE_CONTROLS_LIFT = 128.dp
+
 @Composable
 private fun PlayerClockScope(
     viewModel: PlayerViewModel,
@@ -1998,6 +2004,41 @@ fun PlayerScreen(
                             }
                         },
                 )
+            }
+
+            // Fork: a running AI job's streamed lines, for this session only.
+            // Media3's own cues hide only while the live lines own the
+            // subtitle slot, so the selected track keeps showing before the
+            // first line and where the job has not reached; the finished
+            // track takes over once it is selected.
+            val liveSubtitleTrack = viewModel.liveSubtitle.collectAsState().value
+                ?.takeIf { it.sessionId == uiState.sessionId }
+            var liveSubtitleCovering by remember { mutableStateOf(false) }
+            LaunchedEffect(playerViewRef, liveSubtitleCovering) {
+                playerViewRef?.subtitleView?.visibility =
+                    if (liveSubtitleCovering) android.view.View.INVISIBLE else android.view.View.VISIBLE
+            }
+            if (liveSubtitleTrack != null && !isInPictureInPictureMode && !castState.isConnected) {
+                // Lift the lines over the seek bar and transport row while
+                // the controls show.
+                val liveSubtitleLiftPx = if (uiState.showControls && !uiState.showUpNext) {
+                    with(density) { LIVE_SUBTITLE_CONTROLS_LIFT.roundToPx() }
+                } else {
+                    0
+                }
+                Box(modifier = videoSurfaceModifier) {
+                    org.siloserver.silo.common.player.LiveSubtitleOverlay(
+                        track = liveSubtitleTrack,
+                        positionSourceSeconds = {
+                            viewModel.liveSubtitleSourceSeconds(controller?.currentPosition ?: 0L)
+                        },
+                        bottomLiftPx = liveSubtitleLiftPx,
+                        hidden = false,
+                        style = org.siloserver.silo.common.player.LiveSubtitleOverlayStyle.Phone,
+                        appearance = subtitleAppearance,
+                        onCoveringChanged = { liveSubtitleCovering = it },
+                    )
+                }
             }
 
             // In tabletop posture the regular PlayerOverlay is deliberately

@@ -54,6 +54,12 @@ object LanguageNames {
         return twoLetter[lower] ?: threeLetter[lower] ?: lower.uppercase()
     }
 
+    /** Fork: whether [code] names a language this table knows (not blank, "und" or unknown). */
+    fun isKnown(code: String?): Boolean {
+        val lower = code?.trim()?.lowercase().orEmpty()
+        return lower in twoLetter || lower in threeLetter
+    }
+
     /**
      * Normalizes a profile/track language code to a 2-letter code the
      * subtitle APIs accept. Unmappable codes default to "en" (web default).

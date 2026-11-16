@@ -9,6 +9,8 @@ import org.siloserver.silo.playback.decodePlaybackSubtitleSyncUpdated
 import org.siloserver.silo.playback.decodePlaybackSubtitleTimingChanged
 import org.siloserver.silo.playback.decidePlaybackAction
 import org.siloserver.silo.playback.isTransport
+import org.siloserver.silo.playback.decodePlaybackLiveSubtitleEvent
+import org.siloserver.silo.playback.isPlaybackLiveSubtitleEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -114,7 +116,11 @@ class PlaybackRealtimeController(
                 viewModel.applySubtitleSyncUpdated(decodePlaybackSubtitleSyncUpdated(event))
             "markers_updated" -> viewModel.applyMarkersUpdate(decodeMarkersUpdate(event))
             // chapter_thumbnail_ready: no scrubber-thumbnail UI yet → nothing to update.
-            else -> { /* ignore */ }
+            else -> if (isPlaybackLiveSubtitleEvent(event.name)) {
+                // Fork: live AI subtitles, streamed while a translation or
+                // transcription runs.
+                decodePlaybackLiveSubtitleEvent(event)?.let(viewModel::applyLiveSubtitleEvent)
+            }
         }
     }
 }
