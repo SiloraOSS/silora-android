@@ -26,7 +26,15 @@ data class SectionBrowseArgs(
     val libraryId: Int? = null,
     /** A mixed library's Movies or Series view keeps the row's filter on its page. */
     val mediaScope: String? = null,
-)
+    /**
+     * Fork: the row's section type. A Home progress row's page (Continue
+     * Watching, In Progress, Next Up) lets its cards be removed, as on Home.
+     */
+    val sectionType: String? = null,
+) {
+    val isHomeProgressRow: Boolean
+        get() = libraryId == null && HomeDismissal.isProgressSectionType(sectionType)
+}
 
 data class SectionBrowseUiState(
     val items: List<BrowseItem> = emptyList(),
@@ -66,6 +74,51 @@ class SectionBrowseViewModel(
     }
 
     fun retry() = load(reset = true)
+
+    private val pendingRemovals = mutableSetOf<String>()
+
+    /** Fork: the remove action this card's menu offers, or null when it has none. */
+    fun homeRemoval(item: BrowseItem): HomeDismissal? =
+        if (args.isHomeProgressRow) HomeDismissal.of(item) else null
+
+    /**
+     * Fork: removes [item] from Continue Watching or Next Up, as Home's card
+     * menu does. The card (and, for a show, its other cards) leaves this page
+     * at once and comes back if the server refuses; Home is told so it drops
+     * the card and re-reads its rows.
+     */
+    fun removeFromHome(item: BrowseItem) {
+        val dismissal = homeRemoval(item) ?: return
+        val scope = owner ?: return
+        if (!pendingRemovals.add(item.contentId)) return
+        val dropped = item.droppedSeriesId()
+        fun BrowseItem.removed() = contentId == item.contentId ||
+            (dropped != null && (contentId == dropped || seriesId == dropped))
+        val before = state.value.items
+        state.update { it.copy(items = it.items.filterNot { card -> card.removed() }) }
+        val requestGeneration = generation
+        viewModelScope.launch {
+            try {
+                val result = repository.dismissHomeItem(dismissal.surface, item.contentId, dismissal.anchor, scope)
+                if (result is ApiResult.Success) {
+                    HomeProgressDismissals.publish(HomeProgressDismissals.Removed(scope, item.contentId, dropped))
+                } else if (requestGeneration == generation) {
+                    // Put the cards back where they were. A reload since then owns the list.
+                    state.update { current ->
+                        val items = current.items.toMutableList()
+                        before.forEachIndexed { index, card ->
+                            if (card.removed() && items.none { it.contentId == card.contentId }) {
+                                items.add(index.coerceAtMost(items.size), card)
+                            }
+                        }
+                        current.copy(items = items)
+                    }
+                }
+            } finally {
+                pendingRemovals.remove(item.contentId)
+            }
+        }
+    }
 
     fun loadMore() {
         val current = state.value

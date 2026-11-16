@@ -84,7 +84,12 @@ fun TvSectionBrowseScreen(
             )
             state.isLoading && state.items.isEmpty() -> TvLoadingScreen()
             state.error != null -> TvErrorScreen(message = state.error!!.text(), onRetry = viewModel::retry)
-            else -> TvCatalogGrid(
+            else -> androidx.compose.runtime.CompositionLocalProvider(
+                org.siloserver.silo.tv.ui.components.LocalBrowseCardHomeRemoval provides { item ->
+                    viewModel.homeRemoval(item)?.let { it.menuLabel to { viewModel.removeFromHome(item) } }
+                },
+            ) {
+            TvCatalogGrid(
                 items = state.items,
                 isLoading = state.isLoadingMore,
                 hasMore = state.hasMore,
@@ -119,6 +124,7 @@ fun TvSectionBrowseScreen(
                 header = { PageTitle(args.title) },
                 emptyState = { TvCatalogEmptyState(message = stringResource(CommonR.string.rowPage_noTitles)) },
             )
+            }
         }
     }
 }

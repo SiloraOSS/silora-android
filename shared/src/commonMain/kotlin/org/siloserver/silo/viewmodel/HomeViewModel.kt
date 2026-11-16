@@ -140,6 +140,17 @@ class HomeViewModel(
                 }
             }
         }
+        // Fork: a card removed on a progress row's full page leaves Home too.
+        viewModelScope.launch {
+            HomeProgressDismissals.removed.collect { removed ->
+                if (removed.owner != displayedOwner) return@collect
+                fun SectionItem.removed() = contentId == removed.contentId ||
+                    (removed.droppedSeriesId != null &&
+                        (contentId == removed.droppedSeriesId || seriesId == removed.droppedSeriesId))
+                _uiState.update { state -> state.copy(sections = state.sections.removingFromProgressRows { it.removed() }) }
+                refreshFromRealtime()
+            }
+        }
         homeRealtime?.let { coordinator ->
             viewModelScope.launch {
                 coordinator.refreshSignals.collect { refreshFromRealtime() }

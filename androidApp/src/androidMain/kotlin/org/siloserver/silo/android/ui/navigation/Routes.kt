@@ -260,15 +260,18 @@ sealed class Route(val route: String) {
         val title: String,
         val libraryId: Int? = null,
         val mediaScope: String? = null,
+        /** Fork: the row's section type, so a progress row's page can remove cards. */
+        val sectionType: String? = null,
     ) : Route(
         buildString {
             append("section/${sectionId.routeEncode()}?title=${title.routeEncode()}")
             libraryId?.let { append("&libraryId=$it") }
             mediaScope?.let { append("&mediaScope=${it.routeEncode()}") }
+            sectionType?.let { append("&sectionType=${it.routeEncode()}") }
         },
     ) {
         companion object {
-            const val ROUTE = "section/{sectionId}?title={title}&libraryId={libraryId}&mediaScope={mediaScope}"
+            const val ROUTE = "section/{sectionId}?title={title}&libraryId={libraryId}&mediaScope={mediaScope}&sectionType={sectionType}"
         }
     }
 

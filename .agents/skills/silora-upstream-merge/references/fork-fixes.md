@@ -132,6 +132,27 @@ handoff behavior, local-trailer playback, TV remote controls, close-on-end,
 and the phone's More-menu placement when the action row is full. Keep Edrock's
 attribution. Use an upstream equivalent if it preserves these behaviors.
 
+## Home progress pages (`home-explore-removal`)
+
+Matt requested edrock `d3d39cec329486198cf914e88bb0b608fa971926` on November 15,
+2026. Follow `HomeDismissal.kt`, `SectionBrowseViewModel.kt`, `HomeViewModel.kt`,
+phone/TV section-browse routes and screens, and both catalog grids. Carry the
+originating Home row's `sectionType` through navigation; library rows and
+unrelated sections do not gain a removal action.
+
+Keep the existing dismissal anchors (`progress_updated_at` for Continue
+Watching; series ID for Next Up), whole-show removal for episodes and
+single-item removal for movies/books. The page removes cards immediately and
+restores them on refusal only if the same load still owns the list. Retain the
+pending-request guard, captured auth scope and profile-scoped Home notification
+and refresh. Reuse upstream's equivalent if it supplies this behavior.
+
+`SectionBrowseHomeRemovalTest` covers menu eligibility and anchor selection.
+`SectionBrowseHomeRemovalIntegrationTest` covers the real catalog/dismissal
+transports, rollback after refusal/reload, duplicate requests, profile changes,
+Home refresh and audiobook isolation. Existing `HomeDismissal*` tests cover the
+Home-row contract. TV focus and menu interaction still need device validation.
+
 ## Edrock AI subtitle fixes (`edrock-ai-subs-fixes`)
 
 This entry tracks fixes imported from edrock’s fork for the existing AI

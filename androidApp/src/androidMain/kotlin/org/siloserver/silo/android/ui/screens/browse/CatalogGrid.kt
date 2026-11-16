@@ -258,7 +258,11 @@ private fun CatalogGridCard(
     reserveTextLines: Boolean = false,
 ) {
     val heroHandoff = LocalHeroSourceHandoff.current
-    val (actions, userState, positionSeconds) = rememberBrowseItemCardActions(item)
+    val (baseActions, userState, positionSeconds) = rememberBrowseItemCardActions(item)
+    // Fork: a progress row's page offers Remove, as Home does.
+    val actions = LocalBrowseCardHomeRemoval.current?.invoke(item)?.let { (label, remove) ->
+        baseActions.copy(onRemoveFromHome = remove, removeFromHomeLabel = label)
+    } ?: baseActions
     val spoilerPrefs = LocalEpisodeSpoilerPrefs.current
     val hideArtwork = EpisodeSpoilers.hidesBrowseArtwork(item, spoilerPrefs, userState.played, positionSeconds = positionSeconds)
     val hideDetailArtwork = EpisodeSpoilers.hidesBrowseArtwork(item, spoilerPrefs, userState.played, selectBackdrop = true, positionSeconds = positionSeconds)
@@ -320,3 +324,11 @@ internal fun LoadMoreNearEnd(
         }
     }
 }
+
+/**
+ * Fork: on a Home progress row's full page ("Explore all"), the remove action a
+ * card's menu offers, as (label, remove) — or null for a card that has none.
+ * Other grids leave it unset.
+ */
+val LocalBrowseCardHomeRemoval =
+    androidx.compose.runtime.staticCompositionLocalOf<((org.siloserver.silo.model.catalog.BrowseItem) -> Pair<String, () -> Unit>?)?> { null }

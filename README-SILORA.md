@@ -27,6 +27,7 @@ playback, browsing, profiles, and other client features; you need a running
 | Shield HEVC compatibility | **Ignore HEVC Level Limits**, a simple On/Off setting enabled by default on phone and TV. It lets playback be attempted when a file exceeds the decoder's advertised HEVC level. |
 | Admin console | **Profile menu → Admin** on phone and TV for administrator accounts, with dashboard/now playing, request moderation, tasks/scans, logs and generic admin API forms. See [admin console](docs/admin-console.md) for access and API coverage. |
 | In-app trailers | Play YouTube trailers inside Silora on phone and TV, with a Trailer action on movie and series details and remote controls on TV. |
+| Home progress lists | Remove items from Continue Watching and Next Up on their full **Explore all** pages on phone and TV. Adapted from [edrock200's patch](https://github.com/edrock200/silo-android/commit/d3d39cec329486198cf914e88bb0b608fa971926). |
 
 The HEVC patch changes the level information reported to the server. Other
 compatibility checks still apply, and it cannot increase the decoder's actual

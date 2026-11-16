@@ -74,6 +74,11 @@ fun SectionBrowseScreen(
                 modifier = contentModifier,
             )
             else -> Box(modifier = contentModifier.fillMaxSize()) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    LocalBrowseCardHomeRemoval provides { item ->
+                        viewModel.homeRemoval(item)?.let { it.menuLabel to { viewModel.removeFromHome(item) } }
+                    },
+                ) {
                 CatalogGrid(
                     items = state.items,
                     isLoadingMore = state.isLoadingMore,
@@ -85,6 +90,7 @@ fun SectionBrowseScreen(
                     onLoadMore = viewModel::loadMore,
                     modifier = Modifier.fillMaxSize(),
                 )
+                }
                 if (state.loadMoreError != null) {
                     LoadMoreRetryBar(
                         onRetry = viewModel::loadMore,

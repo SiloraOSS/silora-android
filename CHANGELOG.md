@@ -4,6 +4,26 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-15 21:15 PST — remove Home progress cards from Explore all
+
+Imported edrock's `d3d39cec329486198cf914e88bb0b608fa971926` at Matt's request.
+Phone and TV now offer Remove from Continue Watching / Next Up on the full
+Explore all pages opened from Home progress rows, including In Progress.
+The card leaves immediately, episode removal drops the matching show, and a
+server refusal restores the cards. Successful removal updates Home and
+requests a refresh. Library rows and unrelated Home sections are unaffected.
+
+Added the `home-explore-removal` preservation entry, technical merge pointers
+and a Silora README feature row. Retained edrock's eligibility tests and added
+transport-level checks for duplicate requests, failure rollback, reload/profile
+ownership, whole-show dismissal, Home refresh and single-book removal.
+
+Validation passed: 41 focused shared release tests (including seven new
+removal integration cases), phone/TV release Kotlin compilation and release
+lint, merge-skill validation and `git diff --check`. No APK was packaged or
+installed, and TV focus/menu interaction has not been verified on a device.
+No push or release was requested.
+
 ## 2026-11-15 20:03 PST — rename edrock AI subtitle fixes
 
 Renamed the fork preservation ID `ai-subtitles` to `edrock-ai-subs-fixes` at

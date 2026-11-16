@@ -1437,8 +1437,8 @@ fun TvAppNavigation(
                         launchSingleTop = true
                     }
                 },
-                onOpenSectionBrowse = { sectionId, title, libraryId, mediaScope ->
-                    navController.navigate(TvRoute.SectionBrowse(sectionId, title, libraryId, mediaScope).route) {
+                onOpenSectionBrowse = { sectionId, title, libraryId, mediaScope, sectionType ->
+                    navController.navigate(TvRoute.SectionBrowse(sectionId, title, libraryId, mediaScope, sectionType).route) {
                         launchSingleTop = true
                     }
                 },
@@ -2188,6 +2188,10 @@ fun TvAppNavigation(
                     type = NavType.StringType
                     defaultValue = ""
                 },
+                navArgument(TvRoute.SectionBrowse.ARG_SECTION_TYPE) {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
             ),
         ) { backStack ->
             val sectionId = backStack.arguments
@@ -2202,6 +2206,8 @@ fun TvAppNavigation(
                     libraryId = libraryId,
                     mediaScope = backStack.arguments?.getString(TvRoute.SectionBrowse.ARG_MEDIA_SCOPE)
                         ?.takeIf { it in setOf("movie", "series") },
+                    sectionType = backStack.arguments?.getString(TvRoute.SectionBrowse.ARG_SECTION_TYPE)
+                        ?.takeIf { it.isNotBlank() },
                 ),
                 // An episode opens its series at that episode, as Home's rows do.
                 onItemClick = { item ->

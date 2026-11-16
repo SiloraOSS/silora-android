@@ -221,7 +221,7 @@ fun TvMainShell(
     ) -> Unit,
     onOpenCollectionDetail: (collectionId: String, title: String) -> Unit,
     /** Opens a row's full page: a Home row when libraryId is null. */
-    onOpenSectionBrowse: (sectionId: String, title: String, libraryId: Int?, mediaScope: String?) -> Unit,
+    onOpenSectionBrowse: (sectionId: String, title: String, libraryId: Int?, mediaScope: String?, sectionType: String?) -> Unit,
     /** Runs the sign-out the user chose in [TvSignOutDialog]. */
     onSignOut: (removeServer: Boolean) -> Unit,
     /** Opens the open account's picker. */
@@ -605,13 +605,13 @@ fun TvMainShell(
         restoreContentAfterDetail = true
         detailReturnRoot = TvMainRoute.Home.route
         suppressFeedRefreshAfterDetail = true
-        onOpenSectionBrowse(section.tvHomeBrowseSectionId(), context.sectionTitle(section), null, null)
+        onOpenSectionBrowse(section.tvHomeBrowseSectionId(), context.sectionTitle(section), null, null, section.sectionType)
     }
     val openLibrarySection: (org.siloserver.silo.model.section.ResolvedSection, Int, String?) -> Unit =
         { section, libraryId, mediaScope ->
             restoreContentAfterDetail = true
             detailReturnRoot = null
-            onOpenSectionBrowse(section.id, context.sectionTitle(section), libraryId, mediaScope)
+            onOpenSectionBrowse(section.id, context.sectionTitle(section), libraryId, mediaScope, section.sectionType)
         }
     var contentUpFallback by remember { mutableStateOf<((Boolean) -> Boolean)?>(null) }
     // Feeds that registered the up-fallback slot, were superseded by a newer

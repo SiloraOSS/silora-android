@@ -276,6 +276,7 @@ fun TvCatalogGrid(
                 contentType = { _, item -> item.type },
             ) { index, item ->
                 val (actions, userState, positionSeconds) = rememberTvBrowseItemCardActions(item)
+                val homeRemoval = LocalBrowseCardHomeRemoval.current
                 val spoilerPrefs = LocalEpisodeSpoilerPrefs.current
                 val hideArtwork = EpisodeSpoilers.hidesBrowseArtwork(item, spoilerPrefs, userState.played, positionSeconds = positionSeconds)
                 val isRestoreTarget =
@@ -345,7 +346,14 @@ fun TvCatalogGrid(
                             )
                         },
                     overlay = OverlayDataExtractor.fromBrowseItem(item).takeIf { boxSet == null },
-                    actions = if (boxSet != null) TvMediaCardActions() else actions,
+                    actions = if (boxSet != null) {
+                        TvMediaCardActions()
+                    } else {
+                        // Fork: a progress row's page offers Remove, as Home does.
+                        homeRemoval?.invoke(item)?.let { (label, remove) ->
+                            actions.copy(onRemoveFromHome = remove, removeFromHomeLabel = label)
+                        } ?: actions
+                    },
                 )
             }
         }
@@ -431,3 +439,11 @@ fun TvCatalogEmptyState(message: String, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/**
+ * Fork: on a Home progress row's full page ("Explore all"), the remove action a
+ * card's menu offers, as (label, remove) — or null for a card that has none.
+ * Other grids leave it unset.
+ */
+val LocalBrowseCardHomeRemoval =
+    androidx.compose.runtime.staticCompositionLocalOf<((org.siloserver.silo.model.catalog.BrowseItem) -> Pair<String, () -> Unit>?)?> { null }

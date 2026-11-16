@@ -324,12 +324,16 @@ sealed class TvRoute(val route: String) {
         val title: String,
         val libraryId: Int? = null,
         val mediaScope: String? = null,
+        /** Fork: the row's section type, so a progress row's page can remove cards. */
+        val sectionType: String? = null,
     ) : TvRoute(
         "section/${sectionId.routeEncode()}?title=${title.routeEncode()}" +
-            "&libraryId=${libraryId?.toString().orEmpty()}&mediaScope=${mediaScope.orEmpty().routeEncode()}",
+            "&libraryId=${libraryId?.toString().orEmpty()}&mediaScope=${mediaScope.orEmpty().routeEncode()}" +
+            "&sectionType=${sectionType.orEmpty().routeEncode()}",
     ) {
         companion object {
-            const val ROUTE = "section/{sectionId}?title={title}&libraryId={libraryId}&mediaScope={mediaScope}"
+            const val ROUTE = "section/{sectionId}?title={title}&libraryId={libraryId}&mediaScope={mediaScope}&sectionType={sectionType}"
+            const val ARG_SECTION_TYPE = "sectionType"
             const val ARG_SECTION_ID = "sectionId"
             const val ARG_TITLE = "title"
             const val ARG_LIBRARY_ID = "libraryId"
