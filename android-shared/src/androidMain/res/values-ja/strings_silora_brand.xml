@@ -27,7 +27,6 @@
     <string name="silora_profiles_rememberOffer_body">このテレビでSiloを起動したときに、「誰が視聴しますか？」を省略してこのプロフィールを開くことができます。この設定は後から「設定 &gt; 一般 &gt; プロフィールの選択」で変更できます。</string>
     <string name="silora_remote_battery_message">アプリを離れた後もリモートコントロールの接続を維持できるよう、Siloをバッテリー制限なしで実行できるようにしてください。「電池の最適化」でSiloを選び、「最適化しない」に設定してください。</string>
     <string name="silora_search_initial">Siloを検索</string>
-    <string name="silora_search_voiceMicPermissionTv">音声検索を使用するには、設定でSiloのマイクへのアクセスを許可してください。</string>
     <string name="silora_search_voicePrompt">Siloを検索</string>
     <string name="silora_servers_remove_failedToast">Siloは保存済みのサーバーを削除できませんでした。もう一度お試しください。</string>
     <string name="silora_settings_bufferingQuality_description">自動画質で再生中にバッファリングが続く場合のSiloの動作です。選択した画質を下げる前には、必ず確認します。</string>

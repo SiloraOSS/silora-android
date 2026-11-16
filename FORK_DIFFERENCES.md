@@ -46,7 +46,6 @@ competing product requirements to that checklist.
 | `tv-subtitle-size` | TV has an Extra small subtitle choice. Preserve local persistence, server-compatible Small wire fallback and existing phone sizes. | `eae382b4b` |
 | `tv-remote` | Customizable long presses provide playback shortcuts while ordinary short presses and contextual action limits remain intact. Preserve playback-options focus handling; a Stats shortcut opens playback information, not an admin dashboard. | `04ef9c483`, `64a6d3b14` |
 | `tv-keyboard` | Search offers App/System keyboards with System as default and automatic opening off by default. Preserve physical typing, explicit keyboard opening, cursor state, clearing and focus handoffs. | `1d8fc7a5f`, `a42991501`, `660758013`, `bcf487826` |
-| `tv-google-voice` | Use upstream's direct recognition-service helper for Google's TV recognizer on Android 11 and later when a recognition service is available. Keep the activity fallback for other providers/older Android and when the service is unavailable. Request microphone permission on newer Android too. Matt requested this trial on November 11, 2026 after the unchanged upstream activity failed on the Android 14 Streamer; he confirmed voice search works with the trial. Preserve upstream's dialog, cancellation, permission/error handling and query submission. | `TvVoiceSearch.kt` (`SDK_INT >= R`), `LegacyTvVoiceSearch.kt`, TV manifest; [device investigation](docs/maintenance/2026-11-11-streamer-voice-investigation.md) |
 | `input-scope` | Supporting storage for `tv-keyboard` and `tv-remote`: save only App/System keyboard choice, automatic keyboard opening, and long-press mappings separately per server/login/profile. This adds no menu or standalone setting. Preserve migration, switching and account-removal cleanup. | `a19729d21`; account integration in `73c46323f` |
 | `trailers` | Embedded YouTube previews, external fallback and TV controls keep trailers accessible from movie/series details. Prefer local trailers and retain attribution. | `bac06a7c7` |
 | `ai-subtitles` | Preserve the four fixes for server audio ordinals, bounded uncertain-create fencing, missing-row replanning and language-alias normalization. Retire individual workarounds when a verified upstream replacement supplies the same behavior. | `5536474b3` |
@@ -62,24 +61,26 @@ competing product requirements to that checklist.
 
 | ID | Replacement and reason | Implementation references |
 | --- | --- | --- |
-| `tv-voice` | Superseded on November 11, 2026 at Matt's request after he confirmed upstream voice search on his Android 11 Shield. Use upstream's recognizer helpers, with the newer Google TV compatibility extension tracked as `tv-google-voice`. The fork controller, overlay and session tests are removed. Keep spoken-query submission integrated with the App/System keyboard controls. | Upstream PR #830 (`4fb8f1b59`), PR #860 (`484b55da5`) and translated helpers from PR #869 (`59f15e534`); `TvVoiceSearch.kt`, `LegacyTvVoiceSearch.kt`, `TvSearchScreen.kt` and the TV manifest |
+| `tv-voice` | Superseded on November 11, 2026 at Matt's request after he confirmed upstream voice search on his Android 11 Shield. Use upstream's recognizer helpers, including the Google TV fix that now supersedes `tv-google-voice`. The fork controller, overlay and session tests are removed. Keep spoken-query submission integrated with the App/System keyboard controls. | Upstream PR #830 (`4fb8f1b59`), PR #860 (`484b55da5`) and translated helpers from PR #869 (`59f15e534`); `TvVoiceSearch.kt`, `LegacyTvVoiceSearch.kt`, `TvSearchScreen.kt` and the TV manifest |
+| `tv-google-voice` | Superseded on November 15, 2026 at Matt's request by upstream PR #945 (`712ddb547f945222aa45fef473bc873db516f492`, fixes #887). Upstream now uses its direct recognition-service helper for Google's TV recognizer on Android 11 and later when the service is available, with `RECORD_AUDIO` available on newer Android. This replaces Silora's identical compatibility extension and permission-copy override. Follow upstream's voice helpers and resources unchanged; keep the separate `tv-keyboard` integration. | `TvVoiceSearch.kt` and `LegacyTvVoiceSearch.kt` match upstream exactly; TV manifest voice declarations match upstream. Source equivalence, TV host tests and release lint/compilation validate integration; no fresh device voice test was performed. |
 
 The November 6 fallback and November 9/10 merge decisions are historical.
-Both helpers came from upstream `09f43a215`; the active `tv-google-voice`
-compatibility change now extends its service path to Google on Android 11 and
-later. The manifest retains recognition-activity and service queries and
-optional microphone hardware, with `RECORD_AUDIO` available on newer Android.
-Earlier failure evidence remains in `CHANGELOG.md` and the
-[November 6 audit](docs/maintenance/2026-11-06-voice-and-merge-audit.md).
+Matt confirmed upstream voice search on his Android 11 Shield on November 11.
+A later check that day reproduced the unchanged upstream activity's failure on
+his Android 14 Google TV Streamer. Silora extended upstream's direct-service
+path to Google on Android 11 and later, and Matt confirmed spoken-query entry
+and results on the Streamer. Upstream PR #945 now supplies that same behavior;
+neither voice entry above remains an active fork difference.
 
-Matt later clarified that the November 11 success was on his Android 11 Shield.
-The unchanged upstream APK still fails on his Android 14 Google TV Streamer;
-TiviMate works there through a direct recognition-service call. Upstream's
-direct-service helper currently runs only on Android 11. Matt then approved
-extending upstream's own service helper and confirmed the
-trial returned spoken text and search results on the Streamer. See the
-[device investigation](docs/maintenance/2026-11-11-streamer-voice-investigation.md).
-This finding does not authorize restoring the retired fork controller/overlay.
+Both upstream helpers, including dialog, cancellation, permission/error handling,
+provider fallback and query delivery, are maintained upstream. The manifest keeps
+recognition-activity and service queries, optional microphone hardware and
+`RECORD_AUDIO` without an SDK ceiling. App/System keyboard ownership and spoken
+query submission remain part of `tv-keyboard`, not a voice-helper customization.
+Do not restore the retired fork controller/overlay or compatibility patch.
+Earlier evidence remains in `CHANGELOG.md`, the
+[November 6 audit](docs/maintenance/2026-11-06-voice-and-merge-audit.md) and the
+[November 11 device investigation](docs/maintenance/2026-11-11-streamer-voice-investigation.md).
 
 Requests navigation has no fork override and must not be reintroduced from old
 merge logs or instruction text.

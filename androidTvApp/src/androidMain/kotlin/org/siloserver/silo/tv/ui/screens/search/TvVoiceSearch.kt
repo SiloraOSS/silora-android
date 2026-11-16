@@ -24,10 +24,11 @@ import androidx.compose.ui.platform.LocalContext
  * This deliberately hands off to the system recogniser rather than recording
  * anything itself. On a Shield the recogniser listens through the remote's
  * microphone, which is the hardware the viewer expects to be talking into.
- * Google's TV activity fails its permission check on Android 11 and can leave
- * recognized speech unreturned on the Android 14 Google TV Streamer. For Google
- * on Android 11 and later, use the recognition service directly and request
- * microphone permission instead.
+ * Google TV's recognition activity can't hand a result back: on Android 11 it
+ * fails its own permission check, and on later versions it stays open after
+ * its final result without returning it. So when Google TV's recogniser is the
+ * handler, Silo calls the device's speech recognition service itself and
+ * requests microphone permission instead.
  *
  * The remote's own mic BUTTON cannot be used to start this: Android TV binds it
  * to the system assistant before any app sees it. An on-screen affordance is

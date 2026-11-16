@@ -29,7 +29,6 @@
     <string name="silora_profiles_rememberOffer_body">Silora kann „Wer schaut?“ überspringen und dieses Profil öffnen, wenn die App auf diesem Fernseher startet. Du kannst das später unter Einstellungen &gt; Allgemein &gt; Profilauswahl ändern.</string>
     <string name="silora_remote_battery_message">Erlaube Silora, ohne Akkubeschränkungen zu laufen, damit die Fernbedienung verbunden bleibt, nachdem du die App verlassen hast. Wähle unter „Akku-Optimierung“ Silora aus und stelle es auf „Nicht optimiert“.</string>
     <string name="silora_search_initial">Silora durchsuchen</string>
-    <string name="silora_search_voiceMicPermissionTv">Erlaube Silora in den Einstellungen den Zugriff auf das Mikrofon, um die Sprachsuche zu nutzen.</string>
     <string name="silora_search_voicePrompt">Silora durchsuchen</string>
     <string name="silora_servers_remove_failedToast">Silora konnte den gespeicherten Server nicht entfernen. Versuche es erneut.</string>
     <string name="silora_settings_bufferingQuality_description">Was Silora bei Auto tut, wenn die Wiedergabe immer wieder puffert. Bevor Silora eine von dir gewählte Qualität senkt, fragt es immer nach.</string>

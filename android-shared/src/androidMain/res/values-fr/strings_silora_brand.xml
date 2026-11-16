@@ -31,7 +31,6 @@
     <string name="silora_profiles_rememberOffer_body">Silora peut passer l’écran « Qui regarde ? » et ouvrir ce profil au démarrage sur cette TV. Vous pourrez modifier ce choix plus tard dans Paramètres &gt; Général &gt; Sélection du profil.</string>
     <string name="silora_remote_battery_message">Autorisez Silora à fonctionner sans restrictions de batterie pour que la télécommande reste connectée lorsque vous quittez l’app. Dans Optimisation de la batterie, choisissez Silora et sélectionnez Non optimisée.</string>
     <string name="silora_search_initial">Rechercher dans Silora</string>
-    <string name="silora_search_voiceMicPermissionTv">Autorisez l’accès au micro pour Silora dans les Paramètres pour utiliser la recherche vocale.</string>
     <string name="silora_search_voicePrompt">Rechercher dans Silora</string>
     <string name="silora_servers_remove_failedToast">Silora n’a pas pu retirer le serveur enregistré. Réessayez.</string>
     <string name="silora_settings_bufferingQuality_description">Ce que fait Silora en qualité Auto quand la lecture se met sans cesse en mémoire tampon. Silora demande toujours avant de baisser une qualité que vous avez choisie.</string>

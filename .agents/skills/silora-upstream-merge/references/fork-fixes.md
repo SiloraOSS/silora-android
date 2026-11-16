@@ -89,42 +89,36 @@ confirming upstream voice search on his Android 11 Shield. Follow upstream here;
 do not restore `TvSearchVoiceController.kt`, `TvSearchVoiceOverlay.kt` or their
 session tests from older fork commits or merge resolutions.
 
-`TvVoiceSearch.kt` and `LegacyTvVoiceSearch.kt` come from upstream `09f43a215`:
-PR #830's recognizer activity, PR #860's Google service fallback and PR #869's
-translated prompts/errors. Keep both manifest queries
-(`android.speech.action.RECOGNIZE_SPEECH` and `android.speech.RecognitionService`)
-and optional microphone hardware. The active `tv-google-voice` extension below
-widens the Google service path and microphone permission to newer Android.
+`TvVoiceSearch.kt` and `LegacyTvVoiceSearch.kt` now follow upstream unchanged,
+including PR #945 (`712ddb547f945222aa45fef473bc873db516f492`, fixes #887).
+Keep both manifest queries (`android.speech.action.RECOGNIZE_SPEECH` and
+`android.speech.RecognitionService`), optional microphone hardware and upstream's
+`RECORD_AUDIO` declaration without an SDK ceiling.
 
 Preserve the `tv-keyboard` integration: close the selected keyboard before voice
 launch, update its editable field/cursor on a nonempty spoken result, enforce
 the normal query limit and submit library/request searches. Keep upstream's
 availability-based mic visibility, unavailable message and in-flight
-request-search deduplication. The November 6 failure and November 9/10 deferral
-records are historical.
+request-search deduplication. This integration does not require changes to the
+upstream recognizer helpers or their permission-message resources.
 
-The later November 11 device check reproduced failure in the unchanged upstream
-activity on Matt's Android 14 Streamer. The active `tv-google-voice` compatibility
-change below addresses that path with upstream's service helper.
+## Google TV speech-service compatibility (superseded `tv-google-voice`)
 
-## Google TV speech-service compatibility (`tv-google-voice`)
+Matt requested retiring this extension on November 15, 2026 because upstream
+PR #945 supplies the same behavior: Google's selected activity provider
+(`com.google.android.katniss`) uses `LegacyTvVoiceSearch.kt` on API 30 and later
+when a recognition service is available. Other providers, older Android and
+service-unavailable cases retain upstream's activity fallback. Microphone
+permission is available on newer Android. The fork's permission-copy override
+is removed along with its helper differences.
 
-Matt approved extending upstream's service helper on November 11, 2026 and
-confirmed successful spoken-query entry and results on the Android 14 Streamer.
-For Google's selected activity provider (`com.google.android.katniss`) on API 30
-and later, use `LegacyTvVoiceSearch.kt` when a recognition service is available.
-Keep the upstream activity fallback for other providers, older Android and
-service-unavailable cases. The TV manifest must make `RECORD_AUDIO` available
-on newer Android so upstream's runtime permission request works there.
-
-Preserve upstream's recognition/session lifecycle and query submission, plus
-the existing Silora translation for the microphone-permission message. This is
-a small compatibility extension to upstream's helper, not a restoration of the
-retired fork controller/overlay. Keep App/System keyboard integration and
-in-flight request-search deduplication. Retire this extension when upstream
-supplies the same behavior. Evidence and limits are in
-`docs/maintenance/2026-11-11-streamer-voice-investigation.md`; the Shield's existing
-API-30 path remains selected, but no fresh Shield device test was performed.
+Compare both helper files and the manifest's speech declarations with the
+pinned upstream tree. Follow upstream's lifecycle, dialog, cancellation,
+permission/error handling and query delivery; do not restore the retired
+controller/overlay or the former compatibility patch. The earlier Android 14
+Streamer success and investigation limits remain in
+`docs/maintenance/2026-11-11-streamer-voice-investigation.md`; they are historical
+evidence, not validation of a later APK.
 
 ## Trailers (`trailers`)
 

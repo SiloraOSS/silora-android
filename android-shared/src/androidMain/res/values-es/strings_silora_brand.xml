@@ -31,7 +31,6 @@
     <string name="silora_profiles_rememberOffer_body">Silora puede omitir ¿Quién está viendo? y abrir este perfil al iniciarse en esta TV. Puedes cambiarlo más tarde en Configuración &gt; General &gt; Selección de perfil.</string>
     <string name="silora_remote_battery_message">Permite que Silora se ejecute sin restricciones de batería para que Control remoto siga conectado cuando salgas de la app. En Optimización de batería, elige Silora y configúralo como Sin optimizar.</string>
     <string name="silora_search_initial">Buscar en Silora</string>
-    <string name="silora_search_voiceMicPermissionTv">Permite el acceso al micrófono para Silora en Configuración para usar la búsqueda por voz.</string>
     <string name="silora_search_voicePrompt">Buscar en Silora</string>
     <string name="silora_servers_remove_failedToast">Silora no pudo quitar el servidor guardado. Vuelve a intentarlo.</string>
     <string name="silora_settings_bufferingQuality_description">Qué hace Silora en Auto cuando la reproducción sigue almacenando en búfer. Silora siempre pregunta antes de bajar una calidad que hayas elegido.</string>

@@ -27,7 +27,6 @@
     <string name="silora_profiles_rememberOffer_body">Silo在这台电视上启动时，可以跳过“谁在观看”并直接打开此个人资料。你之后可以在设置 &gt; 通用 &gt; 个人资料选择中更改。</string>
     <string name="silora_remote_battery_message">允许Silo在不受电池限制的情况下运行，这样你离开应用后遥控仍能保持连接。在“电池优化”中，选择Silo并将其设为“不优化”。</string>
     <string name="silora_search_initial">搜索Silo</string>
-    <string name="silora_search_voiceMicPermissionTv">请在设置中允许Silo访问麦克风，即可使用语音搜索。</string>
     <string name="silora_search_voicePrompt">搜索Silo</string>
     <string name="silora_servers_remove_failedToast">Silo无法移除已保存的服务器。请重试。</string>
     <string name="silora_settings_bufferingQuality_description">在“自动”模式下播放持续缓冲时Silo的处理方式。如果画质是你手动选择的，Silo总会先询问再降低。</string>

@@ -4,6 +4,92 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-15 18:33 PST — upstream 40d34e6d9
+
+**Merge inputs:** `main`; fork before `34b5be69a25030931ec8f22d6df43eeade701de1`;
+upstream `40d34e6d9d0c7f3aae82787ece12eb3093ccf6e7`. These 22 commits fix Google TV voice results,
+stack simultaneous subtitle cues, sync downloaded playback progress, refresh TV
+resume/episode data after playback stops, close Requests when the server turns
+it off, improve TV season/detail navigation and skip-pill seeking, fix phone
+remote-control behavior, and expand/update translations. Recovery:
+`refs/codex/upstream-merge/20261116T022619Z`.
+
+**Upstream commits added:**
+
+- `cc35bac84` fix(tv): let Left and Right seek while a skip pill has focus (#928)
+- `69e39ad45` fix(catalog): list Specials first as season zero (#929)
+- `d902e961b` fix(catalog): keep the Specials chip in view and label season zero Specials (#931)
+- `d9983125f` fix(player): mark every credits range on the phone and TV seek bars (#933)
+- `c24555c70` fix(player): mark every marker occurrence above the played fill on phone and TV (#934)
+- `3632eda4e` feat(tv): move Show to the series More menu as Show Series Info (#932)
+- `5613b278e` fix(tv): keep Play off for the previous season while a new season loads (#936)
+- `064b8d0b7` fix(tv): keep Show Series Info on the series after an entry episode (#937)
+- `c1371178b` fix(tv): keep Show Series Info on the series after returning to a season page (#938)
+- `0c0f8f834` feat(i18n): ship Dutch from translations 2026.11.15-277265f (#943)
+- `712ddb547` fix(tv): fill the search field from voice on Google TV with Android 12+ (#945)
+- `0718a96ec` fix(cast): name the connected TV on Play and in the Remote menu on phones (#947)
+- `93927d29e` fix(cast): stop the phone app crashing when Remote Control and local playback overlap (#949)
+- `f410d220b` feat(i18n): ship 13 more languages from translations 2026.11.15-8dbdfe4 (#950)
+- `3afd7006f` fix(player): stack subtitles that are on screen at the same time (#862)
+- `d1c36e7be` fix(home): drop Explore all from a Continue Watching row that shows its whole list (#908)
+- `9a6a8cdcc` chore(i18n): sync translations 2026.11.15-0ba1666 (#952)
+- `376446317` fix(tv): open the Continue Listening row's full page instead of a missing section (#953)
+- `b7cc29ec8` fix(tv): re-read the episode rail after the player's stop lands (#954)
+- `a4045779b` fix(progress): send download progress to the server and stop stale local resume (#847)
+- `98d077170` fix(requests): close request screens whenever the server turns requests off (#855)
+- `40d34e6d9` fix(tv): show the server's resume point once the player's stop lands (#955)
+
+**Silora merge decisions:**
+
+- Superseded `tv-google-voice` at Matt's explicit request with upstream PR #945
+  (`712ddb547`, fixes #887). Both `TvVoiceSearch.kt` and
+  `LegacyTvVoiceSearch.kt` now match the pinned upstream tree byte for byte,
+  including its resources, lifecycle, permission/error handling and fallback.
+  The TV manifest's speech queries, permission and optional microphone match
+  upstream. Removed the unused fork microphone-permission resource override.
+  Updated `FORK_DIFFERENCES.md` and the technical preservation checklist;
+  the earlier `tv-voice` controller/overlay remains retired.
+- Resolved the TV detail-screen conflict by retaining `trailers` alongside
+  upstream's Show Series Info callback and More action. Resolved FEATURES
+  conflicts by accepting Requests refresh/exit behavior while retaining
+  `admin-console` as a separate administrator surface. The other three
+  conflicted files were the voice helpers and manifest comments; those now
+  use upstream wording.
+- Preserved the other active fork IDs: `identity`, `hevc-levels`, `night-mode`,
+  `tv-display`, `tv-subtitle-size`, `tv-remote`, `tv-keyboard`, `input-scope`,
+  `trailers`, `ai-subtitles`, `tv-live-ai-subtitles`, `up-next-setting`,
+  `up-next-fixes`, `credits-auto-skip`, `admin-console`, `release-tooling` and
+  `fork-maintenance`. Reviewed all overlapping files, including automatic
+  merges. Playback/marker changes retain remote shortcuts, credits skipping,
+  live AI subtitles, Up Next triggers and end artwork. Requests route exits
+  leave Admin separate. Settings keys, defaults, scope, migrations and startup
+  bindings are unchanged; TV Settings only receives upstream casing changes.
+- Kept upstream's generated translations byte-identical and regenerated
+  separate Silora identity resources for all shipped languages, including the
+  14 newly shipped locales. README retains upstream text plus the Silora link.
+  No unexplained product difference was introduced. Apple, Roku and Web need
+  no new parity issue for retiring an Android speech-provider workaround;
+  inherited upstream features retain their existing contribution ownership.
+
+**Validation:**
+
+- `./gradlew test :androidApp:lintRelease :androidTvApp:lintRelease :androidApp:compileReleaseKotlinAndroid :androidTvApp:compileReleaseKotlinAndroid --parallel --console=plain`
+  passed with JDK 21 in 4m 6s. Reports contain 12,170 variant test cases,
+  zero failures/errors/skips. Shared ran 2,522 cases in each debug/release
+  variant; android-shared ran 2,352 in each; phone ran 983 debug host cases;
+  TV ran 1,435 debug host cases; libass ran two in each debug/release variant.
+  Both apps disable release host suites; their stale reports were excluded.
+  Both release apps compiled, and full release lint passed with the existing
+  baselines and warnings. No baseline or verification safeguard changed.
+- `scripts/check-translations` matched `2026.11.15-0ba1666` against a fresh
+  catalog installation. `python3 scripts/sync-silora-strings.py --check`,
+  `scripts/check-build-supply-chain.sh`, voice-helper/declaration equivalence,
+  the active fork-ID audit, conflict-index checks and staged diff checks passed.
+- Validated staged tree `52c63f2b92391556c4d7ead04af2d82a534fc45b` while HEAD
+  still named the pre-merge parent. This changelog entry is the only subsequent
+  tree change. No APK, signing, device/server playback or fresh voice test was
+  performed. Nothing was pushed or published.
+
 ## 2026-11-14 17:36 PST — upstream 73e55b96b
 
 **Merge inputs:** `main`; fork before `5fd18307fd09eddd4f69249c44a2970bfe102969`;

@@ -31,7 +31,6 @@
     <string name="silora_profiles_rememberOffer_body">O Silora pode pular a tela “Quem está assistindo?” e abrir este perfil ao iniciar nesta TV. Você pode mudar isso depois em Configurações &gt; Geral &gt; Seleção de perfil.</string>
     <string name="silora_remote_battery_message">Permita que o Silora seja executado sem restrições de bateria para que o Controle remoto continue conectado depois que você sair do app. Em Otimização de bateria, escolha Silora e defina como Não otimizado.</string>
     <string name="silora_search_initial">Buscar no Silora</string>
-    <string name="silora_search_voiceMicPermissionTv">Permita o acesso do Silora ao microfone nas Configurações para usar a busca por voz.</string>
     <string name="silora_search_voicePrompt">Buscar no Silora</string>
     <string name="silora_servers_remove_failedToast">O Silora não conseguiu remover o servidor salvo. Tente novamente.</string>
     <string name="silora_settings_bufferingQuality_description">O que o Silora faz na qualidade Auto quando a reprodução continua carregando. O Silora sempre pergunta antes de reduzir uma qualidade que você escolheu.</string>

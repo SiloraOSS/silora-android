@@ -29,7 +29,6 @@
     <string name="silora_profiles_rememberOffer_body">Silora can skip Who\'s Watching and open this profile when it starts on this TV. You can change this later in Settings &gt; General &gt; Profile Selection.</string>
     <string name="silora_remote_battery_message">Allow Silora to run without battery restrictions so Remote Control can stay connected after you leave the app. In Battery optimization, choose Silora and set it to Not optimized.</string>
     <string name="silora_search_initial">Search Silora</string>
-    <string name="silora_search_voiceMicPermissionTv">Allow microphone access for Silora in Settings to use voice search.</string>
     <string name="silora_search_voicePrompt">Search Silora</string>
     <string name="silora_servers_remove_failedToast">Silora couldn\'t remove the saved server. Please try again.</string>
     <string name="silora_settings_bufferingQuality_description">What Silora does on Auto when playback keeps buffering. Silora always asks before lowering a quality you picked.</string>

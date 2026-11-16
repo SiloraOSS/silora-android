@@ -26,7 +26,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.siloserver.silo.common.R as CommonR
 
-/** Direct service fallback for Google's TV recognition activity on Android 11 and later. */
+/**
+ * Recognition through the device's speech recognition service, for Google TV on
+ * Android 11 and later, where its recognition activity can't return a result
+ * (see [rememberTvVoiceSearch]).
+ */
 @Composable
 internal fun rememberLegacyTvVoiceSearch(
     prompt: String,
@@ -119,7 +123,7 @@ internal fun rememberLegacyTvVoiceSearch(
                         context.getString(CommonR.string.search_voiceNetworkErrorTv)
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
                         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                            context.getString(CommonR.string.silora_search_voiceMicPermissionTv)
+                            context.getString(CommonR.string.search_voiceMicPermissionTv)
                         } else {
                             context.getString(CommonR.string.search_voiceServiceMicDeniedTv)
                         }
@@ -128,7 +132,8 @@ internal fun rememberLegacyTvVoiceSearch(
             }
         })
         listeningDialog.show()
-        // Android 11 can drop binding errors before installing the listener.
+        // A binding error can be dropped before the listener is installed (seen
+        // on Android 11), so bound the wait for the recogniser to start.
         val timeout = Runnable {
             if (recognizer === speech) {
                 stopRecognition()
@@ -157,7 +162,7 @@ internal fun rememberLegacyTvVoiceSearch(
         } else {
             dialog = AlertDialog.Builder(context)
                 .setTitle(CommonR.string.search_voiceDialogTitleTv)
-                .setMessage(CommonR.string.silora_search_voiceMicPermissionTv)
+                .setMessage(CommonR.string.search_voiceMicPermissionTv)
                 .setPositiveButton(android.R.string.ok) { _, _ -> dialog = null }
                 .setOnCancelListener { dialog = null }
                 .show()

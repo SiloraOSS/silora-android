@@ -37,7 +37,6 @@
     <string name="silora_profiles_rememberOffer_body">يمكن لـ Silora تخطي «من يشاهد؟» وفتح هذا الملف الشخصي عند بدء تشغيله على هذا التلفزيون. يمكنك تغيير ذلك لاحقًا في الإعدادات ← عام ← اختيار الملف الشخصي.</string>
     <string name="silora_remote_battery_message">اسمح لتطبيق Silora بالعمل دون قيود البطارية حتى يظل التحكم عن بُعد متصلًا بعد مغادرة التطبيق. في «تحسين البطارية»، اختر Silora واضبطه على «غير محسَّن».</string>
     <string name="silora_search_initial">البحث في Silora</string>
-    <string name="silora_search_voiceMicPermissionTv">اسمح لـSilo بالوصول إلى الميكروفون من الإعدادات لاستخدام البحث الصوتي.</string>
     <string name="silora_search_voicePrompt">ابحث في Silora</string>
     <string name="silora_servers_remove_failedToast">تعذّر على Silora إزالة الخادم المحفوظ. حاول مرة أخرى.</string>
     <string name="silora_settings_bufferingQuality_description">ما يفعله Silora في الوضع «تلقائي» عندما يتكرر التخزين المؤقت أثناء التشغيل. يسألك Silora دائمًا قبل خفض جودة اخترتها.</string>

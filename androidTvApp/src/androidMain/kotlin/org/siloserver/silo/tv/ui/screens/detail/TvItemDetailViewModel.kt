@@ -998,25 +998,26 @@ class TvItemDetailViewModel(
         // a pick; the series refresh keeps the loaded episode detail, so
         // re-read it.
         if (nextUpPlayed || pickedBefore.isNotEmpty()) refreshNextUpPlaybackDetail()
-        applySeriesPlaybackReturn()
-        quietRefresh()
+        val seriesReturned = applySeriesPlaybackReturn()
+        quietRefresh(afterPlayback = nextUpPlayed || seriesReturned)
     }
 
     /**
      * Back from playing this series: select the episode the player handed back
      * (tvOS `SeriesPlaybackReturn`) — the one playback ended on, or the next
-     * one when it was finished.
+     * one when it was finished. Returns whether there was one.
      */
-    private fun applySeriesPlaybackReturn() {
-        val detail = _uiState.value.detail ?: return
-        if (detail.type.lowercase() != "series") return
+    private fun applySeriesPlaybackReturn(): Boolean {
+        val detail = _uiState.value.detail ?: return false
+        if (detail.type.lowercase() != "series") return false
         val target = TvDetailTrackSelectionSession.consumeSeriesReturn(
             detail.contentId,
             identityTransitions.generation.value,
-        ) ?: return
+        ) ?: return false
         pendingReturnEpisodeId = target.episodeId
         pendingReturnSeason = target.seasonNumber
         selectPendingReturnEpisode()
+        return true
     }
 
     /** Selects [pendingReturnEpisodeId] once its season is on the page. */
@@ -1102,9 +1103,15 @@ class TvItemDetailViewModel(
      * [afterWatchedChange] reads the season list and episodes fresh from the
      * server and skips repainting the rail from the on-disk catalog cache:
      * the cache, and any coalesced request, still hold the pre-write state.
-     * [showAccessRefusal]: see [refreshAfterAccessChange].
+     * [showAccessRefusal]: see [refreshAfterAccessChange]. [afterPlayback]:
+     * back from playing an episode this page shows, whose return was
+     * consumed by [refreshOnReturn].
      */
-    private fun quietRefresh(afterWatchedChange: Boolean = false, showAccessRefusal: Boolean = false) {
+    private fun quietRefresh(
+        afterWatchedChange: Boolean = false,
+        showAccessRefusal: Boolean = false,
+        afterPlayback: Boolean = false,
+    ) {
         val current = _uiState.value.detail ?: return
         val consumedPlaybackReturn = TvDetailTrackSelectionSession.consumePlaybackReturn(contentId)
         consumedPlaybackReturn?.let { saved ->
@@ -1163,10 +1170,15 @@ class TvItemDetailViewModel(
                     val detail = if (playbackReturn != null && result.data.isWatchedWithoutResume()) {
                         result.data
                     } else {
-                        withLocalProgress(result.data)
-                            .let { refreshed -> playbackReturn?.let(refreshed::withPlaybackReturn) ?: refreshed }
+                        // The exit spot stands in only until the stop lands. After
+                        // that the server's resume point is the answer: a stop under
+                        // the minimum resume share leaves its earlier one, or none.
+                        withLocalProgress(result.data).let { refreshed ->
+                            playbackReturn?.takeUnless { settled }?.let(refreshed::withPlaybackReturn) ?: refreshed
+                        }
                     }
                     if (!isTvHiddenMediaType(detail.type)) {
+                        val before = _uiState.value
                         _uiState.update {
                             it.copy(
                                 detail = detail,
@@ -1174,6 +1186,9 @@ class TvItemDetailViewModel(
                                 isWatched = detail.userData?.played == true,
                             )
                         }
+                        // That answer can also name an older file or edition than
+                        // the one played, and the picks handed back belong to it.
+                        if (playbackReturn != null) restartTrackPicksIfShownFileChanged(before, _uiState.value)
                     }
                 }
                 is ApiResult.Error -> if (showRefusal && result.isAccessRefusal()) {
@@ -1198,6 +1213,31 @@ class TvItemDetailViewModel(
         // Watched badges in the box set row follow the player and
         // a watched change too.
         loadBoxSet(current)
+        refreshEpisodeRails(current, fresh = afterWatchedChange)
+        // Back from the player: the reads above can answer before its stop
+        // sends the final progress, so read the rails again, fresh, once the
+        // stop lands. Episode loads finish first, including one a season change
+        // started meanwhile: a fresh read has no cache to fall back on, and its
+        // failure would undo that season change. A newer return replaces this
+        // read.
+        if (afterPlayback || consumedPlaybackReturn != null) {
+            val identityGeneration = identityTransitions.generation.value
+            railsAfterStopJob?.cancel()
+            railsAfterStopJob = viewModelScope.launch {
+                awaitPlaybackSettled()
+                while (episodeLoadJob?.isActive == true) episodeLoadJob?.join()
+                if (identityTransitions.generation.value == identityGeneration && _uiState.value.detail != null) {
+                    refreshEpisodeRails(current, fresh = true)
+                }
+            }
+        }
+    }
+
+    /**
+     * Quietly re-reads the season list (series page) and the selected season's
+     * episodes. [fresh]: see [CatalogRepository.getEpisodes].
+     */
+    private fun refreshEpisodeRails(current: ItemDetail, fresh: Boolean) {
         val seriesId = when (current.type.lowercase()) {
             "series" -> current.contentId
             "season", "episode" -> current.seriesId?.takeIf { it.isNotBlank() }
@@ -1212,7 +1252,7 @@ class TvItemDetailViewModel(
         val favoritesToRecheck =
             TvFavoriteRevalidationSession.changedSince(favoritesRevalidatedThrough)
         if (current.type.lowercase() == "series" && seriesId != null) {
-            refreshSeasonsQuietly(seriesId, fresh = afterWatchedChange)
+            refreshSeasonsQuietly(seriesId, fresh = fresh)
         }
         if (seriesId != null && season != null) {
             loadEpisodes(
@@ -1221,7 +1261,7 @@ class TvItemDetailViewModel(
                 quiet = true,
                 revalidateFavorites = favoritesToRecheck,
                 favoritesVersion = favoritesVersion,
-                freshRead = afterWatchedChange,
+                freshRead = fresh,
             )
         }
     }
@@ -1713,8 +1753,9 @@ class TvItemDetailViewModel(
             _uiState.update {
                 // The ordinals were resolved against `version`; if the user
                 // switched versions while this suspended, they'd index into the
-                // wrong track list — leave the new version untouched.
-                if (selectedVersionFor(it, detail)?.fileId != version.fileId) return@update it
+                // wrong track list — leave the new version untouched. The same
+                // goes for a refresh that has since shown another file.
+                if (selectedVersionFor(it, it.detail ?: detail)?.fileId != version.fileId) return@update it
                 it.copy(
                     selectedSubtitleIndex = it.selectedSubtitleIndex ?: subOrdinal,
                     selectedAudioIndex = it.selectedAudioIndex ?: audOrdinal,
@@ -1775,7 +1816,7 @@ class TvItemDetailViewModel(
 
     /**
      * Series is one in-place browsing page: focus, not a pushed episode-detail
-     * route, owns the active episode. `null` restores Show mode's suggested
+     * route, owns the active episode. `null` restores the series overview's suggested
      * episode while a concrete id updates the hero and playback selector.
      */
     fun onSeriesEpisodeActivated(contentId: String?) {
@@ -1805,7 +1846,7 @@ class TvItemDetailViewModel(
             }
         }
         activeSeriesEpisodeContentId = active?.contentId
-        updateNextUp(active ?: resolveNextUpEpisode(_uiState.value.episodes))
+        if (active != null) updateNextUp(active) else refreshNextUp(_uiState.value.episodes)
         if (active != null) {
             if (active.seasonNumber != state.selectedSeason) publishCarousel()
             prefetchCarouselNeighbors()
@@ -1984,6 +2025,8 @@ class TvItemDetailViewModel(
     }
 
     private var episodeLoadJob: kotlinx.coroutines.Job? = null
+    /** The fresh rail read that waits for the closed player's stop; see [quietRefresh]. */
+    private var railsAfterStopJob: kotlinx.coroutines.Job? = null
     private var episodeLoadRequestGeneration: Long = 0
 
     /**
@@ -2309,6 +2352,10 @@ class TvItemDetailViewModel(
      * `loadSeriesNextUpPlaybackDetail` / `loadSeasonNextUpPlaybackDetail`.
      */
     private fun refreshNextUp(episodes: List<EpisodeListItem>) {
+        // While a newly selected season loads, `episodes` still holds the
+        // previous season as a placeholder. That load refreshes next-up when
+        // it lands; resolving one now would let Play launch the old season.
+        if (loadedSeason != _uiState.value.selectedSeason) return
         val active = activeSeriesEpisodeContentId
             ?.let { contentId -> episodes.firstOrNull { it.contentId == contentId } }
         updateNextUp(active ?: resolveNextUpEpisode(episodes))
@@ -2717,6 +2764,9 @@ class TvItemDetailViewModel(
             _uiState.value.selectedSeason != seasonNumber
         ) return target
         episodeDescriptionRevisions[seasonNumber] = (episodeDescriptionRevisions[seasonNumber] ?: 0L) + 1
+        // This can be the season's first successful read (a season page whose
+        // first episode load failed), so record whose rows these are.
+        loadedSeason = seasonNumber
         _uiState.update { state ->
             val current = state.episodes.associateBy { it.contentId }
             val merged = fresh.sortedBy { it.episodeNumber }

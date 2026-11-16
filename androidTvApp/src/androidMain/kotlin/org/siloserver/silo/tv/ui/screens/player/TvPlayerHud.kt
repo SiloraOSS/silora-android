@@ -1,6 +1,7 @@
 package org.siloserver.silo.tv.ui.screens.player
 
 import org.siloserver.silo.common.i18n.UiText
+import org.siloserver.silo.common.i18n.displayUppercase
 import org.siloserver.silo.common.i18n.text
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
@@ -918,7 +919,7 @@ private fun HudInfoPane(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (episodeTag != null) {
-                    Text(text = episodeTag.uppercase(), style = TvPlayerType.Eyebrow)
+                    Text(text = episodeTag.displayUppercase(), style = TvPlayerType.Eyebrow)
                 }
                 Text(
                     text = title.ifBlank { stringResource(CommonR.string.player_hud_nowPlaying) },
@@ -993,7 +994,7 @@ private fun HudEyebrow(text: String, modifier: Modifier = Modifier, trailing: St
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = text.uppercase(),
+            text = text.displayUppercase(),
             style = TvPlayerType.Eyebrow,
             maxLines = 1,
             modifier = Modifier.weight(1f),
@@ -3037,7 +3038,7 @@ internal fun HudPickerDialog(
             Column(modifier = Modifier.padding(start = HudRowPadding, end = HudRowPadding, bottom = 12.dp)) {
                 presentation.eyebrow?.let { eyebrow ->
                     Text(
-                        text = eyebrow.uppercase(),
+                        text = eyebrow.displayUppercase(),
                         style = TvPlayerType.Eyebrow,
                         modifier = Modifier.padding(bottom = 4.dp),
                     )

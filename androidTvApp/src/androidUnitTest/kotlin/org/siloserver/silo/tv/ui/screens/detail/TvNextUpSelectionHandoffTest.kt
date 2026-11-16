@@ -12,6 +12,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,6 +29,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.siloserver.silo.domain.settings.ProfileSettingsController
 import org.siloserver.silo.model.catalog.AudioTrack
+import org.siloserver.silo.model.catalog.ItemDetail
 import org.siloserver.silo.model.catalog.SubtitleTrack
 import org.siloserver.silo.model.settings.SettingsContractCapabilities
 import org.siloserver.silo.network.ApiResult
@@ -124,6 +126,27 @@ class TvNextUpSelectionHandoffTest {
         val inserted = fixture.viewModel.uiState.value.episodes.first { it.contentId == scenario.episodeTwoId }
         assertTrue(inserted.userData?.isInProgress == true)
         assertEquals(30.0, inserted.userData?.positionSeconds)
+    }
+
+    @Test
+    fun translationAfterAFailedFirstSeasonLoadMakesTheSeasonPlayable() = runDetailTest {
+        val scenario = Scenario(suffix = "-season-page-translation-recovery")
+        scenario.seasonOneEpisodeFailures.set(1)
+        val translationApi = object : MetadataAiApi by acceptingTranslationApi() {
+            override suspend fun refreshDetail(contentId: String, scope: AuthScopeSnapshot?) =
+                ApiResult.Success(SiloJson.decodeFromString<ItemDetail>(scenario.seasonOnePageJson(pendingTranslation = false)))
+        }
+        val fixture = createFixture(scenario, translationApi, contentId = scenario.seasonOnePageId)
+        awaitCondition {
+            fixture.viewModel.uiState.value.let { it.selectedSeason == 1 && !it.episodesLoading && it.detail != null }
+        }
+        assertTrue(fixture.viewModel.uiState.value.episodes.isEmpty(), "the first season 1 load must fail")
+
+        fixture.viewModel.translateDescription()
+
+        awaitCondition { fixture.viewModel.uiState.value.episodes.isNotEmpty() }
+        awaitCondition { fixture.viewModel.uiState.value.nextUpTargetReady }
+        assertEquals(scenario.episodeOneId, fixture.viewModel.uiState.value.nextUpEpisode?.contentId)
     }
 
     private fun acceptingTranslationApi() = object : MetadataAiApi {
@@ -311,6 +334,55 @@ class TvNextUpSelectionHandoffTest {
             fixture.viewModel.uiState.value.episodes.any { it.seasonNumber == 2 }
         }
         assertEquals(2, fixture.viewModel.uiState.value.selectedSeason)
+        assertTrue(fixture.viewModel.uiState.value.nextUpTargetReady)
+    }
+
+    @Test
+    fun showSeriesInfoWhileSeasonLoadsKeepsThePreviousSeasonUnplayable() = runDetailTest {
+        val scenario = Scenario(suffix = "-series-info-during-season-load")
+        val fixture = createFixture(scenario)
+        awaitEpisode(fixture.viewModel, scenario.episodeOneId)
+        fixture.viewModel.onSeriesEpisodeActivated(scenario.episodeTwoId)
+        awaitEpisode(fixture.viewModel, scenario.episodeTwoId)
+
+        scenario.seasonTwoEpisodesGate = CompletableDeferred()
+        fixture.viewModel.onSeasonSelected(2)
+        awaitCondition {
+            fixture.viewModel.uiState.value.let { it.selectedSeason == 2 && it.episodesLoading }
+        }
+        fixture.viewModel.onSeriesEpisodeActivated(null)
+
+        assertFalse(
+            fixture.viewModel.uiState.value.nextUpTargetReady,
+            "Show Series Info must not make a season 1 episode playable while season 2 loads",
+        )
+
+        scenario.seasonTwoEpisodesGate?.complete(Unit)
+        awaitEpisode(fixture.viewModel, scenario.seasonTwoEpisodeId)
+        assertEquals(2, fixture.viewModel.uiState.value.selectedSeason)
+        assertTrue(fixture.viewModel.uiState.value.nextUpTargetReady)
+    }
+
+    @Test
+    fun watchingAPlaceholderEpisodeWhileSeasonLoadsKeepsThePreviousSeasonUnplayable() = runDetailTest {
+        val scenario = Scenario(suffix = "-watched-during-season-load")
+        val fixture = createFixture(scenario)
+        awaitEpisode(fixture.viewModel, scenario.episodeOneId)
+
+        scenario.seasonTwoEpisodesGate = CompletableDeferred()
+        fixture.viewModel.onSeasonSelected(2)
+        awaitCondition {
+            fixture.viewModel.uiState.value.let { it.selectedSeason == 2 && it.episodesLoading }
+        }
+        fixture.viewModel.onSetEpisodeWatched(scenario.episodeOneId, true)
+
+        assertFalse(
+            fixture.viewModel.uiState.value.nextUpTargetReady,
+            "watching a season 1 placeholder must not make season 1 playable while season 2 loads",
+        )
+
+        scenario.seasonTwoEpisodesGate?.complete(Unit)
+        awaitEpisode(fixture.viewModel, scenario.seasonTwoEpisodeId)
         assertTrue(fixture.viewModel.uiState.value.nextUpTargetReady)
     }
 
@@ -557,6 +629,65 @@ class TvNextUpSelectionHandoffTest {
         playbackReturned()
         fixture.viewModel.refreshOnReturn()
         awaitCondition { fixture.viewModel.uiState.value.nextUpPlaybackDetail == null }
+    }
+
+    @Test
+    fun returnRefreshShowsTheServerResumePointOnceTheStopHasSettled() = runDetailTest {
+        val versions = listOf(
+            version(101, "1080p", subtitles = listOf(subtitle(0, "eng"), subtitle(1, "spa"))),
+            version(102, "2160p", subtitles = listOf(subtitle(0, "eng"))),
+        )
+        val scenario = Scenario(suffix = "-settled-return", oldVersions = versions)
+        val fixture = createFixture(scenario, contentId = scenario.episodeOneId)
+        // Spanish is the subtitle saved for the theatrical cut.
+        fixture.userState.saved[scenario.episodeOneId to 101] = LocalTrackSelection(
+            audioFingerprint = null,
+            subtitleFingerprint = subtitleTrackFingerprint(subtitle(1, "spa")),
+        )
+        awaitCondition { fixture.viewModel.uiState.value.detail?.contentId == scenario.episodeOneId }
+        // Each answer carries its own title, so the test waits for that answer to land.
+        // The two files are two cuts, so the last-played file picks the cut.
+        fun detailWithUserData(title: String, userData: String) =
+            itemDetailJson(scenario.episodeOneId, versions)
+                .replace(""""file_id":"101",""", """"file_id":"101","edition_key":"theatrical",""")
+                .replace(""""file_id":"102",""", """"file_id":"102","edition_key":"directors-cut",""")
+                .replace(""""title":"Episode"""", """"title":"$title"""")
+                .replace(""""user_data":{"last_file_id":null}""", """"user_data":$userData""")
+        suspend fun returnFromPlayer(exitSeconds: Double, serverUserData: String) {
+            val title = "After $exitSeconds"
+            scenario.episodeOneResponses.addLast(DetailResponse(null, detailWithUserData(title, serverUserData)))
+            TvDetailTrackSelectionSession.rememberPlaybackReturn(
+                contentId = scenario.episodeOneId,
+                // Played the director's cut on Auto, with its English subtitles.
+                fileId = 102,
+                audio = null,
+                subtitle = 0,
+                positionSeconds = exitSeconds,
+                durationSeconds = 7200.0,
+            )
+            fixture.viewModel.refreshOnReturn()
+            awaitCondition { fixture.viewModel.uiState.value.detail?.title == title }
+        }
+
+        // Restarted at 50:00 and stopped at 2:00, under the minimum resume
+        // share: the server kept 50:00, and the page must offer that.
+        returnFromPlayer(
+            exitSeconds = 120.0,
+            serverUserData = """{"is_in_progress":true,"position_seconds":3000.0,"duration_seconds":7200.0,"last_file_id":"101"}""",
+        )
+        assertEquals(3000.0, fixture.viewModel.uiState.value.detail?.userData?.positionSeconds)
+        // That resume point is in the theatrical cut, so the page opens on it,
+        // with the subtitle saved for that cut, not the other cut's pick.
+        val state = fixture.viewModel.uiState.value
+        assertEquals(101, state.detail?.userData?.lastFileId)
+        assertEquals(101, selectTvDetailDisplayVersion(state.detail, state.selectedFileId, state.selectedEditionId, state.preferredQuality)?.fileId)
+        assertEquals(1, state.selectedSubtitleIndex)
+
+        // A first 40 s of a title: the server kept no resume point, so Play.
+        returnFromPlayer(exitSeconds = 40.0, serverUserData = """{"played":false}""")
+        val userData = fixture.viewModel.uiState.value.detail?.userData
+        assertNull(userData?.positionSeconds)
+        assertFalse(userData?.isInProgress == true)
     }
 
     @Test
@@ -857,6 +988,51 @@ class TvNextUpSelectionHandoffTest {
         assertEquals(mapOf(scenario.episodeOneId to false, scenario.episodeTwoId to false), played)
     }
 
+    @Test
+    fun seriesReturnRereadsEpisodesAndSeasonsAfterThePlayerStopLands() = runDetailTest {
+        val scenario = Scenario(suffix = "-series-return-settle")
+        scenario.episodeTwoWatched = true
+        val stop = CompletableDeferred<Unit>()
+        val fixture = createFixture(scenario, awaitPlaybackSettled = { stop.await() })
+        awaitEpisode(fixture.viewModel, scenario.episodeOneId)
+
+        // The player closes on episode one's credits: it records its returns and
+        // sends the final progress and stop in the background.
+        TvDetailTrackSelectionSession.rememberPlaybackReturn(
+            contentId = scenario.episodeOneId,
+            fileId = 101,
+            audio = null,
+            subtitle = null,
+            positionSeconds = 118.0,
+            durationSeconds = 120.0,
+        )
+        TvDetailTrackSelectionSession.rememberSeriesReturn(
+            TvDetailTrackSelectionSession.SeriesReturn(
+                seriesId = scenario.seriesId,
+                episodeId = scenario.episodeTwoId,
+                seasonNumber = 1,
+                identityGeneration = fixture.identityTransitions.generation.value,
+            ),
+        )
+        val seasonsBefore = scenario.seasonsRequests.get()
+        val episodesBefore = scenario.completedSeasonOneReads.get()
+        fixture.viewModel.refreshOnReturn()
+        // The page's immediate reads answer before the stop lands.
+        awaitCondition {
+            scenario.seasonsRequests.get() > seasonsBefore &&
+                scenario.completedSeasonOneReads.get() > episodesBefore
+        }
+
+        scenario.episodeOneWatched = true
+        stop.complete(Unit)
+
+        awaitCondition(timeoutMs = 5_000) {
+            val state = fixture.viewModel.uiState.value
+            state.episodes.firstOrNull { it.contentId == scenario.episodeOneId }?.userData?.played == true &&
+                state.seasons.firstOrNull { it.seasonNumber == 1 }?.userData?.played == true
+        }
+    }
+
     // ------------------------------------------------------------------
 
     private val createdViewModels = mutableListOf<ViewModel>()
@@ -874,7 +1050,12 @@ class TvNextUpSelectionHandoffTest {
         }
     }
 
-    private fun createFixture(scenario: Scenario, metadataApi: MetadataAiApi? = null): Fixture {
+    private fun createFixture(
+        scenario: Scenario,
+        metadataApi: MetadataAiApi? = null,
+        contentId: String = scenario.seriesId,
+        awaitPlaybackSettled: suspend () -> Unit = {},
+    ): Fixture {
         val identityTransitions = DefaultIdentityTransitionBarrier()
         val tokenManager = FakeTokenManager(identityTransitions)
         val client = scenario.client(tokenManager)
@@ -907,10 +1088,11 @@ class TvNextUpSelectionHandoffTest {
             profileRepository = profileRepository,
             profileSettings = ProfileSettingsController(SettingsRepository(UnavailableSettingsApi())),
             metadataAiRepository = MetadataAiRepository(metadataApi ?: DefaultMetadataAiApi(client, gate = ApiV2Gate.Unrestricted)),
-            contentId = scenario.seriesId,
+            contentId = contentId,
             userItemState = userState,
             tokenManager = tokenManager,
             identityTransitions = identityTransitions,
+            awaitPlaybackSettled = awaitPlaybackSettled,
         ).also { createdViewModels += it }
         return Fixture(viewModel, userState, tokenManager, identityTransitions)
     }
@@ -929,9 +1111,9 @@ class TvNextUpSelectionHandoffTest {
         }
     }
 
-    private suspend fun awaitCondition(predicate: () -> Boolean) {
+    private suspend fun awaitCondition(timeoutMs: Long = 30_000, predicate: () -> Boolean) {
         withContext(Dispatchers.IO) {
-            withTimeout(30_000) {
+            withTimeout(timeoutMs) {
                 while (!predicate()) delay(10)
             }
         }
@@ -954,6 +1136,7 @@ class TvNextUpSelectionHandoffTest {
         val preferredQuality: String = "auto",
     ) {
         val seriesId = "series$suffix"
+        val seasonOnePageId = "season-1-page$suffix"
         val episodeOneId = "episode-1$suffix"
         val episodeTwoId = "episode-2$suffix"
         val seasonTwoEpisodeId = "season-2-episode-1$suffix"
@@ -971,6 +1154,8 @@ class TvNextUpSelectionHandoffTest {
         var seasonOnePageOverride: String? = null
         val seasonOneResponses = ConcurrentLinkedDeque<DetailResponse>()
         val completedSeasonOneReads = AtomicInteger()
+        /** Season 1 episode reads answer 500 while this stays above zero. */
+        val seasonOneEpisodeFailures = AtomicInteger()
         val seasonsRequests = AtomicInteger()
         val episodeTwoRequests = AtomicInteger()
         val pendingEpisodeOneResponses = AtomicInteger()
@@ -1008,7 +1193,14 @@ class TvNextUpSelectionHandoffTest {
                             ]}""".trimIndent(),
                         )
                     }
-                    "/api/v2/catalog/series/$seriesId/seasons/1/episodes" -> {
+                    "/api/v2/catalog/items/$seasonOnePageId" -> json(seasonOnePageJson(pendingTranslation = true))
+                    "/api/v2/catalog/series/$seriesId/seasons/1/episodes" -> if (seasonOneEpisodeFailures.getAndDecrement() > 0) {
+                        respond(
+                            content = """{"error":"unavailable","message":"unavailable"}""",
+                            status = HttpStatusCode.InternalServerError,
+                            headers = JSON_HEADERS,
+                        )
+                    } else {
                         val queued = seasonOneResponses.pollFirst()
                         queued?.gate?.await()
                         if (queued == null) seasonOneEpisodesGate?.await()
@@ -1086,6 +1278,10 @@ class TvNextUpSelectionHandoffTest {
         ) {
             install(ContentNegotiation) { json(SiloJson) }
         }
+
+        fun seasonOnePageJson(pendingTranslation: Boolean): String =
+            """{"content_id":"$seasonOnePageId","type":"season","title":"Season 1","series_id":"$seriesId","season_number":1,""" +
+                """"pending_translation_language":${if (pendingTranslation) "\"de\"" else "null"},"cast":[],"crew":[],"versions":[],"subtitles":[]}"""
 
         fun episodesJson(): String =
             """{"items":[

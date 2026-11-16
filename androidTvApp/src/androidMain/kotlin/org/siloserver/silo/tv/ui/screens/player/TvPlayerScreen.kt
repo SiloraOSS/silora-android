@@ -3,6 +3,7 @@
 package org.siloserver.silo.tv.ui.screens.player
 
 import org.siloserver.silo.common.i18n.LocaleFormat
+import org.siloserver.silo.common.i18n.displayUppercase
 import org.siloserver.silo.common.i18n.stringResourceWithNames
 import org.siloserver.silo.playback.SubtitleSyncNotice
 import org.siloserver.silo.common.ui.components.NextUpArtwork
@@ -779,13 +780,10 @@ fun TvPlayerScreen(
         null -> viewModel.onBufferingSelectPrimary()
     }
 
-    // The pill takes its focus with it when it hides. Aim where the intro
+    // A pill takes its focus with it when it hides. Aim where the intro
     // pill's dismissal does: the scrubber with the controls up, otherwise the
     // player root, which must own focus while the overlay is hidden.
-    var bufferingPillHeldFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(bufferingPill.isVisible) {
-        if (bufferingPill.isVisible || !bufferingPillHeldFocus) return@LaunchedEffect
-        bufferingPillHeldFocus = false
+    suspend fun refocusAfterPillHides() {
         if (viewModel.uiState.value.showControls) {
             requestIdleOverlayFocus(TvIdleOverlayFocusTarget.Scrubber)
         } else {
@@ -797,6 +795,29 @@ fun TvPlayerScreen(
             )
         }
     }
+    var bufferingPillHeldFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(bufferingPill.isVisible) {
+        if (bufferingPill.isVisible || !bufferingPillHeldFocus) return@LaunchedEffect
+        bufferingPillHeldFocus = false
+        refocusAfterPillHides()
+    }
+    // The same for the skip pills: one that times out or leaves its range
+    // while focused would otherwise strand focus with the controls up, where
+    // Left/Right then do nothing (silo-android#926). Tracked per pill, since
+    // the intro pill can hand straight over to the recap or credits pill.
+    val refocusAfterSkipPillHides: suspend () -> Unit = {
+        // The HUD and Up Next replace the pills and own focus themselves.
+        val current = viewModel.uiState.value
+        if (!current.hudOpen && !current.showNextUp) refocusAfterPillHides()
+    }
+    val onIntroPillFocusChanged = rememberRefocusWhenPillHides(
+        visible = visibleIntroSkipState.isVisible,
+        refocus = refocusAfterSkipPillHides,
+    )
+    val onMarkerPillFocusChanged = rememberRefocusWhenPillHides(
+        visible = manualSkipTarget != null,
+        refocus = refocusAfterSkipPillHides,
+    )
     val onBufferingPillFocusChanged: (TvBufferingPillAction?) -> Unit = remember(viewModel) {
         { action ->
             bufferingPillFocusedAction = action
@@ -889,6 +910,16 @@ fun TvPlayerScreen(
         return true
     }
 
+    // The scrubber's tap skip, shared with the skip pills.
+    fun overlaySkip(direction: Int) {
+        if (!canSeekInRoom) return
+        performRelativeSeek(
+            if (direction < 0) -resolvedSkipBackMs() else resolvedSkipForwardMs(),
+            roomSnapshot,
+            revealControls = true,
+        )
+    }
+
     fun clearPendingCleanSeekPress() {
         cleanSeekHoldJob?.cancel()
         cleanSeekHoldJob = null
@@ -962,6 +993,18 @@ fun TvPlayerScreen(
                 previous = cleanSeekRate
             }
         }
+    }
+
+    // Left/Right on a skip pill with the controls up (while they're hidden the
+    // remote bridge takes them first) seek as with the controls hidden: a tap
+    // skips by the seek interval, a hold starts the hold seek. Focus stays on
+    // the pill; if the seek takes it away, focus moves on with it.
+    fun handleSkipPillSeek(direction: Int, hold: Boolean) {
+        // The pill can outlive the picture (an error, a reload); there the
+        // remote does nothing, as in the bridge, rather than move the resume point.
+        val current = viewModel.uiState.value
+        if (current.streamUrl == null || current.isLoading || current.error != null || current.awaitingFirstFrame) return
+        if (hold) beginCleanPlaybackSeek(direction, latestRoomSnapshot) else overlaySkip(direction)
     }
 
     fun beginCleanSeekPress(direction: Int, allowsHold: Boolean) {
@@ -2573,10 +2616,7 @@ fun TvPlayerScreen(
                         scrubThumbnail = trickplayThumbnail,
                         bufferedAheadSec = bufferedAheadSec,
                         chapters = state.chapters,
-                        introRange = state.intro,
-                        creditsRange = state.credits,
-                        recapRange = state.recap,
-                        previewRange = state.preview,
+                        markers = state.markerTimeline,
                         // In a room, skip/scrub/seek are routed through the
                         // controller (transport_request → server → broadcast
                         // command → engine applies the seek locally). Solo
@@ -2589,24 +2629,8 @@ fun TvPlayerScreen(
                         skipForwardSeconds = seekIntervals.forwardSeconds,
                         canToggleAfterCommit = watchParty == null,
                         playbackSpeed = if (watchParty != null) 1.0 else playbackSpeed,
-                        onSkipBack = {
-                            if (canSeekInRoom) {
-                                performRelativeSeek(
-                                    -resolvedSkipBackMs(),
-                                    roomSnapshot,
-                                    revealControls = true,
-                                )
-                            }
-                        },
-                        onSkipForward = {
-                            if (canSeekInRoom) {
-                                performRelativeSeek(
-                                    resolvedSkipForwardMs(),
-                                    roomSnapshot,
-                                    revealControls = true,
-                                )
-                            }
-                        },
+                        onSkipBack = { overlaySkip(-1) },
+                        onSkipForward = { overlaySkip(1) },
                         onBeginScrub = {
                             // In a room the scrub starts from a pending seek's
                             // target, where the overlay already shows the playhead.
@@ -2962,6 +2986,9 @@ fun TvPlayerScreen(
             introSkipState = visibleIntroSkipState,
             manualSkipTarget = manualSkipTarget,
             onManualMarkerSelect = { handleManualMarkerSelect() },
+            onSkipPillSeek = { direction, hold -> handleSkipPillSeek(direction, hold) },
+            onIntroPillFocusChanged = onIntroPillFocusChanged,
+            onMarkerPillFocusChanged = onMarkerPillFocusChanged,
             introSkipCountdownRun = introSkipCountdownRun,
             introSkipTimerRunning = introSkipTimerRunning,
             introSkipTotalSeconds = viewModel.introSkipTotalSeconds,
@@ -3289,10 +3316,7 @@ private fun TvPlayerIdleOverlay(
     scrubThumbnail: androidx.compose.ui.graphics.ImageBitmap?,
     bufferedAheadSec: Double,
     chapters: List<org.siloserver.silo.model.catalog.VersionChapter>,
-    introRange: org.siloserver.silo.model.catalog.TimeRange?,
-    creditsRange: org.siloserver.silo.model.catalog.TimeRange?,
-    recapRange: org.siloserver.silo.model.catalog.TimeRange?,
-    previewRange: org.siloserver.silo.model.catalog.TimeRange?,
+    markers: org.siloserver.silo.domain.player.MarkerTimeline,
     onPlayPause: () -> Unit,
     onSkipBack: () -> Unit,
     onSkipForward: () -> Unit,
@@ -3469,18 +3493,7 @@ private fun TvPlayerIdleOverlay(
                         title = it.title.ifBlank { null },
                     )
                 },
-                introRangeSec = introRange
-                    ?.takeIf { it.end > it.start }
-                    ?.let { it.start..it.end },
-                creditsRangeSec = creditsRange
-                    ?.takeIf { it.end > it.start }
-                    ?.let { it.start..it.end },
-                recapRangeSec = recapRange
-                    ?.takeIf { it.end > it.start }
-                    ?.let { it.start..it.end },
-                previewRangeSec = previewRange
-                    ?.takeIf { it.end > it.start }
-                    ?.let { it.start..it.end },
+                markers = markers,
                 cancelOnBlur = false,
                 skipBackSeconds = skipBackSeconds,
                 skipForwardSeconds = skipForwardSeconds,
@@ -3846,7 +3859,7 @@ private fun TvPlayerNextUpOverlay(
                             },
                         )
                         androidx.tv.material3.Text(
-                            text = eyebrow.uppercase(),
+                            text = eyebrow.displayUppercase(),
                             color = Color.White.copy(alpha = 0.52f),
                             style = androidx.tv.material3.MaterialTheme.typography.labelLarge,
                         )
@@ -4493,6 +4506,36 @@ private fun TvPlayerClockScope(
 }
 
 /**
+ * Remembers whether a pill held focus and, when it hides while holding it,
+ * calls [refocus]: the focus leaves with the pill. Returns the pill's focus
+ * callback (true while it, or something in it, has focus).
+ */
+@Composable
+private fun rememberRefocusWhenPillHides(
+    visible: Boolean,
+    refocus: suspend () -> Unit,
+): (Boolean) -> Unit {
+    val latestVisible by rememberUpdatedState(visible)
+    val latestRefocus by rememberUpdatedState(refocus)
+    var heldFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(visible) {
+        if (visible || !heldFocus) return@LaunchedEffect
+        heldFocus = false
+        latestRefocus()
+    }
+    return remember {
+        { focused ->
+            if (focused) {
+                heldFocus = true
+            } else if (latestVisible) {
+                // Focus moved off a pill that stays up (or a menu covered it).
+                heldFocus = false
+            }
+        }
+    }
+}
+
+/**
  * The overlay layer stacked above the player surface: lifecycle notice, remote
  * message toast, Watch Party indicator, the Up Next
  * surface, the intro auto-skip banner, and the loading spinner.
@@ -4523,6 +4566,11 @@ private fun TvPlayerOverlays(
     introSkipState: IntroAutoSkipState,
     manualSkipTarget: MarkerSkipTarget?,
     onManualMarkerSelect: () -> Unit,
+    /** Left/Right on a focused skip pill; see [TvIntroAutoSkipBanner]'s onSeek. */
+    onSkipPillSeek: (direction: Int, hold: Boolean) -> Unit,
+    /** Whether each skip pill holds focus, so focus can be placed when it hides. */
+    onIntroPillFocusChanged: (Boolean) -> Unit,
+    onMarkerPillFocusChanged: (Boolean) -> Unit,
     /** Bumps when the pill's timer (re)starts, so its fill re-anchors. */
     introSkipCountdownRun: Int,
     /** False while the pill is up but its timer is frozen by a pause. */
@@ -4729,13 +4777,17 @@ private fun TvPlayerOverlays(
                 ) {
                     if (manualSkipTarget != null) {
                         TvMarkerSkipPill(
+                            modifier = Modifier.onFocusChanged { onMarkerPillFocusChanged(it.hasFocus) },
                             label = stringResource(if (manualSkipTarget.kind == ManualMarkerKind.Recap) CommonR.string.marker_skipRecap else CommonR.string.marker_skipCredits),
                             onSelect = onManualMarkerSelect,
+                            onSeek = onSkipPillSeek,
                         )
                     }
                     TvIntroAutoSkipBanner(
+                        modifier = Modifier.onFocusChanged { onIntroPillFocusChanged(it.hasFocus) },
                         state = introSkipState,
                         onSelect = onIntroPromptSelect,
+                        onSeek = onSkipPillSeek,
                         totalSeconds = introSkipTotalSeconds,
                         countdownRun = introSkipCountdownRun,
                         timerRunning = introSkipTimerRunning,
