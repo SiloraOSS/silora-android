@@ -41,6 +41,8 @@ import org.siloserver.silo.model.feature.MetadataAiFeatureStore
 import org.siloserver.silo.model.metadata.MetadataAiOnView
 import org.siloserver.silo.model.settings.SeekMedia
 import org.siloserver.silo.common.settings.text
+import org.siloserver.silo.common.requests.RequestSearchPreferences
+import org.siloserver.silo.model.feature.RequestsFeatureStore
 
 // The sub-pages the Settings overview pushes, one per Apple Settings page.
 // Each shares the overview's SettingsViewModel (AppNavigation hands it the
@@ -91,6 +93,10 @@ fun SettingsInterfaceScreen(viewModel: SettingsViewModel, onBackClick: () -> Uni
     var showHomeSectionsEditor by rememberSaveable { mutableStateOf(false) }
     val titleArtStore: TitleArtStore = koinInject()
     val playerSettingsStore: PlayerSettingsStore = koinInject()
+    val requestPreferences: RequestSearchPreferences = koinInject()
+    val requestsFirst by requestPreferences.requestsFirst.collectAsState(initial = requestPreferences.isRequestsFirst())
+    val requestsFeatureStore: RequestsFeatureStore = koinInject()
+    val requestsEnabled by requestsFeatureStore.isEnabled.collectAsState()
     // Opening Interface is a refresh edge, so a title art choice made on
     // another device shows here without waiting for the next foreground. Kept
     // out of the LazyColumn item, which re-enters composition on scroll.
@@ -101,6 +107,20 @@ fun SettingsInterfaceScreen(viewModel: SettingsViewModel, onBackClick: () -> Uni
     SettingsPageScaffold(title = stringResource(CommonR.string.settings_interface_title), onBackClick = onBackClick) {
         item(key = "app-language") {
             AppLanguageSettingsSection(store = appLanguageStore)
+        }
+        if (requestsEnabled) {
+            item(key = "search") {
+                SettingsSection(
+                    title = stringResource(CommonR.string.nav_search),
+                    footer = stringResource(CommonR.string.silora_search_requests_first_footer),
+                ) {
+                    SettingsSwitchRow(
+                        label = stringResource(CommonR.string.silora_search_requests_first),
+                        checked = requestsFirst,
+                        onCheckedChange = requestPreferences::setRequestsFirst,
+                    )
+                }
+            }
         }
         item(key = "cards") {
             MediaCardsSettings(

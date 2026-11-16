@@ -97,6 +97,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import org.siloserver.silo.model.catalog.BrowseItem
+import org.siloserver.silo.common.requests.RequestSearchPreferences
 import org.siloserver.silo.model.feature.RequestsFeatureStore
 import org.siloserver.silo.model.request.RequestMediaResult
 import org.siloserver.silo.model.request.RequestMediaType
@@ -168,6 +169,8 @@ fun TvSearchScreen(
     val requestState by requestSearchViewModel.uiState.collectAsState()
     val requestsFeatureStore: RequestsFeatureStore = koinInject()
     val requestsEnabled by requestsFeatureStore.isEnabled.collectAsState()
+    val requestPreferences: RequestSearchPreferences = koinInject()
+    val requestsFirst by requestPreferences.requestsFirst.collectAsState(initial = requestPreferences.isRequestsFirst())
     val firstResultFocusRequester = remember { FocusRequester() }
     val firstRequestResultFocusRequester = remember { FocusRequester() }
     val firstPersonFocusRequester = remember { FocusRequester() }
@@ -293,7 +296,10 @@ fun TvSearchScreen(
             requestState.isLoading ||
             requestState.error != null ||
             (requestState.hasSubmittedQuery && !onlyLibraryRequestMatches))
-    val requestSearchSettled = !canSearchRequests || !requestState.isLoading
+    val requestSectionFirst = requestsFirst && shouldShowRequestSection
+    val requestSearchSettled = !canSearchRequests ||
+        (requestState.hasSubmittedQuery && requestState.submittedQuery == state.query.trim() &&
+            requestState.mediaType == requestMediaType && !requestState.isLoading)
     fun submitCurrentSearch() {
         setKeyboardOpen(false)
         keyboardController?.hide()
@@ -341,10 +347,9 @@ fun TvSearchScreen(
             reportInputOverlay(false)
         }
     }
-    // Same precedence as the post-search handoff below: people (the row
-    // nearest the chips), results, then the error's "Try again", then the
-    // request row.
+    // Match the displayed section order when moving down from the filters.
     val firstContentFocusRequester = when {
+        requestSectionFirst && visibleRequestResults.isNotEmpty() -> firstRequestResultFocusRequester
         state.people.isNotEmpty() -> firstPersonFocusRequester
         state.items.isNotEmpty() -> firstResultFocusRequester
         state.error != null -> feedbackActionFocusRequester
@@ -556,7 +561,7 @@ fun TvSearchScreen(
         when (located.sectionId) {
             TvSearchCatalogSectionId -> {
                 restoreCatalogIndex = located.itemIndex
-                searchGridState.scrollToItem(located.itemIndex)
+                searchGridState.scrollToItem(located.itemIndex + 1 + if (requestSectionFirst) 1 else 0)
                 requestFocusUntilObserved(
                     maxAttempts = TvFrameRelocationMaxAttempts,
                     awaitAttempt = { androidx.compose.runtime.withFrameNanos { } },
@@ -566,8 +571,8 @@ fun TvSearchScreen(
             }
             TvSearchPeopleSectionId -> {
                 restorePeopleIndex = located.itemIndex
-                // The people row lives in the header, which is item zero.
-                searchGridState.scrollToItem(0)
+                // Requests-first moves people below the header with the request row.
+                searchGridState.scrollToItem(if (requestSectionFirst) 1 else 0)
                 requestFocusUntilObserved(
                     maxAttempts = TvFrameRelocationMaxAttempts,
                     awaitAttempt = { androidx.compose.runtime.withFrameNanos { } },
@@ -577,6 +582,9 @@ fun TvSearchScreen(
             }
             TvSearchRequestSectionId -> {
                 restoreRequestIndex = located.itemIndex
+                searchGridState.scrollToItem(
+                    if (requestSectionFirst) 1 else 1 + state.items.distinctBy { it.contentId }.size.coerceAtLeast(1),
+                )
                 requestFocusUntilObserved(
                     maxAttempts = TvFrameRelocationMaxAttempts,
                     awaitAttempt = { androidx.compose.runtime.withFrameNanos { } },
@@ -637,30 +645,23 @@ fun TvSearchScreen(
         state.people.size,
         state.isLoadingPeople,
         visibleRequestResults.size,
+        requestsFirst,
     ) {
         if (!pendingSearchFocus || state.isLoading) return@LaunchedEffect
-        // People sit above the results and are the first target when present,
-        // so give their lookup a short window to answer. Bounded: a slow or
-        // hung lookup must not park the viewer on the field. If it answers in
-        // time, this effect relaunches on the key change and picks it up.
-        if (state.isLoadingPeople) delay(TvSearchPeopleHandoffWaitMillis)
-        // Only wait on the request lookup when it is the thing focus would
-        // land on. Library results are the primary target and arrive first;
-        // holding them hostage to a slow TMDB round-trip left the user parked
-        // on the search field with results visibly sitting there.
-        if (state.items.isEmpty() && !requestSearchSettled) return@LaunchedEffect
+        // Wait for the preferred section on an explicit submission. Otherwise
+        // a faster library lookup would skip the request row as it arrives.
+        if ((requestsFirst || state.items.isEmpty()) && !requestSearchSettled) return@LaunchedEffect
+        if (!requestSectionFirst && state.isLoadingPeople) delay(TvSearchPeopleHandoffWaitMillis)
         // A return outranks a stale submit. Submitting, walking down to a card
         // that the reset had not yet cleared, and opening it leaves this armed
         // on a retained composition — and on the way back both effects would
         // otherwise be eligible, one aiming at the restored card and the other
         // at the first result.
         if (returnPending) return@LaunchedEffect
-        // A failed library search lands on "Try again", even when the request
-        // row has something to show. Landing on a request card instead scrolled
-        // the field, chips and the error itself up under the top menu — the
-        // screen looked broken rather than merely failed, and the recovery
-        // action was the one thing not on screen.
+        // With library-first ordering, keep its recovery action ahead of the
+        // request footer. Requests-first instead lands on the leading row.
         val postSearchTarget = when {
+            requestSectionFirst && visibleRequestResults.isNotEmpty() -> firstRequestResultFocusRequester
             state.people.isNotEmpty() -> firstPersonFocusRequester
             state.items.isNotEmpty() -> firstResultFocusRequester
             state.error != null -> feedbackActionFocusRequester
@@ -668,6 +669,7 @@ fun TvSearchScreen(
             else -> firstFilterChipFocusRequester
         }
         val postSearchRegion = when {
+            requestSectionFirst && visibleRequestResults.isNotEmpty() -> TvSearchFocusRegion.RequestResults
             state.people.isNotEmpty() -> TvSearchFocusRegion.People
             state.items.isNotEmpty() -> TvSearchFocusRegion.CatalogResults
             state.error != null -> TvSearchFocusRegion.Feedback
@@ -695,6 +697,108 @@ fun TvSearchScreen(
     //   • first chip   —DOWN→ first card (when results exist)
     //   • first card   —UP→   first chip
     // Only an explicit Search submission hands focus to the results.
+
+    @Composable
+    fun PeopleRow() {
+        TvSearchPeopleRow(
+            people = state.people,
+            firstItemFocusRequester = firstPersonFocusRequester,
+            restoreItemIndex = restorePeopleIndex,
+            restoreItemFocusRequester = restorePeopleFocusRequester,
+            // Follow the chosen section order. Spatial DOWN finds the catalog
+            // card beneath this person when the grid has titles.
+            cardModifier = Modifier.focusProperties {
+                up = if (requestSectionFirst && visibleRequestResults.isNotEmpty()) {
+                    firstRequestResultFocusRequester
+                } else firstFilterChipFocusRequester
+                when {
+                    state.items.isNotEmpty() -> Unit
+                    state.error != null -> down = feedbackActionFocusRequester
+                    !requestSectionFirst && visibleRequestResults.isNotEmpty() -> down = firstRequestResultFocusRequester
+                }
+            },
+            onItemFocusChanged = { person, _, focused ->
+                // Identity-guarded like the other sections.
+                val id = tvSearchPersonItemId(person.id)
+                if (focused) {
+                    focusedReturnItemId = id
+                    focusedRegion = TvSearchFocusRegion.People
+                    // Only library-first keeps people in the header.
+                    if (!requestSectionFirst) scrollHeaderIntoView++
+                } else if (focusedReturnItemId == id) {
+                    focusedReturnItemId = null
+                    if (focusedRegion == TvSearchFocusRegion.People) {
+                        focusedRegion = null
+                    }
+                }
+            },
+            onPersonClick = { person, index ->
+                recordReturn(
+                    TvSearchPeopleSectionId,
+                    tvSearchPersonItemId(person.id),
+                    2,
+                    index,
+                )
+                onOpenPersonDetail(person.id)
+            },
+        )
+    }
+
+    @Composable
+    fun RequestSection() {
+        TvRequestSearchSection(
+            query = state.query,
+            requestsEnabled = requestsEnabled,
+            isLoading = requestState.isLoading,
+            error = requestState.error?.text(),
+            hasSubmittedQuery = requestState.hasSubmittedQuery,
+            results = visibleRequestResults,
+            shouldShow = shouldShowRequestSection,
+            firstItemFocusRequester = firstRequestResultFocusRequester,
+            restoreItemIndex = restoreRequestIndex,
+            restoreItemFocusRequester = restoreRequestFocusRequester,
+            onItemFocusChanged = { item, _, focused ->
+                // Identity-guarded for the same reason as the catalog
+                // cards above: a late false from the card that just
+                // lost focus must not clear the region the new one set.
+                val id = tvSearchRequestItemId(item.mediaType, item.tmdbId)
+                if (focused) {
+                    focusedReturnItemId = id
+                    focusedRegion = TvSearchFocusRegion.RequestResults
+                } else if (focusedReturnItemId == id) {
+                    focusedReturnItemId = null
+                    if (focusedRegion == TvSearchFocusRegion.RequestResults) {
+                        focusedRegion = null
+                    }
+                }
+            },
+            onItemClicked = { item, index ->
+                recordReturn(
+                    TvSearchRequestSectionId,
+                    tvSearchRequestItemId(item.mediaType, item.tmdbId),
+                    1,
+                    index,
+                )
+            },
+            // The leading row returns UP to filters. A footer uses spatial
+            // search into the library grid, whose first card may be offscreen.
+            cardModifier = Modifier.focusProperties {
+                when {
+                    requestSectionFirst -> {
+                        up = firstFilterChipFocusRequester
+                        if (state.people.isNotEmpty()) down = firstPersonFocusRequester
+                        else if (state.items.isEmpty() && state.error != null) down = feedbackActionFocusRequester
+                    }
+                    state.items.isNotEmpty() -> Unit
+                    state.error != null -> up = feedbackActionFocusRequester
+                    state.people.isNotEmpty() -> up = firstPersonFocusRequester
+                    else -> up = firstFilterChipFocusRequester
+                }
+            },
+            onOpenRequestDetail = onOpenRequestDetail,
+            onOpenLibraryItem = onOpenLibraryItem,
+        )
+    }
 
     val platformInputInterceptor = remember(keyboardMode) {
         PlatformTextInputInterceptor { request, nextHandler ->
@@ -781,7 +885,11 @@ fun TvSearchScreen(
             // spatial focus search can prefer the wider search field above and
             // skip over the smaller chip row.
             firstItemCardModifier = Modifier.focusProperties {
-                up = if (state.people.isNotEmpty()) firstPersonFocusRequester else firstFilterChipFocusRequester
+                up = when {
+                    state.people.isNotEmpty() -> firstPersonFocusRequester
+                    requestSectionFirst && visibleRequestResults.isNotEmpty() -> firstRequestResultFocusRequester
+                    else -> firstFilterChipFocusRequester
+                }
             },
             header = {
                 SearchStage(
@@ -835,106 +943,19 @@ fun TvSearchScreen(
                     isKeyboardOpen = isKeyboardOpen,
                     onKeyboardOpenChanged = setKeyboardOpen,
                     peopleRow = {
-                        TvSearchPeopleRow(
-                            people = state.people,
-                            firstItemFocusRequester = firstPersonFocusRequester,
-                            restoreItemIndex = restorePeopleIndex,
-                            restoreItemFocusRequester = restorePeopleFocusRequester,
-                            // UP goes to the chips from any card. DOWN is left to
-                            // spatial search while the grid below has cards, so
-                            // it lands beneath the focused person; otherwise it
-                            // follows the same precedence as the handoff.
-                            cardModifier = Modifier.focusProperties {
-                                up = firstFilterChipFocusRequester
-                                when {
-                                    state.items.isNotEmpty() -> Unit
-                                    state.error != null -> down = feedbackActionFocusRequester
-                                    visibleRequestResults.isNotEmpty() -> down = firstRequestResultFocusRequester
-                                }
-                            },
-                            onItemFocusChanged = { person, _, focused ->
-                                // Identity-guarded like the other sections.
-                                val id = tvSearchPersonItemId(person.id)
-                                if (focused) {
-                                    focusedReturnItemId = id
-                                    focusedRegion = TvSearchFocusRegion.People
-                                    // Coming back UP from the grid, the row sits
-                                    // under the top menu with the field above it.
-                                    // The header is item zero; bring it all back.
-                                    scrollHeaderIntoView++
-                                } else if (focusedReturnItemId == id) {
-                                    focusedReturnItemId = null
-                                    if (focusedRegion == TvSearchFocusRegion.People) {
-                                        focusedRegion = null
-                                    }
-                                }
-                            },
-                            onPersonClick = { person, index ->
-                                recordReturn(
-                                    TvSearchPeopleSectionId,
-                                    tvSearchPersonItemId(person.id),
-                                    2,
-                                    index,
-                                )
-                                onOpenPersonDetail(person.id)
-                            },
-                        )
+                        if (!requestSectionFirst) PeopleRow()
                     },
                 )
             },
-            footer = {
-                TvRequestSearchSection(
-                    query = state.query,
-                    requestsEnabled = requestsEnabled,
-                    isLoading = requestState.isLoading,
-                    error = requestState.error?.text(),
-                    hasSubmittedQuery = requestState.hasSubmittedQuery,
-                    results = visibleRequestResults,
-                    shouldShow = shouldShowRequestSection,
-                    firstItemFocusRequester = firstRequestResultFocusRequester,
-                    restoreItemIndex = restoreRequestIndex,
-                    restoreItemFocusRequester = restoreRequestFocusRequester,
-                    onItemFocusChanged = { item, _, focused ->
-                        // Identity-guarded for the same reason as the catalog
-                        // cards above: a late false from the card that just
-                        // lost focus must not clear the region the new one set.
-                        val id = tvSearchRequestItemId(item.mediaType, item.tmdbId)
-                        if (focused) {
-                            focusedReturnItemId = id
-                            focusedRegion = TvSearchFocusRegion.RequestResults
-                        } else if (focusedReturnItemId == id) {
-                            focusedReturnItemId = null
-                            if (focusedRegion == TvSearchFocusRegion.RequestResults) {
-                                focusedRegion = null
-                            }
-                        }
-                    },
-                    onItemClicked = { item, index ->
-                        recordReturn(
-                            TvSearchRequestSectionId,
-                            tvSearchRequestItemId(item.mediaType, item.tmdbId),
-                            1,
-                            index,
-                        )
-                    },
-                    // With results above, spatial search takes UP to the card
-                    // just above. Pinning it to the first result failed once
-                    // the grid scrolled that card out of composition, and the
-                    // shell parked focus on the top bar. Otherwise the same
-                    // precedence as the handoff: spatial search alone skipped
-                    // "Try again" and landed on the chips or the field.
-                    cardModifier = Modifier.focusProperties {
-                        when {
-                            state.items.isNotEmpty() -> Unit
-                            state.error != null -> up = feedbackActionFocusRequester
-                            state.people.isNotEmpty() -> up = firstPersonFocusRequester
-                            else -> up = firstFilterChipFocusRequester
-                        }
-                    },
-                    onOpenRequestDetail = onOpenRequestDetail,
-                    onOpenLibraryItem = onOpenLibraryItem,
-                )
-            },
+            beforeItems = if (requestSectionFirst) {
+                {
+                    Column {
+                        RequestSection()
+                        PeopleRow()
+                    }
+                }
+            } else null,
+            footer = if (!requestSectionFirst) { { RequestSection() } } else null,
             emptyState = {
                 when {
                     state.query.isBlank() -> SearchFeedbackMessage(
@@ -947,10 +968,10 @@ fun TvSearchScreen(
                         body = state.error?.text().orEmpty(),
                         actionLabel = stringResource(CommonR.string.common_tryAgain),
                         actionFocusRequester = feedbackActionFocusRequester,
-                        actionUpFocusRequester = if (state.people.isNotEmpty()) {
-                            firstPersonFocusRequester
-                        } else {
-                            firstFilterChipFocusRequester
+                        actionUpFocusRequester = when {
+                            state.people.isNotEmpty() -> firstPersonFocusRequester
+                            requestSectionFirst && visibleRequestResults.isNotEmpty() -> firstRequestResultFocusRequester
+                            else -> firstFilterChipFocusRequester
                         },
                         onActionFocusChanged = { focused ->
                             setFocusedRegion(TvSearchFocusRegion.Feedback, focused)
@@ -958,7 +979,7 @@ fun TvSearchScreen(
                             // is only just on screen and the field, chips and
                             // error title are still under the top menu. The
                             // header is item zero; bring the whole thing back.
-                            if (focused) scrollHeaderIntoView++
+                            if (focused && !requestSectionFirst) scrollHeaderIntoView++
                         },
                         onAction = viewModel::submitSearch,
                     )
@@ -1008,7 +1029,7 @@ private fun TvRequestSearchSection(
     val router = rememberRequestRouter(org.koin.compose.koinInject(), onOpenLibraryItem, onOpenRequestDetail)
     if (!requestsEnabled || query.trim().length < 2 || !shouldShow) return
 
-    // This section is a full-span footer item inside TvCatalogGrid, so the
+    // This section is a full-span item inside TvCatalogGrid, so the
     // grid's own contentPadding already supplies the safe-area gutter. Adding
     // it again here is what pushed this header out of line with the result
     // grid above it.

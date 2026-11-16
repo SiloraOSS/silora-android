@@ -139,7 +139,7 @@ fun SettingsScreen(
     val showDiagnostics = shouldShowDiagnosticsEntry(diagnosticsState) &&
         search.matches(*searchTerms(CommonR.string.settings_search_terms_diagnostics, "diagnostics", "support", "reports", "debug", "crash"))
 
-    val matchesInterface = search.matches(*searchTerms(CommonR.string.settings_search_terms_interface, "interface", "appearance", "cards", "posters", "home", "sections", "title art", "logos", "language"))
+    val matchesInterface = search.matches(*searchTerms(CommonR.string.settings_search_terms_interface, "interface", "appearance", "cards", "posters", "home", "sections", "title art", "logos", "language"), "search", "requests", "available to request")
     val matchesNotifications = state.notificationsAvailable && search.matches(*searchTerms(CommonR.string.settings_search_terms_notifications, "notifications", "alerts", "favorites", "watchlist", "continue watching", "next up"))
     val matchesProfileSelection = search.matches(*searchTerms(CommonR.string.settings_search_terms_profileSelection, "profile selection", "profiles", "who's watching", "launch", "pin"))
     val matchesPlayback = search.matches(*searchTerms(CommonR.string.settings_search_terms_playback, "playback", "quality", "resolution", "bitrate", "cellular", "mobile data", "audio", "dolby vision", "picture-in-picture", "episodes", "next up", "skip", "intros", "credits", "rewind", "still watching", "skip interval", "audiobooks", "spoilers", "unwatched", "blur", "descriptions"))

@@ -48,6 +48,7 @@ import org.koin.compose.koinInject
 import org.siloserver.silo.common.ui.OnViewerAccessChanged
 import org.siloserver.silo.common.ui.rememberViewerAccessKey
 import org.siloserver.silo.network.AccessChangeSignals
+import org.siloserver.silo.common.requests.RequestSearchPreferences
 
 /**
  * The search screen with a search bar and results grid.
@@ -77,6 +78,8 @@ fun SearchScreen(
     val personalDataRepository: PersonalDataRepository = koinInject()
     val requestsFeatureStore: RequestsFeatureStore = koinInject()
     val requestsEnabled by requestsFeatureStore.isEnabled.collectAsState()
+    val requestPreferences: RequestSearchPreferences = koinInject()
+    val requestsFirst by requestPreferences.requestsFirst.collectAsState(initial = requestPreferences.isRequestsFirst())
     // An access change can add or remove libraries and titles: re-derive the
     // media modes and re-run the current query under the new policy.
     val accessChangeSignals: AccessChangeSignals = koinInject()
@@ -202,7 +205,7 @@ fun SearchScreen(
             }
 
             @Composable
-            fun RequestSearchFooter() {
+            fun RequestSearchContent() {
                 RequestSearchSection(
                     query = state.query,
                     selectedMediaType = state.mediaType,
@@ -225,6 +228,7 @@ fun SearchScreen(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
+                        if (requestsFirst) RequestSearchContent()
                         Spacer(modifier = Modifier.height(80.dp))
                         CircularProgressIndicator(
                             color = MaterialTheme.colorScheme.primary,
@@ -248,29 +252,33 @@ fun SearchScreen(
                     )
                 }
                 state.error != null -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.ErrorOutline,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(48.dp),
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = state.error?.text().orEmpty(),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            FilledTonalButton(onClick = { viewModel.retry() }) {
-                                Text(stringResource(CommonR.string.common_retry))
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (requestsFirst) RequestSearchContent()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(48.dp),
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = state.error?.text().orEmpty(),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                FilledTonalButton(onClick = { viewModel.retry() }) {
+                                    Text(stringResource(CommonR.string.common_retry))
+                                }
                             }
                         }
                     }
@@ -278,13 +286,14 @@ fun SearchScreen(
                 state.hasSearched && state.results.isEmpty() && state.people.isEmpty() &&
                     state.boxSets.isEmpty() && !state.isSearching -> {
                     Column(modifier = Modifier.fillMaxSize()) {
+                        if (requestsFirst) RequestSearchContent()
                         Box(modifier = Modifier.weight(1f)) {
                             SearchEmptyState(
                                 text = stringResource(CommonR.string.search_empty),
                                 subtitle = stringResource(CommonR.string.search_emptyBody),
                             )
                         }
-                        RequestSearchFooter()
+                        if (!requestsFirst) RequestSearchContent()
                     }
                 }
                 else -> {
@@ -301,7 +310,8 @@ fun SearchScreen(
                         onPersonClick = onPersonClick,
                         onLoadMore = { viewModel.loadMore() },
                         modifier = Modifier.fillMaxSize(),
-                        footer = { RequestSearchFooter() },
+                        header = if (requestsFirst) { { RequestSearchContent() } } else null,
+                        footer = if (!requestsFirst) { { RequestSearchContent() } } else null,
                     )
                 }
             }

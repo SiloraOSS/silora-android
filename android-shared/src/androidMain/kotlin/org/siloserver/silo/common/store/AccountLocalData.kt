@@ -10,6 +10,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import org.siloserver.silo.common.requests.RequestSearchPreferences
 import org.siloserver.silo.common.admin.AdminMenuPreferences
 import org.siloserver.silo.common.profiles.ProfileLaunchPreferences
 import org.siloserver.silo.model.server.ServerEntry
@@ -254,6 +255,7 @@ class AccountLocalData(
             "silo_tv_search_keyboard",
             "silo_tv_remote_shortcuts",
             AdminMenuPreferences.PREFS_NAME,
+            RequestSearchPreferences.PREFS_NAME,
         ) + HASHED_CACHE_PREFS
 
         /**

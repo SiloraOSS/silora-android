@@ -71,6 +71,7 @@ fun SearchResults(
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier,
     footer: (@Composable () -> Unit)? = null,
+    header: (@Composable () -> Unit)? = null,
 ) {
     val gridState = rememberLazyGridState()
     val focusManager = LocalFocusManager.current
@@ -110,6 +111,11 @@ fun SearchResults(
         verticalArrangement = Arrangement.spacedBy(MediaGridDefaults.PosterGridVerticalSpacing),
         modifier = modifier,
     ) {
+        if (header != null) {
+            item(span = { GridItemSpan(maxLineSpan) }, contentType = "search-header") {
+                header()
+            }
+        }
         if (boxSets.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }, contentType = "search-section-title") {
                 Text(

@@ -125,6 +125,8 @@ fun TvCatalogGrid(
     header: (@Composable () -> Unit)? = null,
     footer: (@Composable () -> Unit)? = null,
     emptyState: (@Composable () -> Unit)? = null,
+    /** A separate full-width item between the search header and catalog cards. */
+    beforeItems: (@Composable () -> Unit)? = null,
 ) {
     val resolvedGridState = gridState ?: rememberLazyGridState()
     // Keyed lazy lists throw on a repeated key, which is fatal. Paging can
@@ -163,13 +165,14 @@ fun TvCatalogGrid(
     // Trigger pagination when the user is within 6 items of the end. The
     // `loadMoreRequestedSize` guard is read inside the derived state so a failed
     // page (size unchanged) stays gated until a retry or a successful growth.
-    val shouldLoadMore by remember(uniqueItems.size, hasMore, isLoading) {
+    val itemOffset = (if (header != null) 1 else 0) + (if (beforeItems != null) 1 else 0)
+    val shouldLoadMore by remember(uniqueItems.size, hasMore, isLoading, itemOffset) {
         derivedStateOf {
             if (!hasMore || isLoading || uniqueItems.isEmpty()) return@derivedStateOf false
             if (uniqueItems.size == loadMoreRequestedSize) return@derivedStateOf false
             val lastVisible = resolvedGridState.layoutInfo.visibleItemsInfo
                 .lastOrNull()?.index ?: return@derivedStateOf false
-            lastVisible >= uniqueItems.size - loadMoreThreshold
+            lastVisible >= itemOffset + uniqueItems.size - loadMoreThreshold
         }
     }
 
@@ -253,6 +256,12 @@ fun TvCatalogGrid(
         if (header != null) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 header()
+            }
+        }
+
+        if (beforeItems != null) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                beforeItems()
             }
         }
 

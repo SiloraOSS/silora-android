@@ -17,6 +17,7 @@ import org.siloserver.silo.common.settings.AndroidServerSettingsCache
 import android.content.SharedPreferences
 import org.siloserver.silo.network.AndroidServerRegistry
 import org.siloserver.silo.network.EncryptedTokenManagerImpl
+import org.siloserver.silo.common.requests.RequestSearchPreferences
 import org.siloserver.silo.network.ServerRegistry
 import org.siloserver.silo.network.TokenManager
 import org.siloserver.silo.network.createSecureSharedPrefs
@@ -89,6 +90,15 @@ import org.koin.dsl.module
  * [org.siloserver.silo.tv.SiloTvApplication].
  */
 val androidTvModule = module {
+    single {
+        RequestSearchPreferences(
+            androidContext().getSharedPreferences(
+                RequestSearchPreferences.PREFS_NAME,
+                android.content.Context.MODE_PRIVATE,
+            ),
+            get(),
+        )
+    }
     single {
         TvSearchKeyboardStore(
             androidContext().getSharedPreferences(TvSearchKeyboardStore.PREFS_NAME, android.content.Context.MODE_PRIVATE),

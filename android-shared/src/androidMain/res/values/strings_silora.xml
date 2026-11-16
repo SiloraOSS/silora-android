@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="silora_search_requests_first">Show available to request first</string>
+    <string name="silora_search_requests_first_footer">Show Available to request before library search results. Saved for this profile on this device.</string>
     <string name="silora_cancel_autoplay">Cancel autoplay</string>
     <string name="silora_extra_small">Extra small</string>
     <string name="silora_time_remaining">Time remaining</string>
