@@ -132,11 +132,12 @@ handoff behavior, local-trailer playback, TV remote controls, close-on-end,
 and the phone's More-menu placement when the action row is full. Keep Edrock's
 attribution. Use an upstream equivalent if it preserves these behaviors.
 
-## AI subtitles (`ai-subtitles`)
+## Edrock AI subtitle fixes (`edrock-ai-subs-fixes`)
 
-The original four bug-fix goals remain active. Matt requested all subtitle
-updates from edrock v42 (`c934aaf7a`) on November 15, 2026; preserve the newer
-implementations rather than restoring the old retry/phone-language helpers.
+This entry tracks fixes imported from edrock’s fork for the existing AI
+subtitle feature. The original four bug-fix goals remain active. Matt requested
+all subtitle updates from edrock v42 (`c934aaf7a`) on November 15, 2026; preserve
+the newer implementations rather than restoring the old retry/phone-language helpers.
 
 - TV **From audio** uses the playing file's server audio ordinals, not the
   remuxed/transcoded player group ordinal. Follow

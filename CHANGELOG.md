@@ -4,9 +4,21 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-15 20:03 PST — rename edrock AI subtitle fixes
+
+Renamed the fork preservation ID `ai-subtitles` to `edrock-ai-subs-fixes` at
+Matt's request. The entry groups fixes imported from edrock's fork for the
+existing AI subtitle feature. Updated the manifest, merge-skill preservation
+checklist and feature-ID references in older changelog prose. The manifest
+records the former name so historical commits remain traceable.
+
+This is a documentation-only rename. The `tv-live-ai-subtitles` ID, source
+commit lists and runtime behavior are unchanged. Reference checks, skill
+validation and `git diff --check` passed; no code tests were needed.
+
 ## 2026-11-15 19:47 PST — edrock v42 AI subtitle updates
 
-Matt requested all current edrock updates for `ai-subtitles` and
+Matt requested all current edrock updates for `edrock-ai-subs-fixes` and
 `tv-live-ai-subtitles`, including phone live display. Imported the seven source
 commits below from `edrock/feat/hevc-level-override-v42`, pinned to
 `c934aaf7ac0aef17881070c0a54ab4cdc56add36`, into Silora `main` from
@@ -35,7 +47,7 @@ commits below from `edrock/feat/hevc-level-override-v42`, pinned to
   job's live lines and preserves that manual choice on completion. Cancel and
   terminal outcomes reject late batches; an explicitly reused job is restored.
   TV reports a failed cancel. Existing session/file/job and timeline guards stay.
-- `ai-subtitles` retains the server audio-ordinal fix and missing-row fallback.
+- `edrock-ai-subs-fixes` retains the server audio-ordinal fix and missing-row fallback.
   The completed event now supplies its inventory row through the normal ready
   path before the five-second TV replan fallback is needed. Kept the completed
   live-track cleanup backstop.
@@ -227,7 +239,7 @@ remote-control behavior, and expand/update translations. Recovery:
   use upstream wording.
 - Preserved the other active fork IDs: `identity`, `hevc-levels`, `night-mode`,
   `tv-display`, `tv-subtitle-size`, `tv-remote`, `tv-keyboard`, `input-scope`,
-  `trailers`, `ai-subtitles`, `tv-live-ai-subtitles`, `up-next-setting`,
+  `trailers`, `edrock-ai-subs-fixes`, `tv-live-ai-subtitles`, `up-next-setting`,
   `up-next-fixes`, `credits-auto-skip`, `admin-console`, `release-tooling` and
   `fork-maintenance`. Reviewed all overlapping files, including automatic
   merges. Playback/marker changes retain remote shortcuts, credits skipping,
@@ -354,7 +366,7 @@ update cross-client parity guidance and the addressable lock.
 - Accepted TV Space-bar pause/resume with repeat/key-up consumption and
   Ctrl/Alt/Meta shortcut guards. Retained remote long-press behavior, modal and
   Up Next ownership, automatic credits skipping, and live AI subtitle overlays
-  (`tv-remote`, `credits-auto-skip`, `tv-live-ai-subtitles`, `ai-subtitles`).
+  (`tv-remote`, `credits-auto-skip`, `tv-live-ai-subtitles`, `edrock-ai-subs-fixes`).
 - Integrated upstream parity instructions while retaining fork product exposure
   and maintenance rules (`fork-maintenance`). This merge adds no new product
   override or cross-client implementation; the upstream changes retain their
@@ -411,7 +423,7 @@ and public translation checks.
   credit skips do not reset the still-watching count. Manual seeks still count
   as viewer activity. Preserved custom trigger/timing, next-item artwork,
   dismissal/end-countdown guards and manual TV Up Next (`up-next-setting`,
-  `up-next-fixes`), plus TV AI workarounds and live cues (`ai-subtitles`,
+  `up-next-fixes`), plus TV AI workarounds and live cues (`edrock-ai-subs-fixes`,
   `tv-live-ai-subtitles`).
 - Retained Night Mode, HEVC controls, independent display matching, Extra small
   TV subtitles, remote shortcuts, App/System keyboard and scoped input settings,
@@ -631,7 +643,7 @@ locale-aware formatting, debug pseudo-locales and Arabic TV layout fixes.
 - Retained `up-next-setting`, `up-next-fixes` and `credits-auto-skip`: custom
   trigger/timing choices, end-state artwork, cancellation/countdown behavior,
   four Skip Credits choices, profile reset, local scope and warning remain.
-  Retained `ai-subtitles`, `tv-live-ai-subtitles` and `trailers`, including
+  Retained `edrock-ai-subs-fixes`, `tv-live-ai-subtitles` and `trailers`, including
   server audio ordinals, bounded create/replan guards, language aliases, live
   cue/job cleanup, embedded/local trailer preference and external fallback.
 - Retained `admin-console`, ordinary Requests scope/server gating, and the
@@ -900,7 +912,7 @@ English TV layout left to right while allowing metadata its own text direction.
   baseline profile, episode-rail centering/reveal guards, watched/resume refresh,
   fresh catalog reads, final-progress cleanup and text-direction fixes.
 - Reviewed automatically merged playback and DI code: retained `night-mode`,
-  `tv-display`, `ai-subtitles`, `tv-live-ai-subtitles`, `up-next-setting`,
+  `tv-display`, `edrock-ai-subs-fixes`, `tv-live-ai-subtitles`, `up-next-setting`,
   `up-next-fixes` and `credits-auto-skip` alongside upstream's session-exit changes.
   Account-scoped input bindings (`input-scope`, `tv-keyboard`, `tv-remote`),
   in-app voice permission/service declarations (`tv-voice`) and embedded trailer
