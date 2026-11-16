@@ -99,6 +99,32 @@ object AdminText {
         session.streamLocation?.takeIf { it == "remote" }?.let { "Remote" },
     ).joinToString(" · ")
 
+    /** The server's adaptation reasons in plain words; null for direct play. */
+    fun sessionReasons(session: AdminPlaybackSession): String? =
+        session.adaptationReasons.map { ADAPTATION_REASONS[it] ?: humanizeKey(it).lowercase() }
+            .distinct().joinToString(", ").takeIf { it.isNotBlank() }?.let { "Why: $it" }
+
+    /** silo-server's closed vocabulary (playback.AdaptationReasons); unknown values fall back to their key. */
+    private val ADAPTATION_REASONS = mapOf(
+        "video_codec_unsupported" to "video codec not supported",
+        "video_capability_unconfirmed" to "device support for the video unconfirmed",
+        "dynamic_range_unsupported" to "HDR or Dolby Vision not supported",
+        "resolution_limit" to "above the device's resolution",
+        "bandwidth_limit" to "not enough bandwidth",
+        "buffering" to "lowered after buffering",
+        "bandwidth_cap" to "viewer's bitrate limit",
+        "server_bitrate_limit" to "access group bitrate limit",
+        "quality_selected" to "lower quality chosen",
+        "subtitle_burn_in" to "subtitles burned in",
+        "direct_play_failed" to "direct play failed",
+        "audio_codec_unsupported" to "audio codec not supported",
+        "audio_channels_unsupported" to "too many audio channels",
+        "device_workaround" to "device workaround",
+        "audio_track_selection" to "different audio track chosen",
+        "container_unsupported" to "container not supported",
+        "subtitle_unsupported" to "subtitle needs converting",
+    )
+
     fun sessionProgress(session: AdminPlaybackSession): String {
         val at = clock(session.positionSeconds)
         val length = session.fileDuration?.takeIf { it > 0 }?.let { clock(it.toDouble()) }
@@ -127,7 +153,8 @@ object AdminText {
     fun taskLine(task: AdminTask): String {
         if (task.isRunning) {
             val pct = task.progress.coerceIn(0.0, 100.0).toInt()
-            return if (task.state == "cancelling") "Cancelling…" else "Running · $pct%"
+            val since = ago(task.startedAt)?.let { " · started $it" }.orEmpty()
+            return if (task.state == "cancelling") "Cancelling…$since" else "Running · $pct%$since"
         }
         val last = task.lastExecution
         val lastText = last?.let {

@@ -7,9 +7,12 @@ import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.content.TextContent
+import io.ktor.http.contentLength
+import io.ktor.http.contentType
 import io.ktor.http.encodeURLPathPart
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
@@ -38,6 +41,11 @@ class AdminV2Api(
     private val tokens: TokenManager,
     private val gate: ApiV2Gate,
 ) {
+    /**
+     * A query value with several lines is sent as one parameter per line
+     * (an array parameter such as `content_ids`). [onRefusal] sees the
+     * headers of a refused call, e.g. a stale command's latest sequence.
+     */
     suspend fun call(
         operation: AdminOperation,
         pathValues: Map<String, String> = emptyMap(),
@@ -45,6 +53,7 @@ class AdminV2Api(
         body: JsonElement? = null,
         ifMatch: String? = null,
         cursor: String? = null,
+        onRefusal: ((status: Int, headers: Headers) -> Unit)? = null,
     ): ApiResult<AdminResponse> {
         gate.blocked()?.let { return it }
         val owner = tokens.snapshotCurrentScope() ?: return identityChanged()
@@ -55,17 +64,29 @@ class AdminV2Api(
                 method = HttpMethod.parse(operation.method)
                 authScope(owner)
                 requireSiloAuth()
-                query.forEach { (k, v) -> if (v.isNotBlank()) parameter(k, v) }
+                query.forEach { (k, v) ->
+                    v.lines().map { it.trim() }.filter { it.isNotEmpty() }.forEach { parameter(k, it) }
+                }
                 cursor?.let { parameter("cursor", it) }
                 ifMatch?.let { header(HttpHeaders.IfMatch, it) }
                 if (body != null) setBody(TextContent(body.toString(), ContentType.Application.Json))
             }
             currentCoroutineContext().ensureActive()
             if (!owner.stillOwns(tokens, OwnerPolicy.IDENTITY)) return identityChanged()
-            if (!response.status.isSuccess()) return response.toApiV2Error()
-            val text = response.bodyAsText()
-            val parsed = if (text.isBlank()) null else {
-                runCatching { SiloJson.parseToJsonElement(text) }.getOrElse { JsonPrimitive(text) }
+            if (!response.status.isSuccess()) {
+                onRefusal?.invoke(response.status.value, response.headers)
+                return response.toApiV2Error()
+            }
+            val type = response.contentType()?.withoutParameters()
+            val parsed = if (type != null && !isTextual(type)) {
+                // A download the console can't show; don't pull it into memory.
+                val size = response.contentLength()?.let { " of $it bytes" }.orEmpty()
+                JsonPrimitive("Binary response$size ($type), not shown.")
+            } else {
+                val text = response.bodyAsText()
+                if (text.isBlank()) null else {
+                    runCatching { SiloJson.parseToJsonElement(text) }.getOrElse { JsonPrimitive(text) }
+                }
             }
             ApiResult.Success(AdminResponse(response.status.value, parsed, response.headers[HttpHeaders.ETag]))
         } catch (e: CancellationException) {
@@ -76,6 +97,9 @@ class AdminV2Api(
     }
 
     companion object {
+        private fun isTextual(type: ContentType): Boolean =
+            type.contentType == "text" || type.contentSubtype == "json" || type.contentSubtype.endsWith("+json")
+
         /** `/api/v2/admin/users/{id}` + `{id=5}` → `/api/v2/admin/users/5`; null if a value is missing. */
         fun fillPath(operation: AdminOperation, values: Map<String, String>): String? {
             var missing = false

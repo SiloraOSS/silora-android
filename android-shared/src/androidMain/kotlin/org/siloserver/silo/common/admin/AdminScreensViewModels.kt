@@ -100,9 +100,14 @@ class AdminService(private val loader: AdminSpecLoader, private val api: AdminV2
         }
     }
 
-    suspend fun send(id: String, path: Map<String, String> = emptyMap(), body: JsonElement? = null): ApiResult<JsonElement?> {
+    suspend fun send(
+        id: String,
+        path: Map<String, String> = emptyMap(),
+        body: JsonElement? = null,
+        onRefusal: ((status: Int, headers: io.ktor.http.Headers) -> Unit)? = null,
+    ): ApiResult<JsonElement?> {
         val operation = op(id) ?: return unsupported(id)
-        return when (val result = api.call(operation, path, body = body)) {
+        return when (val result = api.call(operation, path, body = body, onRefusal = onRefusal)) {
             is ApiResult.Success -> ApiResult.Success(result.data.body)
             is ApiResult.Error -> result
             is ApiResult.NetworkError -> result
@@ -120,8 +125,14 @@ internal fun ApiResult<*>.message(): String? = when (this) {
 
 private fun <T> ApiResult<T>.orNull(): T? = (this as? ApiResult.Success)?.data
 
-/** A short message to show once, e.g. "Approved". */
+/** A short message to show once, e.g. "Approved". The screen reports it shown, and it is cleared. */
 data class AdminNotice(val text: String, val isError: Boolean = false, val id: Long = System.nanoTime())
+
+/** Items already listed, plus the rows of [page] that aren't (a list that shifts between pages can repeat a row). */
+private fun <T> List<T>.plusNew(page: List<T>, id: (T) -> String): List<T> {
+    val seen = mapTo(HashSet(), id)
+    return this + page.filter { seen.add(id(it)) }
+}
 
 // ---------------------------------------------------------------- Dashboard
 
@@ -160,6 +171,8 @@ class AdminDashboardViewModel(private val service: AdminService) : ViewModel() {
 
     fun refresh() { viewModelScope.launch { load() } }
 
+    fun noticeShown(id: Long) = _state.update { if (it.notice?.id == id) it.copy(notice = null) else it }
+
     private suspend fun load() = coroutineScope {
         val status = async { service.get(AdminOps.SERVER_STATUS, AdminServerStatus.serializer()) }
         val build = async { service.get(AdminOps.BUILD, AdminBuildInfo.serializer()) }
@@ -196,7 +209,9 @@ class AdminDashboardViewModel(private val service: AdminService) : ViewModel() {
 
     /**
      * Session commands carry an id and a sequence that rises per session, as
-     * the web admin sends them; the server applies each once.
+     * the web admin sends them; the server applies each once. A stale refusal
+     * names the session's latest sequence, and the command is reissued once
+     * above it (this device's clock can be behind another admin client's).
      */
     private fun command(
         session: AdminPlaybackSession,
@@ -205,21 +220,34 @@ class AdminDashboardViewModel(private val service: AdminService) : ViewModel() {
         extra: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {},
     ) {
         if (_state.value.busySessionId != null) return
-        val sequence = maxOf((lastSequence[session.sessionId] ?: 0L) + 1, System.currentTimeMillis())
-        lastSequence[session.sessionId] = sequence
-        val body = buildJsonObject {
-            put("command_id", UUID.randomUUID().toString())
-            put("sequence", sequence)
-            extra()
+        fun body(floor: Long): JsonElement {
+            val sequence = maxOf(floor + 1, System.currentTimeMillis())
+            lastSequence[session.sessionId] = sequence
+            return buildJsonObject {
+                put("command_id", UUID.randomUUID().toString())
+                put("sequence", sequence)
+                extra()
+            }
         }
+        val path = mapOf("session_id" to session.sessionId)
         _state.update { it.copy(busySessionId = session.sessionId) }
         viewModelScope.launch {
-            val result = service.send(id, mapOf("session_id" to session.sessionId), body)
+            var latest: Long? = null
+            var result = service.send(id, path, body(lastSequence[session.sessionId] ?: 0L)) { status, headers ->
+                latest = headers[LATEST_SEQUENCE_HEADER]?.trim()?.toLongOrNull()?.takeIf { status == 409 }
+            }
+            latest?.let { serverLatest ->
+                result = service.send(id, path, body(maxOf(serverLatest, lastSequence[session.sessionId] ?: 0L)))
+            }
             _state.update {
                 it.copy(busySessionId = null, notice = AdminNotice(result.message() ?: done, isError = result !is ApiResult.Success))
             }
             load()
         }
+    }
+
+    private companion object {
+        const val LATEST_SEQUENCE_HEADER = "X-Silo-Latest-Sequence"
     }
 
     fun restartServer() {
@@ -270,6 +298,10 @@ class AdminRequestsViewModel(private val service: AdminService) : ViewModel() {
     private val _state = MutableStateFlow(AdminRequestsState())
     val state: StateFlow<AdminRequestsState> = _state.asStateFlow()
     private var loadJob: Job? = null
+    private var moreJob: Job? = null
+    /** Bumped by every first-page load, so a page for an older list is dropped. */
+    private var generation = 0
+    private var shown = false
 
     init {
         load()
@@ -283,6 +315,14 @@ class AdminRequestsViewModel(private val service: AdminService) : ViewModel() {
         }
     }
 
+    /** The screen came back into view: the first visit loads in init, later ones read again. */
+    fun onShown() {
+        if (shown) load()
+        shown = true
+    }
+
+    fun noticeShown(id: Long) = _state.update { if (it.notice?.id == id) it.copy(notice = null) else it }
+
     fun select(view: AdminRequestView) {
         if (view == _state.value.view) return
         _state.update { it.copy(view = view, items = emptyList(), nextCursor = null) }
@@ -291,6 +331,8 @@ class AdminRequestsViewModel(private val service: AdminService) : ViewModel() {
 
     fun load() {
         loadJob?.cancel()
+        moreJob?.cancel()
+        generation++
         _state.update { it.copy(loading = true, loadingMore = false, error = null) }
         loadJob = viewModelScope.launch {
             val view = _state.value.view
@@ -316,19 +358,23 @@ class AdminRequestsViewModel(private val service: AdminService) : ViewModel() {
         val current = _state.value
         val cursor = current.nextCursor ?: return
         if (current.loadingMore || current.loading) return
+        val requested = generation
         _state.update { it.copy(loadingMore = true) }
-        loadJob = viewModelScope.launch {
+        moreJob = viewModelScope.launch {
             val page = service.get(
                 AdminOps.REQUESTS,
                 AdminCollection.serializer(MediaRequest.serializer()),
                 query = mapOf("view" to current.view.key, "limit" to "50"),
                 cursor = cursor,
             )
+            if (requested != generation) return@launch
+            val data = page.orNull()
             _state.update {
                 it.copy(
                     loadingMore = false,
-                    items = it.items + page.orNull()?.items.orEmpty(),
-                    nextCursor = if (page is ApiResult.Success) page.data.page?.cursor else it.nextCursor,
+                    items = if (data != null) it.items.plusNew(data.items) { r -> r.id } else it.items,
+                    // A failed page keeps its cursor, so "Load more" can be pressed again.
+                    nextCursor = if (data != null) data.page?.cursor else it.nextCursor,
                     notice = page.message()?.let { m -> AdminNotice(m, true) } ?: it.notice,
                 )
             }
@@ -387,6 +433,8 @@ class AdminTasksViewModel(private val service: AdminService) : ViewModel() {
 
     fun refresh() { viewModelScope.launch { load() } }
 
+    fun noticeShown(id: Long) = _state.update { if (it.notice?.id == id) it.copy(notice = null) else it }
+
     private suspend fun load() = coroutineScope {
         val tasks = async { service.get(AdminOps.TASKS, AdminCollection.serializer(AdminTask.serializer())) }
         val libraries = async {
@@ -396,7 +444,8 @@ class AdminTasksViewModel(private val service: AdminService) : ViewModel() {
         _state.update {
             it.copy(
                 loading = false,
-                tasks = t.orNull()?.items?.sortedWith(compareBy({ task -> !task.isRunning }, { task -> task.category }, { task -> task.name.lowercase() }))
+                // A stable order: a task doesn't move when it starts or stops.
+                tasks = t.orNull()?.items?.sortedWith(compareBy({ task -> task.category }, { task -> task.name.lowercase() }))
                     ?: it.tasks,
                 libraries = libraries.await().orNull()?.items ?: it.libraries,
                 error = t.message(),
@@ -431,10 +480,11 @@ class AdminTasksViewModel(private val service: AdminService) : ViewModel() {
                 } else failure = failure ?: result.message()
             }
             _state.update {
-                it.copy(busyKey = null, notice = failure?.let { m -> AdminNotice(m, true) }
+                it.copy(notice = failure?.let { m -> AdminNotice(m, true) }
                     ?: AdminNotice(if (cancelled == 0) "No scans were running" else "Cancelled $cancelled scan${if (cancelled == 1) "" else "s"}"))
             }
             load()
+            _state.update { it.copy(busyKey = null) }
         }
     }
 
@@ -443,8 +493,11 @@ class AdminTasksViewModel(private val service: AdminService) : ViewModel() {
         _state.update { it.copy(busyKey = key) }
         viewModelScope.launch {
             val result = service.send(id, path, body)
-            _state.update { it.copy(busyKey = null, notice = AdminNotice(result.message() ?: done, result !is ApiResult.Success)) }
+            _state.update { it.copy(notice = AdminNotice(result.message() ?: done, result !is ApiResult.Success)) }
+            // Busy until the list shows the new state, so a second press can't
+            // land on a row whose action has since changed.
             load()
+            _state.update { it.copy(busyKey = null) }
         }
     }
 }
@@ -478,8 +531,18 @@ class AdminLogsViewModel(private val service: AdminService) : ViewModel() {
     private val _state = MutableStateFlow(AdminLogsState())
     val state: StateFlow<AdminLogsState> = _state.asStateFlow()
     private var job: Job? = null
+    private var moreJob: Job? = null
+    /** Bumped by every first-page load, so a page for an older filter is dropped. */
+    private var generation = 0
+    private var shown = false
 
     init { load() }
+
+    /** The screen came back into view: the first visit loads in init, later ones read again. */
+    fun onShown() {
+        if (shown) load()
+        shown = true
+    }
 
     fun setStream(stream: AdminLogStream) { _state.update { it.copy(stream = stream) }; load() }
     fun setLevel(level: AdminLogLevel) { _state.update { it.copy(level = level) }; load() }
@@ -497,6 +560,8 @@ class AdminLogsViewModel(private val service: AdminService) : ViewModel() {
 
     fun load() {
         job?.cancel()
+        moreJob?.cancel()
+        generation++
         _state.update { it.copy(loading = true, loadingMore = false, error = null) }
         job = viewModelScope.launch {
             val state = _state.value
@@ -517,16 +582,36 @@ class AdminLogsViewModel(private val service: AdminService) : ViewModel() {
         val state = _state.value
         val cursor = state.nextCursor ?: return
         if (state.loadingMore || state.loading) return
+        val requested = generation
         _state.update { it.copy(loadingMore = true) }
-        job = viewModelScope.launch {
+        moreJob = viewModelScope.launch {
+            // A failed page keeps its cursor (so it can be retried) and says why.
             when (state.stream) {
                 AdminLogStream.App -> {
                     val page = service.get(AdminOps.LOGS_APP, AdminCollection.serializer(AdminOperationalLog.serializer()), query = query(state), cursor = cursor)
-                    _state.update { it.copy(loadingMore = false, app = it.app + page.orNull()?.items.orEmpty(), nextCursor = if (page is ApiResult.Success) page.data.page?.cursor else it.nextCursor, error = page.message()) }
+                    if (requested != generation) return@launch
+                    val data = page.orNull()
+                    _state.update {
+                        it.copy(
+                            loadingMore = false,
+                            app = if (data != null) it.app.plusNew(data.items) { e -> e.id } else it.app,
+                            nextCursor = if (data != null) data.page?.cursor else it.nextCursor,
+                            error = page.message(),
+                        )
+                    }
                 }
                 AdminLogStream.Audit -> {
                     val page = service.get(AdminOps.LOGS_AUDIT, AdminCollection.serializer(AdminAuditLog.serializer()), query = query(state), cursor = cursor)
-                    _state.update { it.copy(loadingMore = false, audit = it.audit + page.orNull()?.items.orEmpty(), nextCursor = if (page is ApiResult.Success) page.data.page?.cursor else it.nextCursor, error = page.message()) }
+                    if (requested != generation) return@launch
+                    val data = page.orNull()
+                    _state.update {
+                        it.copy(
+                            loadingMore = false,
+                            audit = if (data != null) it.audit.plusNew(data.items) { e -> e.id } else it.audit,
+                            nextCursor = if (data != null) data.page?.cursor else it.nextCursor,
+                            error = page.message(),
+                        )
+                    }
                 }
             }
         }

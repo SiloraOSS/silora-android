@@ -769,11 +769,12 @@ fun AppNavigation(
     }
 
     // Fork: offer the admin console to administrator accounts. Checked again
-    // whenever the signed-in profile changes.
+    // whenever the signed-in profile changes, and retried while the server
+    // hasn't answered.
     val adminAccess: AdminAccess = org.koin.compose.koinInject()
     val adminAvailability by produceState(AdminAvailability.Unknown, overlaySessionKey) {
-        value = if (overlaySessionKey == null) AdminAvailability.Unknown
-        else runCatching { adminAccess.check() }.getOrDefault(AdminAvailability.Unknown)
+        value = AdminAvailability.Unknown
+        if (overlaySessionKey != null) adminAccess.checkUntilKnown { value = it }
     }
     val openAdminConsole: (() -> Unit)? = remember(adminAvailability, navController) {
         if (adminAvailability == AdminAvailability.Available || adminAvailability == AdminAvailability.NeedsPrimaryProfile) {

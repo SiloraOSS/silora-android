@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,10 +34,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import org.koin.compose.viewmodel.koinViewModel
 import org.siloserver.silo.admin.AdminPlaybackSession
+import org.siloserver.silo.admin.AdminTask
 import org.siloserver.silo.admin.humanizeKey
 import org.siloserver.silo.common.admin.AdminDashboardViewModel
 import org.siloserver.silo.common.admin.AdminLogLevel
@@ -71,19 +72,24 @@ import org.siloserver.silo.tv.ui.theme.SuccessGreen
 
 private val Warning = Color(0xFFFFC107)
 
+/** Shows [notice] once; [onShown] clears it, so coming back to the screen doesn't show it again. */
 @Composable
-private fun NoticeToast(notice: AdminNotice?) {
+private fun NoticeToast(notice: AdminNotice?, onShown: (Long) -> Unit) {
     val context = LocalContext.current
     LaunchedEffect(notice?.id) {
-        notice?.let { Toast.makeText(context, it.text, Toast.LENGTH_SHORT).show() }
+        notice?.let {
+            Toast.makeText(context, it.text, Toast.LENGTH_SHORT).show()
+            onShown(it.id)
+        }
     }
 }
 
+/** Refreshes while shown and the app is in front; stops when the screen leaves or the app goes to the background. */
 @Composable
 private fun WhileVisible(setVisible: (Boolean) -> Unit) {
-    DisposableEffect(Unit) {
+    LifecycleStartEffect(Unit) {
         setVisible(true)
-        onDispose { setVisible(false) }
+        onStopOrDispose { setVisible(false) }
     }
 }
 
@@ -129,7 +135,7 @@ private fun ActionsDialog(title: String?, actions: List<TvDialogOption>, onDismi
 internal fun TvAdminDashboardContent(focus: FocusRequester, onOpenRequests: () -> Unit, viewModel: AdminDashboardViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
     WhileVisible(viewModel::setVisible)
-    NoticeToast(state.notice)
+    NoticeToast(state.notice, viewModel::noticeShown)
     val serverUrl = rememberProfileServerUrl()
     var menuFor by remember { mutableStateOf<AdminPlaybackSession?>(null) }
     var messageFor by remember { mutableStateOf<AdminPlaybackSession?>(null) }
@@ -280,6 +286,7 @@ private fun TvSessionRow(session: AdminPlaybackSession, serverUrl: String, busy:
                 subtitle = listOf(
                     AdminText.sessionDetail(session),
                     AdminText.sessionStream(session),
+                    AdminText.sessionReasons(session).orEmpty(),
                     AdminText.sessionProgress(session) + session.progress?.let { " · ${(it * 100).toInt()}%" }.orEmpty(),
                 ).filter { it.isNotBlank() }.joinToString("\n"),
                 chevron = session.hasPlaybackControl,
@@ -294,7 +301,8 @@ private fun TvSessionRow(session: AdminPlaybackSession, serverUrl: String, busy:
 @Composable
 internal fun TvAdminRequestsContent(focus: FocusRequester, viewModel: AdminRequestsViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
-    NoticeToast(state.notice)
+    LaunchedEffect(Unit) { viewModel.onShown() }
+    NoticeToast(state.notice, viewModel::noticeShown)
     var picker by remember { mutableStateOf<TvPicker?>(null) }
     var menuFor by remember { mutableStateOf<MediaRequest?>(null) }
     var declineFor by remember { mutableStateOf<MediaRequest?>(null) }
@@ -312,6 +320,7 @@ internal fun TvAdminRequestsContent(focus: FocusRequester, viewModel: AdminReque
             AdminRequestView.entries.map { it to it.title + (state.count(it)?.let { c -> " ($c)" } ?: "") },
             viewModel::select,
         ) { picker = it }
+        item { TvRow(if (state.loading) "Refreshing…" else "Refresh", null, chevron = false) { viewModel.load() } }
         state.error?.let { item { Banner(it, Destructive) } }
         if (state.loading && state.items.isEmpty()) item { Footnote("Loading…") }
         else if (state.items.isEmpty()) item { Footnote("No requests here.") }
@@ -379,9 +388,10 @@ internal fun TvAdminRequestsContent(focus: FocusRequester, viewModel: AdminReque
 internal fun TvAdminTasksContent(focus: FocusRequester, viewModel: AdminTasksViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
     WhileVisible(viewModel::setVisible)
-    NoticeToast(state.notice)
+    NoticeToast(state.notice, viewModel::noticeShown)
     var confirmCancelScans by remember { mutableStateOf(false) }
-    ReclaimPageFocus(focus, key = state.loading, enabled = !confirmCancelScans)
+    var cancelTask by remember { mutableStateOf<AdminTask?>(null) }
+    ReclaimPageFocus(focus, key = state.loading, enabled = !confirmCancelScans && cancelTask == null)
 
     if (state.loading && state.tasks.isEmpty()) {
         Notice("Loading…", null)
@@ -408,13 +418,24 @@ internal fun TvAdminTasksContent(focus: FocusRequester, viewModel: AdminTasksVie
         item { TvRow("Cancel running scans", null, destructive = true, chevron = false) { confirmCancelScans = true } }
         section("Scheduled tasks")
         items(state.tasks, key = { "task:" + it.key }) { task ->
+            // The title stays put while the task runs; the action is in the
+            // subtitle, and cancelling asks first.
+            val action = when {
+                state.busyKey == task.key -> "Working…"
+                task.isRunning && task.state == "cancelling" -> "Cancelling…"
+                task.isRunning -> "Running · press to cancel"
+                else -> "Press to run"
+            }
             TvRow(
-                title = (if (task.isRunning) "Cancel " else "Run ") + task.name,
-                subtitle = listOf(AdminText.taskLine(task), task.description).filter { it.isNotBlank() }.joinToString("\n"),
-                destructive = task.isRunning,
+                title = task.name,
+                subtitle = listOf(action, AdminText.taskLine(task), task.description).filter { it.isNotBlank() }.joinToString("\n"),
                 chevron = false,
             ) {
-                if (task.isRunning) { if (task.state != "cancelling") viewModel.cancel(task) } else viewModel.run(task)
+                when {
+                    state.busyKey != null -> Unit
+                    task.isRunning -> if (task.state != "cancelling") cancelTask = task
+                    else -> viewModel.run(task)
+                }
             }
         }
     }
@@ -430,6 +451,18 @@ internal fun TvAdminTasksContent(focus: FocusRequester, viewModel: AdminTasksVie
             initialFocusIndex = 0,
         )
     }
+    cancelTask?.let { task ->
+        TvDialog(
+            title = "Cancel ${task.name}?",
+            message = "The running task stops. It runs again at its next scheduled time, or when you run it.",
+            onDismissRequest = { cancelTask = null },
+            actions = listOf(
+                TvDialogAction("Keep running", { cancelTask = null }),
+                TvDialogAction("Cancel task", { cancelTask = null; viewModel.cancel(task) }, TvDialogActionStyle.Destructive),
+            ),
+            initialFocusIndex = 0,
+        )
+    }
 }
 
 // ---------------------------------------------------------------- Logs
@@ -437,6 +470,7 @@ internal fun TvAdminTasksContent(focus: FocusRequester, viewModel: AdminTasksVie
 @Composable
 internal fun TvAdminLogsContent(focus: FocusRequester, viewModel: AdminLogsViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
+    LaunchedEffect(Unit) { viewModel.onShown() }
     var picker by remember { mutableStateOf<TvPicker?>(null) }
     var searching by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -454,6 +488,7 @@ internal fun TvAdminLogsContent(focus: FocusRequester, viewModel: AdminLogsViewM
                 chevron = false,
             ) { searching = true }
         }
+        item { TvRow(if (state.loading) "Refreshing…" else "Refresh", null, chevron = false) { viewModel.load() } }
         state.error?.let { item { Banner(it, Destructive) } }
         if (state.loading) item { Footnote("Loading…") }
         when (state.stream) {

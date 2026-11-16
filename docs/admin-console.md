@@ -16,12 +16,18 @@ Dashboard and now playing, request moderation, tasks/scans and logs have
 dedicated screens. Activity, People, Media and Server groups expose the other
 operations in the bundled admin API through generic forms. Edits load current
 values when a matching read exists. Destructive operations ask for confirmation.
-These controls depend on the connected server’s API and permissions.
+Generic forms ask for confirmation before every non-read request and preserve
+command identities when retrying a lost reply. Dedicated screens keep their
+action-specific confirmations. These controls depend on the connected server’s
+API and permissions.
 
-The asset lists 471 operations, including nine file-upload operations. The
-console has no file picker: multipart and binary uploads require web admin
-and are rejected locally with that explanation. JSON operations remain
-subject to the connected server’s version and schema requirements.
+The asset lists 472 operations. The generic console filters out file uploads,
+binary downloads and raw-protocol operations such as the log WebSocket; these
+require web admin. It binds item actions using path positions, supports editable
+key/value maps and explicit clearing of form values, and masks credential fields.
+JSON operations remain subject to the connected server’s version and schema
+requirements. The dashboard shows server-provided transcode reasons, and running
+tasks show their start time when the server supplies it.
 
 Matt requested the ten-commit range from edrock200/silo-android
 [`3cb8886ed`](https://github.com/edrock200/silo-android/commit/3cb8886ed5b5cb96f3140b8d7786d323143f2814)
@@ -46,9 +52,13 @@ on November 8, 2026. This is the `admin-console` entry in
 
 ## Refreshing the API contract
 
-The imported asset comes from silo-server `f69e14a` and contains 471 admin
-operations. It is bundled with the app; the console does not fetch a new spec
-at runtime. To update it from a deliberately selected server checkout, run:
+The current asset matches edrock v42 at `c934aaf7ac0aef17881070c0a54ab4cdc56add36`.
+It regenerates from official silo-server `699f84ec`'s OpenAPI contract and
+contains 472 admin operations. Its `info.source` stamp is
+`3e256e30 2026-11-15`: the extractor records the last commit that changed the
+contract file, which can differ from the selected server checkout's HEAD.
+The console shows that stamp and does not fetch a new spec at runtime.
+To update from a deliberately selected server checkout, run:
 
 ```sh
 python3 -I scripts/admin-spec.py /path/to/silo-server/contracts/api/v2/openapi.json
@@ -63,3 +73,20 @@ Use the server handlers and web admin pages to confirm what changed. Add new
 controls to both clients when they belong in these dedicated screens; other
 operations are picked up from the regenerated asset. Record the server source
 and validation in the changelog. Keep Silora’s existing release workflow.
+
+## November 15, 2026 update
+
+Matt requested importing missing Admin fixes from edrock's
+`feat/hevc-level-override-v42`. The cumulative update includes supported-operation
+filtering, item binding, form clearing and credential masking, confirmation and
+retry handling, stale version-tag recovery, preserved list state, deduplicated
+pagination and notices, stable task rows, and retryable menu-access checks.
+The original Silora pagination regression tests remain in place.
+
+Silora retains its default-off, device-local **Show Admin in profile menu**
+setting and primary-profile gating. The access cache is adapted to the complete
+server/account/profile credential identity rather than a profile ID alone;
+late answers after an identity switch are discarded, and cancellation stops
+retries. `AdminAccessTest` covers those boundaries. API permissions remain
+enforced by the server. See the root changelog for exact source commits and
+validation; no device or real-server Admin operation was exercised in this update.

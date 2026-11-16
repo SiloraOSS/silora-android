@@ -1435,7 +1435,7 @@ fun HeroActionStack(
             if (onPlayTrailer != null && !trailerInRow && overflow != null) {
                 { dismiss ->
                     SiloDropdownMenuItem(
-                        text = { Text(stringResource(CommonR.string.silora_play_trailer)) },
+                        text = { Text(stringResource(CommonR.string.catalog_extra_trailer)) },
                         leadingIcon = { Icon(Icons.Filled.OndemandVideo, contentDescription = null) },
                         onClick = {
                             dismiss()
@@ -1457,9 +1457,9 @@ fun HeroActionStack(
                     icon = Icons.Filled.OndemandVideo,
                     activeIcon = Icons.Filled.OndemandVideo,
                     isActive = false,
-                    contentDescription = stringResource(CommonR.string.silora_play_trailer),
+                    contentDescription = stringResource(CommonR.string.catalog_extra_trailer),
                     onClick = onPlayTrailer,
-                    label = "Trailer",
+                    label = stringResource(CommonR.string.catalog_extra_trailer),
                     modifier = Modifier.weight(1f),
                 )
             }

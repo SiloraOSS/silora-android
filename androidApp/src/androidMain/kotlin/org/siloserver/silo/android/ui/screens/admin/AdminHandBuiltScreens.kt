@@ -33,7 +33,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,9 +51,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import coil3.compose.AsyncImage
 import org.koin.compose.viewmodel.koinViewModel
 import org.siloserver.silo.admin.AdminPlaybackSession
+import org.siloserver.silo.admin.AdminTask
 import org.siloserver.silo.android.ui.components.SiloConfirmDialog
 import org.siloserver.silo.android.ui.theme.SiloDestructive
 import org.siloserver.silo.android.ui.theme.SiloGroupedCell
@@ -83,20 +84,24 @@ import org.siloserver.silo.network.resolveArtworkUrl
  * the console is generated from the server's spec.
  */
 
+/** Shows [notice] once; [onShown] clears it, so coming back to the screen doesn't show it again. */
 @Composable
-private fun NoticeToast(notice: AdminNotice?) {
+private fun NoticeToast(notice: AdminNotice?, onShown: (Long) -> Unit) {
     val context = LocalContext.current
     LaunchedEffect(notice?.id) {
-        notice?.let { Toast.makeText(context, it.text, Toast.LENGTH_SHORT).show() }
+        notice?.let {
+            Toast.makeText(context, it.text, Toast.LENGTH_SHORT).show()
+            onShown(it.id)
+        }
     }
 }
 
-/** Refreshes while shown; stops when the screen leaves. */
+/** Refreshes while shown and the app is in front; stops when the screen leaves or the app goes to the background. */
 @Composable
 private fun WhileVisible(setVisible: (Boolean) -> Unit) {
-    DisposableEffect(Unit) {
+    LifecycleStartEffect(Unit) {
         setVisible(true)
-        onDispose { setVisible(false) }
+        onStopOrDispose { setVisible(false) }
     }
 }
 
@@ -106,7 +111,7 @@ private fun WhileVisible(setVisible: (Boolean) -> Unit) {
 fun AdminDashboardContent(onOpenRequests: () -> Unit, viewModel: AdminDashboardViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
     WhileVisible(viewModel::setVisible)
-    NoticeToast(state.notice)
+    NoticeToast(state.notice, viewModel::noticeShown)
     var confirmRestart by remember { mutableStateOf(false) }
     var stopTarget by remember { mutableStateOf<AdminPlaybackSession?>(null) }
     var messageTarget by remember { mutableStateOf<AdminPlaybackSession?>(null) }
@@ -278,6 +283,9 @@ private fun SessionCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                AdminText.sessionReasons(session)?.let {
+                    Text(it, color = SiloSecondaryText, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -299,7 +307,8 @@ private fun SessionCard(
 @Composable
 fun AdminRequestsContent(viewModel: AdminRequestsViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
-    NoticeToast(state.notice)
+    LaunchedEffect(Unit) { viewModel.onShown() }
+    NoticeToast(state.notice, viewModel::noticeShown)
     var declineTarget by remember { mutableStateOf<MediaRequest?>(null) }
     var cancelTarget by remember { mutableStateOf<MediaRequest?>(null) }
 
@@ -399,8 +408,9 @@ private fun RequestCard(
 fun AdminTasksContent(viewModel: AdminTasksViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
     WhileVisible(viewModel::setVisible)
-    NoticeToast(state.notice)
+    NoticeToast(state.notice, viewModel::noticeShown)
     var cancelScanAll by remember { mutableStateOf(false) }
+    var cancelTask by remember { mutableStateOf<AdminTask?>(null) }
 
     if (state.loading && state.tasks.isEmpty()) {
         Loading()
@@ -450,7 +460,7 @@ fun AdminTasksContent(viewModel: AdminTasksViewModel = koinViewModel()) {
                         if (task.description.isNotBlank()) Text(task.description, color = SiloSecondaryText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                     if (task.isRunning) {
-                        TextButton(onClick = { viewModel.cancel(task) }, enabled = state.busyKey == null && task.state != "cancelling") { Text("Cancel", color = SiloDestructive) }
+                        TextButton(onClick = { cancelTask = task }, enabled = state.busyKey == null && task.state != "cancelling") { Text("Cancel", color = SiloDestructive) }
                     } else {
                         TextButton(onClick = { viewModel.run(task) }, enabled = state.busyKey == null) { Text("Run") }
                     }
@@ -472,6 +482,19 @@ fun AdminTasksContent(viewModel: AdminTasksViewModel = koinViewModel()) {
             onDismiss = { cancelScanAll = false },
         )
     }
+    cancelTask?.let { task ->
+        SiloConfirmDialog(
+            title = "Cancel ${task.name}?",
+            body = "The running task stops. It runs again at its next scheduled time, or when you run it.",
+            confirmLabel = "Cancel task",
+            dismissLabel = "Keep running",
+            onConfirm = {
+                cancelTask = null
+                viewModel.cancel(task)
+            },
+            onDismiss = { cancelTask = null },
+        )
+    }
 }
 
 // ---------------------------------------------------------------- Logs
@@ -479,6 +502,7 @@ fun AdminTasksContent(viewModel: AdminTasksViewModel = koinViewModel()) {
 @Composable
 fun AdminLogsContent(viewModel: AdminLogsViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
+    LaunchedEffect(Unit) { viewModel.onShown() }
     var query by remember { mutableStateOf(state.query) }
     var expanded by remember { mutableStateOf<String?>(null) }
 

@@ -144,6 +144,8 @@ data class AdminPlaybackSession(
     @SerialName("stream_location") val streamLocation: String? = null,
     @SerialName("poster_url") val posterUrl: String? = null,
     @SerialName("has_playback_control") val hasPlaybackControl: Boolean = false,
+    /** Why the server changes the file instead of playing it as it is (empty for direct play). */
+    @SerialName("adaptation_reasons") val adaptationReasons: List<String> = emptyList(),
     @SerialName("started_at") val startedAt: String = "",
 ) {
     val displayTitle: String
@@ -201,6 +203,8 @@ data class AdminTask(
     val progress: Double = 0.0,
     @SerialName("manual_only") val manualOnly: Boolean = false,
     @SerialName("next_run_at") val nextRunAt: String? = null,
+    /** When the run in progress began (servers that report it). */
+    @SerialName("started_at") val startedAt: String? = null,
     @SerialName("last_execution") val lastExecution: AdminTaskExecution? = null,
     val triggers: List<AdminTaskTrigger> = emptyList(),
 ) {

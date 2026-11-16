@@ -2081,8 +2081,8 @@ private fun HeroActionRow(
                     TvSquareToggleButton(
                         icon = Icons.Filled.OndemandVideo,
                         iconActive = Icons.Filled.OndemandVideo,
-                        contentDescription = "Play trailer",
-                        titleOnFocus = "Trailer",
+                        contentDescription = stringResource(CommonR.string.catalog_extra_trailer),
+                        titleOnFocus = stringResource(CommonR.string.catalog_extra_trailer),
                         isActive = false,
                         onClick = onPlayTrailer,
                     )

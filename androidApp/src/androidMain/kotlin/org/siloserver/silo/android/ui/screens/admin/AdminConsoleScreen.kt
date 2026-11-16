@@ -25,6 +25,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
@@ -39,10 +41,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -141,7 +146,19 @@ fun AdminConsoleScreen(
                 )
                 state.catalog == null && state.loadError != null -> Notice(state.loadError.orEmpty(), action = "Try again" to viewModel::reload)
                 state.catalog == null -> Loading()
-                else -> EntryContent(state, entry, viewModel)
+                else -> {
+                    // Each screen of the console's stack keeps its list
+                    // position, so Back returns to the row it left.
+                    val saved = rememberSaveableStateHolder()
+                    val depth = state.stack.size
+                    var deepest by remember { mutableIntStateOf(depth) }
+                    LaunchedEffect(depth) {
+                        // A popped screen's position is dropped; the next push starts at the top.
+                        for (gone in depth + 1..deepest) saved.removeState(gone)
+                        deepest = depth
+                    }
+                    saved.SaveableStateProvider(depth) { EntryContent(state, entry, viewModel) }
+                }
             }
         }
     }
@@ -176,7 +193,12 @@ private fun EntryContent(state: AdminConsoleState, entry: AdminEntry, vm: AdminC
             group(AdminCategory.entries.toList()) { category, _ ->
                 NavRow(category.title, category.blurb) { vm.openCategory(category) }
             }
-            item { Footnote("Server API ${catalog.spec.version} · ${catalog.spec.operations.size} admin operations") }
+            item {
+                Footnote(
+                    "Server API ${catalog.spec.version} · ${catalog.operations.size} admin operations" +
+                        catalog.spec.source?.let { " · contract from silo-server $it" }.orEmpty(),
+                )
+            }
         }
         is AdminEntry.Category -> Page {
             group(catalog.resourcesIn(entry.category)) { resource, _ ->
@@ -207,7 +229,7 @@ private fun EntryContent(state: AdminConsoleState, entry: AdminEntry, vm: AdminC
             recordRows(entry.value) { title, value -> vm.openNested(title, value) }
             if (entry.actions.isNotEmpty()) {
                 section("Actions")
-                group(entry.actions) { bound, _ -> ActionRow(bound) { vm.openBound(bound) } }
+                group(entry.actions) { bound, _ -> ActionRow(bound) { vm.openBound(bound, source = entry.value) } }
             }
         }
     }
@@ -225,7 +247,7 @@ private fun RunContent(run: AdminEntry.Run, vm: AdminConsoleViewModel) {
     if (run.phase == AdminRunPhase.Confirming) {
         SiloConfirmDialog(
             title = "${run.operation.title}?",
-            body = run.operation.summary?.takeIf { it.isNotBlank() } ?: "This changes the server and may not be undoable.",
+            body = run.confirmMessage,
             confirmLabel = "Continue",
             onConfirm = { vm.submit(run.id) },
             onDismiss = { vm.cancelConfirm(run.id) },
@@ -234,6 +256,13 @@ private fun RunContent(run: AdminEntry.Run, vm: AdminConsoleViewModel) {
     val showForm = run.phase == AdminRunPhase.Editing || run.phase == AdminRunPhase.Confirming
     Page {
         run.error?.let { item { ErrorBanner(it) } }
+        if (showForm && run.stale && run.hasTagSource) {
+            item {
+                OutlinedButton(onClick = { vm.reloadCurrent(run.id) }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text("Reload current values")
+                }
+            }
+        }
         if (showForm) {
             run.operation.description?.takeIf { it.isNotBlank() }?.let { item { Footnote(it) } }
             formFields(run.form, run.values) { key, value -> vm.setValue(run.id, key, value) }
@@ -275,7 +304,7 @@ private fun RunContent(run: AdminEntry.Run, vm: AdminConsoleViewModel) {
             val actions = vm.detailActions(run)
             if (actions.isNotEmpty()) {
                 section("Actions")
-                group(actions) { bound, _ -> ActionRow(bound) { vm.openBound(bound) } }
+                group(actions) { bound, _ -> ActionRow(bound) { vm.openBound(bound, source = response.body) } }
             }
         }
     }
@@ -340,31 +369,47 @@ private fun FieldEditor(field: AdminField, value: String, onChange: (String, Str
                     Switch(checked = value == "true", onCheckedChange = { onChange(field.key, it.toString()) })
                 }
                 is AdminFieldKind.Choice -> ChoiceField(value, kind.options, field.required) { onChange(field.key, it) }
-                else -> OutlinedTextField(
-                    value = value,
-                    onValueChange = { onChange(field.key, it) },
-                    singleLine = kind != AdminFieldKind.Lines && kind != AdminFieldKind.JsonText,
-                    minLines = if (kind == AdminFieldKind.JsonText) 4 else 1,
-                    placeholder = when (kind) {
-                        AdminFieldKind.Lines -> ({ Text("One per line", color = SiloSecondaryText) })
-                        AdminFieldKind.JsonText -> ({ Text("JSON", color = SiloSecondaryText) })
-                        else -> null
-                    },
-                    visualTransformation = if (kind == AdminFieldKind.Secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = when (kind) {
-                            AdminFieldKind.Integer -> KeyboardType.Number
-                            AdminFieldKind.Decimal -> KeyboardType.Decimal
-                            AdminFieldKind.Secret -> KeyboardType.Password
-                            else -> KeyboardType.Text
+                else -> {
+                    var reveal by remember { mutableStateOf(false) }
+                    val hidden = kind == AdminFieldKind.Secret && !reveal
+                    OutlinedTextField(
+                        value = value,
+                        onValueChange = { onChange(field.key, it) },
+                        singleLine = kind != AdminFieldKind.Lines && kind != AdminFieldKind.KeyValues && kind != AdminFieldKind.JsonText,
+                        minLines = if (kind == AdminFieldKind.JsonText) 4 else 1,
+                        placeholder = when (kind) {
+                            AdminFieldKind.Lines -> ({ Text("One per line", color = SiloSecondaryText) })
+                            AdminFieldKind.KeyValues -> ({ Text("key=value, one per line", color = SiloSecondaryText) })
+                            AdminFieldKind.JsonText -> ({ Text("JSON", color = SiloSecondaryText) })
+                            else -> null
                         },
-                    ),
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        color = SiloOnSurface,
-                        fontFamily = if (kind == AdminFieldKind.JsonText) FontFamily.Monospace else FontFamily.Default,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                        trailingIcon = if (kind == AdminFieldKind.Secret) {
+                            {
+                                IconButton(onClick = { reveal = !reveal }) {
+                                    Icon(
+                                        if (reveal) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                        contentDescription = if (reveal) "Hide" else "Show",
+                                        tint = SiloSecondaryText,
+                                    )
+                                }
+                            }
+                        } else null,
+                        visualTransformation = if (hidden) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = when (kind) {
+                                AdminFieldKind.Integer -> KeyboardType.Number
+                                AdminFieldKind.Decimal -> KeyboardType.Decimal
+                                AdminFieldKind.Secret -> KeyboardType.Password
+                                else -> KeyboardType.Text
+                            },
+                        ),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = SiloOnSurface,
+                            fontFamily = if (kind == AdminFieldKind.JsonText) FontFamily.Monospace else FontFamily.Default,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }

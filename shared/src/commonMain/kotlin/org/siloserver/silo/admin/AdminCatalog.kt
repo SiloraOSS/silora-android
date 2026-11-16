@@ -40,7 +40,10 @@ data class AdminQuickAction(
  * finds the operations that apply to one item of a list.
  */
 class AdminCatalog(val spec: AdminSpec) {
-    val resources: List<AdminResource> = spec.operations
+    /** The operations the console offers: those it can send and show (see [AdminOperation.isSupported]). */
+    val operations: List<AdminOperation> = spec.operations.filter { it.isSupported }
+
+    val resources: List<AdminResource> = operations
         .groupBy { it.resourceKey }
         .map { (key, ops) -> AdminResource(key, RESOURCE_TITLES[key] ?: humanizeKey(key), categoryFor(key), ops) }
         .sortedWith(compareBy({ it.category.ordinal }, { it.title.lowercase() }))
@@ -50,10 +53,10 @@ class AdminCatalog(val spec: AdminSpec) {
     fun resource(key: String): AdminResource? = resources.firstOrNull { it.key == key }
 
     fun operation(method: String, path: String): AdminOperation? =
-        spec.operations.firstOrNull { it.method == method && it.path == path }
+        operations.firstOrNull { it.method == method && it.path == path }
 
     private fun op(method: String, relative: String): AdminOperation? =
-        spec.operations.firstOrNull { it.method == method && it.relativePath == relative }
+        operations.firstOrNull { it.method == method && it.relativePath == relative }
 
     /** Shortcuts for the day-to-day jobs, where the server offers them. */
     val quickActions: List<AdminQuickAction> = listOfNotNull(
@@ -69,19 +72,26 @@ class AdminCatalog(val spec: AdminSpec) {
     )
 
     /**
-     * Operations on one item of the list [from] returned: same area, a path
-     * below the list's with exactly one more `{param}`, which the item fills
-     * (its field of that name, else its `id` / `key`). Path values are filled.
+     * Operations on one item of the list [from] returned: a path below the
+     * list's whose next segment is a `{param}`. The list's own path values
+     * carry over (by position, so `users/{id}` fills `users/{user_id}/...`),
+     * and the item fills every other one: the first from its field of that
+     * name, its `id` / `key`, `<name>_name` / `<name>_number`, or its one field
+     * ending in `_<name>`; later ones only from a field of that name (or
+     * `<name>_name` / `<name>_number`).
      */
     fun itemActions(from: AdminOperation, fromPathValues: Map<String, String>, item: JsonElement): List<AdminBoundOperation> {
         val obj = item as? JsonObject ?: return emptyList()
-        val listPath = from.relativePath
-        return spec.operations.mapNotNull { candidate ->
-            if (candidate === from || !candidate.relativePath.startsWith("$listPath/{")) return@mapNotNull null
-            val missing = candidate.pathParams.map { it.name }.filterNot { it in fromPathValues }
-            if (missing.size != 1) return@mapNotNull null
-            val value = itemValueFor(obj, missing.single()) ?: return@mapNotNull null
-            AdminBoundOperation(candidate, fromPathValues + (missing.single() to value))
+        val listTemplate = template(from.relativePath)
+        return operations.mapNotNull { candidate ->
+            if (candidate === from || !template(candidate.relativePath).startsWith("$listTemplate/{}")) return@mapNotNull null
+            val carried = carry(from, fromPathValues, candidate)
+            val missing = paramNames(candidate.relativePath).filterNot { it in carried }
+            if (missing.isEmpty()) return@mapNotNull null
+            val filled = missing.mapIndexed { index, name ->
+                name to (itemValueFor(obj, name, primary = index == 0) ?: return@mapNotNull null)
+            }
+            AdminBoundOperation(candidate, carried + filled)
         }.sortedWith(ACTION_ORDER)
     }
 
@@ -89,33 +99,79 @@ class AdminCatalog(val spec: AdminSpec) {
      * Operations on the record a detail read [from] returned, with every path
      * value already known: the other methods on the same path (edit, delete)
      * and the sub-paths below it (`users/{id}/profiles`, `tasks/{key}/run`).
+     * Paths are compared with their `{param}` names ignored, so `users/{id}`
+     * also offers `users/{user_id}/login-sessions`.
      */
     fun detailActions(from: AdminOperation, pathValues: Map<String, String>): List<AdminBoundOperation> {
         if (from.pathParams.isEmpty()) return emptyList()
-        return spec.operations.mapNotNull { candidate ->
+        val fromTemplate = template(from.relativePath)
+        return operations.mapNotNull { candidate ->
             if (candidate === from) return@mapNotNull null
-            val samePath = candidate.relativePath == from.relativePath
-            val below = candidate.relativePath.startsWith(from.relativePath + "/")
+            val candidateTemplate = template(candidate.relativePath)
+            val samePath = candidateTemplate == fromTemplate
+            val below = candidateTemplate.startsWith("$fromTemplate/")
             if (!samePath && !below) return@mapNotNull null
-            if (candidate.pathParams.any { it.name !in pathValues }) return@mapNotNull null
-            AdminBoundOperation(candidate, pathValues)
+            val values = carry(from, pathValues, candidate)
+            if (paramNames(candidate.relativePath).any { it !in values }) return@mapNotNull null
+            AdminBoundOperation(candidate, values)
         }.sortedWith(ACTION_ORDER)
     }
 
     companion object {
-        /** Which value of an item fills `{name}`. */
-        internal fun itemValueFor(item: JsonObject, name: String): String? {
+        private val PARAM = Regex("""\{([^}]+)\}""")
+
+        /** `users/{id}/profiles` → `users/{}/profiles`. */
+        internal fun template(path: String): String = path.replace(PARAM, "{}")
+
+        /** The `{param}` names of [path], in order. */
+        internal fun paramNames(path: String): List<String> = PARAM.findAll(path).map { it.groupValues[1] }.toList()
+
+        /**
+         * [values] for [from]'s path params, renamed to [candidate]'s params
+         * at the same positions (the candidate's path starts with [from]'s).
+         */
+        internal fun carry(from: AdminOperation, values: Map<String, String>, candidate: AdminOperation): Map<String, String> {
+            val candidateNames = paramNames(candidate.relativePath)
+            val out = LinkedHashMap<String, String>()
+            paramNames(from.relativePath).forEachIndexed { index, name ->
+                val value = values[name]?.takeIf { it.isNotBlank() } ?: return@forEachIndexed
+                candidateNames.getOrNull(index)?.let { out[it] = value }
+            }
+            return out
+        }
+
+        /**
+         * Which value of an item fills `{name}`. [primary] marks the param
+         * right below the list, the one that names the item itself: only it
+         * falls back to the item's `id` / `key` or a single `*_<name>` field.
+         */
+        internal fun itemValueFor(item: JsonObject, name: String, primary: Boolean = true): String? {
             fun field(key: String): String? {
                 val p = item[key] as? JsonPrimitive ?: return null
                 val text = p.contentOrNull ?: return null
                 return text.takeIf { p.isString || text.toDoubleOrNull() != null }?.takeIf { it.isNotBlank() }
             }
             field(name)?.let { return it }
-            if (name == "id" || name == "key" || name.endsWith("_id") || name.endsWith("Id")) {
+            if (primary && (name == "id" || name == "key" || name.endsWith("_id") || name.endsWith("Id"))) {
                 field("id")?.let { return it }
                 field("key")?.let { return it }
             }
+            field("${name}_name")?.let { return it }
+            field("${name}_number")?.let { return it }
+            if (primary && '_' in name) {
+                // `{item_id}` from a collection member's `media_item_id`.
+                item.keys.filter { it.endsWith("_$name") }.singleOrNull()?.let { key -> field(key)?.let { return it } }
+            }
             return null
+        }
+
+        /** A version tag the record carries itself (`etag`, `config_etag`), for edits with no read of their own. */
+        fun versionTagOf(record: JsonElement?): String? {
+            val obj = record as? JsonObject ?: return null
+            return obj.entries.firstOrNull { (key, value) ->
+                (key.equals("etag", ignoreCase = true) || key.endsWith("_etag", ignoreCase = true)) &&
+                    value is JsonPrimitive && value.isString && value.content.isNotBlank()
+            }?.let { (it.value as JsonPrimitive).content }
         }
 
         /** Reads first, then other actions, then deletes. */

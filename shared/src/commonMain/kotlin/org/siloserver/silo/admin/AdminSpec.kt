@@ -22,6 +22,8 @@ import kotlinx.serialization.json.jsonObject
  */
 class AdminSpec private constructor(
     val version: String,
+    /** The silo-server commit and date the bundled contract came from, when the script recorded it. */
+    val source: String?,
     val operations: List<AdminOperation>,
     private val schemas: Map<String, JsonObject>,
 ) {
@@ -51,11 +53,13 @@ class AdminSpec private constructor(
             val root = json.parseToJsonElement(text).jsonObject
             val schemas = (root["schemas"] as? JsonObject).orEmpty()
                 .mapNotNull { (k, v) -> (v as? JsonObject)?.let { k to it } }.toMap()
-            val version = ((root["info"] as? JsonObject)?.get("version") as? JsonPrimitive)?.contentOrNull.orEmpty()
+            val info = root["info"] as? JsonObject
+            val version = (info?.get("version") as? JsonPrimitive)?.contentOrNull.orEmpty()
+            val source = (info?.get("source") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
             val ops = ArrayList<AdminOperation>()
             lateinit var spec: AdminSpec
             val paths = (root["paths"] as? JsonObject).orEmpty()
-            spec = AdminSpec(version, ops, schemas)
+            spec = AdminSpec(version, source, ops, schemas)
             for ((path, item) in paths) {
                 val methods = item as? JsonObject ?: continue
                 for ((method, rawOp) in methods) {
@@ -100,6 +104,14 @@ class AdminOperation(
     val requestBody: AdminRequestBody?,
     /** Success status → response schema (null for empty bodies such as 204). */
     val responses: Map<Int, AdminSchema?>,
+    /** Server-declared `x-silo-guarded`: the call requires an `If-Match` version tag. */
+    val guarded: Boolean = false,
+    /** Server-declared `x-silo-raw-protocol` (a download or WebSocket), else null. */
+    val rawProtocol: String? = null,
+    /** Server-declared `x-silo-retry-safety` (`non_retryable`, `natural_idempotent`, ...). */
+    val retrySafety: String? = null,
+    /** Media types of success bodies that aren't JSON (a gzip archive, subtitle bytes). */
+    val binaryResponseTypes: List<String> = emptyList(),
 ) {
     /** Path below `/api/v2/`, without the `admin/` prefix: `users/{id}`. */
     val relativePath: String = path.removePrefix("/api/v2/").removePrefix("admin/")
@@ -111,15 +123,30 @@ class AdminOperation(
     val queryParams: List<AdminParam> get() = parameters.filter { it.location == "query" }
 
     /** Requires an `If-Match` version tag (optimistic concurrency). */
-    val needsIfMatch: Boolean get() = parameters.any { it.location == "header" && it.name.equals("If-Match", true) && it.required }
-    val acceptsIfMatch: Boolean get() = parameters.any { it.location == "header" && it.name.equals("If-Match", true) }
+    val needsIfMatch: Boolean
+        get() = guarded || parameters.any { it.location == "header" && it.name.equals("If-Match", true) && it.required }
+    val acceptsIfMatch: Boolean get() = needsIfMatch || parameters.any { it.location == "header" && it.name.equals("If-Match", true) }
+
+    /**
+     * The console can send this and show its answer: JSON in and out. Uploads
+     * (multipart, raw bytes), downloads and the log WebSocket are left to the
+     * web admin.
+     */
+    val isSupported: Boolean
+        get() = rawProtocol == null && binaryResponseTypes.isEmpty() && (requestBody == null || requestBody.isJson)
 
     val isRead: Boolean get() = method == "GET"
     val isDelete: Boolean get() = method == "DELETE"
 
-    /** Changes or removes something: delete, plus actions the name marks as such. */
+    /** Changes the server; the console asks before sending it. */
+    val needsConfirmation: Boolean get() = !isRead
+
+    /**
+     * Removes, overwrites or interrupts something: delete, plus changes the
+     * name marks as such. Shown in red; every change is confirmed either way.
+     */
     val isDestructive: Boolean
-        get() = isDelete || DESTRUCTIVE_WORDS.any { operationId.contains(it, ignoreCase = true) }
+        get() = !isRead && (isDelete || DESTRUCTIVE_WORDS.any { operationId.contains(it, ignoreCase = true) })
 
     val successSchema: AdminSchema? get() = responses.entries.sortedBy { it.key }.firstOrNull { it.value != null }?.value
 
@@ -132,7 +159,11 @@ class AdminOperation(
     override fun toString(): String = "$method $path"
 
     companion object {
-        private val DESTRUCTIVE_WORDS = listOf("delete", "remove", "reset", "restart", "purge", "revoke", "wipe", "clear", "disable")
+        private val DESTRUCTIVE_WORDS = listOf(
+            "delete", "remove", "reset", "restart", "purge", "revoke", "wipe", "clear", "disable", "restore",
+            "terminate", "stop", "rotate", "drain", "cancel", "decline", "cleanup", "regenerate", "replace",
+            "merge", "uninstall", "import",
+        )
 
         internal fun parse(spec: AdminSpec, method: String, path: String, op: JsonObject): AdminOperation {
             fun str(o: JsonObject, key: String) = (o[key] as? JsonPrimitive)?.contentOrNull
@@ -153,10 +184,12 @@ class AdminOperation(
                     schema = spec.schema(b["schema"]),
                 )
             }
-            val responses = (op["responses"] as? JsonObject).orEmpty().mapNotNull { (code, r) ->
+            val responseObjects = (op["responses"] as? JsonObject).orEmpty().mapNotNull { (code, r) ->
                 val status = code.toIntOrNull() ?: return@mapNotNull null
-                status to spec.schema((r as? JsonObject)?.get("schema"))
-            }.toMap()
+                status to (r as? JsonObject)
+            }
+            val responses = responseObjects.associate { (status, r) -> status to spec.schema(r?.get("schema")) }
+            val binaryTypes = responseObjects.mapNotNull { (_, r) -> r?.let { str(it, "mediaType") } }
             return AdminOperation(
                 method = method,
                 path = path,
@@ -167,6 +200,10 @@ class AdminOperation(
                 parameters = params,
                 requestBody = body,
                 responses = responses,
+                guarded = (op["x-silo-guarded"] as? JsonPrimitive)?.booleanOrNull == true,
+                rawProtocol = str(op, "x-silo-raw-protocol")?.takeIf { it.isNotBlank() },
+                retrySafety = str(op, "x-silo-retry-safety"),
+                binaryResponseTypes = binaryTypes,
             )
         }
     }

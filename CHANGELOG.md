@@ -4,6 +4,91 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-15 19:21 PST — edrock v42 Admin and trailer updates
+
+Imported the missing Admin console and trailer updates from
+`edrock/feat/hevc-level-override-v42`, pinned to
+`c934aaf7ac0aef17881070c0a54ab4cdc56add36`, into Silora `main` from
+`bbac432277cedf17df935ed4ee9efb8759d8c8d7`. Applied the cumulative Admin patch after
+edrock `8b75007d7` and the four missing trailer patches, with the adaptations
+below. Existing upstream and unrelated fork behavior remain as before.
+Recovery: `refs/codex/edrock-admin-trailers/20261116T031052Z`.
+
+**Admin source commits incorporated:**
+
+- `654860bd0` feat(admin): refresh the admin spec from silo-server 7695787c
+- `d66aa6795` feat(admin): refresh the admin spec from silo-server df9f5501 (descriptions only)
+- `5d0f638ee` feat(admin): refresh the admin spec from silo-server 30a6abd1
+- `160dd7441` feat(admin): refresh the admin spec from silo-server 4a9e527a
+- `39f88ffbd` feat(admin): refresh the admin spec from silo-server aa827602 (descriptions only)
+- `4677da5f8` feat(admin): refresh the admin spec from silo-server 0b579aa6
+- `4bd1b22fa` fix(admin): offer only operations the console can run, and bind item actions by position
+- `b37f880fd` fix(admin): confirm every admin change before sending it
+- `22b166a3f` fix(admin): let forms clear values, mask credentials by name and edit maps
+- `2fb56fcb2` fix(admin): recover from stale version tags and keep list state in the console
+- `4bf956e9d` fix(admin): make the hand-built admin screens safe to revisit
+- `c45d02e0e` fix(admin): retry the admin menu check and stop repeating it on TV
+- `337e79e55` test(admin): check the bundled spec's filtering, item binding and guards
+- `ef9078888` feat(admin): refresh the admin spec from silo-server 4448e401
+- `343389a2a` feat(admin): refresh the admin spec from silo-server 2cc78e4c and show when a running task started
+- `857f1d00a` feat(admin): refresh the admin spec from silo-server e12193d6
+- `2c5873c66` feat(admin): show why each stream is transcoded on the Dashboard
+- `38cbed941` chore(admin): refresh the bundled admin API spec from silo-server 699f84ec
+
+**Trailer source commits incorporated:**
+
+- `12a80264b` fix(detail): label the phone Trailer button from the translation catalog
+- `863f52f2f` fix(trailers): keep the trailer playing when a remote or display setting changes
+- `f653570cd` fix(trailers): hand stuck or offline trailers to YouTube and track playback state
+- `b1aedaaab` fix(tv): localize the Trailer button on the detail page
+
+**Integration decisions:**
+
+- Admin (`admin-console`): imported supported-operation filtering, path-position
+  item binding, confirmations for generic mutations, form clearing/maps and
+  credential masking, command-identity/stale-version recovery, list-state and
+  pagination fixes, notice handling, stable task rows and retryable menu checks.
+  Included server-provided task start times and dashboard transcode reasons.
+- Retained Silora's default-off, local per-server/account/profile Admin menu
+  setting and primary-profile/server permission gates. Adapted edrock's
+  profile-ID-only access cache to a captured `AuthScopeSnapshot`, pinned the
+  account read, discarded replies after identity switches and preserved retry
+  cancellation. Nine focused access tests cover caching, server/account/profile
+  and login changes, unavailable profiles, stale replies, retry and cancellation.
+  Existing Silora pagination tests and the non-JSON form rejection remain.
+- The 472-operation bundled asset and updated extractor match pinned v42.
+  Regenerated the asset from official silo-server `699f84ec`'s OpenAPI blob
+  `aaacde49b1dc322e17ff1922959e18fb255c6b12` and compared the full parsed JSON.
+  Its source stamp is `3e256e30 2026-11-15`, the contract file's last-change
+  stamp recorded by the extractor, rather than the server checkout's HEAD.
+  Generic forms exclude unsupported upload/download/raw-protocol operations.
+- Trailers (`trailers`): imported the activity's stalled/offline start fallback,
+  foreground-only handoff, loading indicator, playback-state screen-on handling,
+  guarded remote commands and tokenized JavaScript bridge. Both manifests keep
+  playback across the additional remote/display configuration changes. Phone
+  and TV actions use the translated catalog label. Existing local-trailer
+  priority, phone More placement, TV controls and upstream Show Series Info stay.
+- Updated the fork manifest and Admin documentation. These are Android fork
+  console/WebView/resource changes; Apple, Roku and Web have no code path through
+  them. No cross-client PR or issue was opened. Subtitle and HEVC code is unchanged.
+
+**Validation:**
+
+- Release Admin suites passed: 15 shared engine tests and 22 android-shared
+  access/asset/contract/pagination tests; 37 total, zero failures/errors/skips.
+  The final focused rerun passed after making the mock network dispatcher
+  explicit. No new UI tests were added.
+- Release Kotlin compilation and full release lint passed for phone and TV,
+  with existing lint baselines unchanged. The combined command was
+  `./gradlew :shared:testReleaseUnitTest --tests 'org.siloserver.silo.admin.*' :android-shared:testReleaseUnitTest --tests 'org.siloserver.silo.common.admin.*' :androidApp:lintRelease :androidTvApp:lintRelease :androidApp:compileReleaseKotlinAndroid :androidTvApp:compileReleaseKotlinAndroid --parallel --console=plain`
+  under JDK 21; it completed in 2m 8s. The final Admin rerun completed in 8s.
+- Supply-chain and derived Silora resource checks, full asset regeneration,
+  pinned-edrock source comparisons, scope checks and staged diff checks passed.
+  No dependency verification, release tooling or unrelated source was changed.
+- No new APK build, device trailer playback or authenticated real-server Admin
+  operation was tested. This update was committed locally; no push, release or
+  external message was performed for it.
+
 ## 2026-11-15 18:33 PST — upstream 40d34e6d9
 
 **Merge inputs:** `main`; fork before `34b5be69a25030931ec8f22d6df43eeade701de1`;

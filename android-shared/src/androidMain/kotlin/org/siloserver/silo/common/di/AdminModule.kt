@@ -17,7 +17,7 @@ import org.siloserver.silo.common.admin.AdminSpecLoader
 /** Fork: the admin console, shared by the phone and TV apps. */
 val adminModule = module {
     single { AdminSpecLoader(androidContext()) }
-    single { AdminAccess(get(), get()) }
+    single { AdminAccess(get(), get(), get()) }
     single {
         AdminMenuPreferences(
             androidContext().getSharedPreferences(AdminMenuPreferences.PREFS_NAME, Context.MODE_PRIVATE),

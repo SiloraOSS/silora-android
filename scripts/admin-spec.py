@@ -6,7 +6,12 @@ builds its generic screens from this file at runtime, so new server admin
 operations appear without app changes.
 
 Usage:
-    python3 -I scripts/admin-spec.py <silo-server>/contracts/api/v2/openapi.json
+    python3 -I scripts/admin-spec.py <silo-server>/contracts/api/v2/openapi.json [--source LABEL]
+
+The source label (the silo-server commit and date the contract came from) is
+read from git when the file is in a silo-server checkout; --source sets it
+otherwise. The console shows it, so a mismatch with the connected server can
+be diagnosed.
 
 Writes android-shared/src/androidMain/assets/admin/openapi-admin.json with
 every admin operation (/api/v2/admin paths and other operations marked
@@ -15,6 +20,7 @@ profile headers the client manages, and other fields the console ignores.
 """
 import json
 import pathlib
+import subprocess
 import sys
 
 OUT = pathlib.Path(__file__).resolve().parent.parent / \
@@ -27,6 +33,9 @@ SCHEMA_KEYS = {
     "default", "title", "$ref", "minItems", "maxItems", "uniqueItems",
 }
 MAX_DESCRIPTION = 280
+# Operation extensions the console reads: If-Match guards, raw (non-JSON)
+# protocols it can't speak, and how a mutation tolerates a retry.
+KEEP_EXTENSIONS = ("x-silo-guarded", "x-silo-raw-protocol", "x-silo-retry-safety")
 
 
 def trim_text(text):
@@ -76,6 +85,9 @@ def trim_operation(op):
             out[key] = trim_text(op[key])
     if op.get("tags"):
         out["tags"] = op["tags"]
+    for ext in KEEP_EXTENSIONS:
+        if op.get(ext) not in (None, False, ""):
+            out[ext] = op[ext]
     params = []
     for param in op.get("parameters", []):
         if param.get("in") == "header" and param.get("name") in DROP_HEADERS:
@@ -103,16 +115,47 @@ def trim_operation(op):
             continue
         content = response.get("content", {})
         schema = content.get("application/json", {}).get("schema")
-        responses[code] = {"schema": trim_schema(schema)} if schema else {}
+        entry = {"schema": trim_schema(schema)} if schema else {}
+        if content and "application/json" not in content:
+            # A download (gzip, octet-stream, subtitles): the console can't show it.
+            entry["mediaType"] = next(iter(content))
+        responses[code] = entry
     out["responses"] = responses
     return out
 
 
+def git_source(path):
+    """`<short commit> <date>` of the last commit that changed [path], or None."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(path.parent), "log", "-1", "--format=%h %cs", "--", path.name],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(path.parent), "status", "--porcelain", "--", path.name],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return (out + (" (modified)" if dirty else "")) or None
+
+
 def main(argv):
-    if len(argv) != 2:
+    args = argv[1:]
+    source = None
+    if "--source" in args:
+        i = args.index("--source")
+        if i + 1 >= len(args):
+            print(__doc__, file=sys.stderr)
+            return 2
+        source = args[i + 1]
+        del args[i:i + 2]
+    if len(args) != 1:
         print(__doc__, file=sys.stderr)
         return 2
-    spec = json.loads(pathlib.Path(argv[1]).read_text())
+    path = pathlib.Path(args[0]).resolve()
+    spec = json.loads(path.read_text())
+    source = source or git_source(path)
     schemas = spec.get("components", {}).get("schemas", {})
     paths = {}
     for path, item in spec.get("paths", {}).items():
@@ -127,7 +170,7 @@ def main(argv):
     needed = set()
     collect_refs(paths, schemas, needed)
     out = {
-        "info": {"version": spec.get("info", {}).get("version", "")},
+        "info": {"version": spec.get("info", {}).get("version", ""), **({"source": source} if source else {})},
         "paths": paths,
         "schemas": {name: trim_schema(schemas[name]) for name in sorted(needed)},
     }

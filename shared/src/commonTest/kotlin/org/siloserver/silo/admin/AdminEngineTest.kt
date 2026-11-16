@@ -81,6 +81,80 @@ class AdminEngineTest {
     }
 
     @Test
+    fun emptiedFieldsClearInsteadOfBeingLeftOut() {
+        val form = AdminForm(op("PATCH", "users/{id}"), mapOf("id" to "5"))
+        val prefill = Json.parseToJsonElement("""{"role":"user","max_streams":2,"tags":["a"]}""")
+        val values = form.initialValues(prefill).toMutableMap()
+        values["max_streams"] = ""
+        values["tags"] = ""
+        val body = form.build(values).getOrThrow().body!!.jsonObject
+        assertEquals(kotlinx.serialization.json.JsonNull, body["max_streams"], "a nullable field the user emptied sends null")
+        assertEquals(kotlinx.serialization.json.JsonArray(emptyList()), body["tags"], "an emptied list sends []")
+        assertTrue("policy" !in body, "an untouched field is still left out")
+    }
+
+    private val formSpec = AdminSpec.parse(
+        """
+        {"info":{"version":"2"},
+         "paths":{
+          "/api/v2/admin/settings":{"put":{"operationId":"updateAdminSettings","requestBody":{"required":true,"mediaType":"application/json",
+             "schema":{"type":"object","required":["values"],"properties":{"values":{"type":"object","additionalProperties":{"type":"string"}}}}},"responses":{"200":{}}}},
+          "/api/v2/admin/settings/{key}":{"put":{"operationId":"updateAdminSetting","parameters":[{"name":"key","in":"path","required":true}],
+             "requestBody":{"required":true,"mediaType":"application/json","schema":{"type":"object","required":["value"],"properties":{"value":{"type":"string"}}}},"responses":{"200":{}}}},
+          "/api/v2/admin/accounts":{"post":{"operationId":"createAdminAccount","requestBody":{"required":true,"mediaType":"application/json",
+             "schema":{"type":"object","properties":{"username":{"type":"string"},"password":{"type":"string"},"admin_token":{"type":"string"},"token_ttl":{"type":"string"}}}},"responses":{"201":{}}}},
+          "/api/v2/admin/sessions/{session_id}/pause":{"post":{"operationId":"pauseAdminPlaybackSession","parameters":[{"name":"session_id","in":"path","required":true}],
+             "requestBody":{"required":true,"mediaType":"application/json","schema":{"type":"object","required":["command_id","sequence"],
+               "properties":{"command_id":{"type":"string"},"sequence":{"type":"integer"},"reason":{"type":"string"}}}},"responses":{"200":{}}}}
+         },
+         "schemas":{}}
+        """.trimIndent(),
+    )
+    private fun fop(method: String, path: String) = AdminCatalog(formSpec).operation(method, "/api/v2/admin/$path")!!
+
+    @Test
+    fun aRequiredTextCanBeSetEmpty() {
+        val form = AdminForm(fop("PUT", "settings/{key}"), mapOf("key" to "ui.banner"))
+        assertEquals(JsonPrimitive(""), form.build(mapOf("value" to "")).getOrThrow().body!!.jsonObject["value"])
+    }
+
+    @Test
+    fun mapsAreEditedAsKeyValueLines() {
+        val form = AdminForm(fop("PUT", "settings"))
+        val field = form.fields.single()
+        assertEquals(AdminFieldKind.KeyValues, field.kind)
+        val values = form.initialValues(Json.parseToJsonElement("""{"values":{"a.b":"1","c":"x=y"}}"""))
+        assertEquals("a.b=1\nc=x=y", values["values"])
+        val body = form.build(values).getOrThrow().body!!.jsonObject
+        assertEquals(Json.parseToJsonElement("""{"a.b":"1","c":"x=y"}"""), body["values"])
+        assertTrue(form.build(mapOf("values" to "no equals sign")).isFailure)
+    }
+
+    @Test
+    fun credentialFieldsAreMaskedByName() {
+        val kinds = AdminForm(fop("POST", "accounts")).fields.associate { it.key to it.kind }
+        assertEquals(AdminFieldKind.Secret, kinds["password"])
+        assertEquals(AdminFieldKind.Secret, kinds["admin_token"])
+        assertEquals(AdminFieldKind.Text, kinds["username"])
+        assertEquals(AdminFieldKind.Text, kinds["token_ttl"])
+    }
+
+    @Test
+    fun aHeldCommandIdentityIsReused() {
+        val form = AdminForm(fop("POST", "sessions/{session_id}/pause"), mapOf("session_id" to "s1"))
+        assertTrue(form.sendsCommandIdentity)
+        assertEquals(listOf("reason"), form.fields.map { it.key }, "the identity isn't a form field")
+        val identity = AdminForm.newCommandIdentity()
+        val first = form.build(identity).getOrThrow().body!!.jsonObject
+        val again = form.build(identity).getOrThrow().body!!.jsonObject
+        assertEquals(first, again, "a resend carries the same command_id and sequence")
+        val serverLatest = 4_000_000_000_000L
+        AdminForm.raiseCommandSequenceFloor(serverLatest)
+        val next = AdminForm.newCommandIdentity()[AdminForm.COMMAND_SEQUENCE_KEY]!!.toLong()
+        assertTrue(next > serverLatest, "after a stale refusal the next sequence goes above the server's")
+    }
+
+    @Test
     fun formRejectsMissingRequiredAndBadNumbers() {
         val form = AdminForm(op("PATCH", "users/{id}"), mapOf("id" to "5"))
         assertTrue(form.build(emptyMap()).isFailure)
@@ -104,9 +178,75 @@ class AdminEngineTest {
         assertEquals("2026-11-08 14:03 UTC", AdminDisplay.formatValue("created_at", "2026-11-08T14:03:22Z"))
     }
 
+    private val bindingSpec = AdminSpec.parse(
+        """
+        {"info":{"version":"2","source":"abc123 2026-11-11"},
+         "paths":{
+          "/api/v2/admin/devices":{"get":{"operationId":"listAdminDevices","responses":{"200":{"schema":{"${'$'}ref":"#/schemas/Page"}}}}},
+          "/api/v2/admin/devices/{user_id}/{device_id}":{"get":{"operationId":"getAdminDevice","parameters":[
+             {"name":"user_id","in":"path","required":true},{"name":"device_id","in":"path","required":true}],"responses":{"200":{}}}},
+          "/api/v2/admin/subtitle-providers":{"get":{"operationId":"listAdminSubtitleProviders","responses":{"200":{"schema":{"${'$'}ref":"#/schemas/Page"}}}}},
+          "/api/v2/admin/subtitle-providers/{provider}":{"put":{"operationId":"updateAdminSubtitleProvider","parameters":[
+             {"name":"provider","in":"path","required":true}],"responses":{"200":{}}}},
+          "/api/v2/admin/collections/{id}/items":{"get":{"operationId":"listAdminCollectionItems","parameters":[
+             {"name":"id","in":"path","required":true}],"responses":{"200":{"schema":{"${'$'}ref":"#/schemas/Page"}}}}},
+          "/api/v2/admin/collections/{id}/items/{item_id}":{"delete":{"operationId":"removeAdminCollectionItem","parameters":[
+             {"name":"id","in":"path","required":true},{"name":"item_id","in":"path","required":true}],"responses":{"204":{}}}},
+          "/api/v2/admin/users/{id}":{"get":{"operationId":"getAdminUser","parameters":[{"name":"id","in":"path","required":true}],"responses":{"200":{}}}},
+          "/api/v2/admin/users/{user_id}/login-sessions":{"get":{"operationId":"listAdminUserLoginSessions","parameters":[
+             {"name":"user_id","in":"path","required":true}],"responses":{"200":{"schema":{"${'$'}ref":"#/schemas/Page"}}}}},
+          "/api/v2/admin/jobs/{id}/artifact":{"get":{"operationId":"downloadAdminJobArtifact","x-silo-raw-protocol":"job-artifact",
+             "parameters":[{"name":"id","in":"path","required":true}],"responses":{"200":{"mediaType":"application/gzip"}}}},
+          "/api/v2/admin/collections/{id}/poster":{"put":{"operationId":"uploadAdminCollectionPoster","parameters":[{"name":"id","in":"path","required":true}],
+             "requestBody":{"required":true,"mediaType":"multipart/form-data","schema":{"type":"object"}},"responses":{"200":{}}}},
+          "/api/v2/admin/nodes/{id}":{"put":{"operationId":"updateAdminNode","x-silo-guarded":true,"parameters":[{"name":"id","in":"path","required":true}],"responses":{"200":{}}}}
+         },
+         "schemas":{"Page":{"type":"object","properties":{"items":{"type":"array","items":{"type":"object"}}}}}}
+        """.trimIndent(),
+    )
+    private val bindingCatalog = AdminCatalog(bindingSpec)
+    private fun bop(method: String, path: String) = bindingCatalog.operation(method, "/api/v2/admin/$path")!!
+
+    @Test
+    fun itemActionsBindEveryParamTheItemCanFill() {
+        fun actions(list: String, pathValues: Map<String, String>, item: String) =
+            bindingCatalog.itemActions(bop("GET", list), pathValues, Json.parseToJsonElement(item))
+                .map { it.operation.operationId to it.pathValues }
+        assertEquals(
+            listOf("getAdminDevice" to mapOf("user_id" to "u1", "device_id" to "d1")),
+            actions("devices", emptyMap(), """{"user_id":"u1","device_id":"d1","name":"TV"}"""),
+        )
+        assertEquals(
+            listOf("updateAdminSubtitleProvider" to mapOf("provider" to "opensubtitles")),
+            actions("subtitle-providers", emptyMap(), """{"provider_name":"opensubtitles"}"""),
+        )
+        assertEquals(
+            listOf("removeAdminCollectionItem" to mapOf("id" to "c1", "item_id" to "m9")),
+            actions("collections/{id}/items", mapOf("id" to "c1"), """{"collection_id":"c1","media_item_id":"m9"}"""),
+        )
+    }
+
+    @Test
+    fun detailActionsIgnoreParamNames() {
+        val actions = bindingCatalog.detailActions(bop("GET", "users/{id}"), mapOf("id" to "7"))
+        assertEquals(listOf("listAdminUserLoginSessions" to mapOf("user_id" to "7")), actions.map { it.operation.operationId to it.pathValues })
+    }
+
+    @Test
+    fun downloadsUploadsAndGuardsComeFromTheSpec() {
+        assertNull(bindingCatalog.operation("GET", "/api/v2/admin/jobs/{id}/artifact"), "a download isn't offered")
+        assertNull(bindingCatalog.operation("PUT", "/api/v2/admin/collections/{id}/poster"), "an upload isn't offered")
+        assertTrue(bop("PUT", "nodes/{id}").needsIfMatch, "x-silo-guarded requires If-Match without a header param")
+        assertEquals("abc123 2026-11-11", bindingSpec.source)
+        assertEquals("c9", AdminCatalog.versionTagOf(Json.parseToJsonElement("""{"id":"n1","config_etag":"c9"}""")))
+    }
+
     @Test
     fun deletesAndUpdatesAreFlagged() {
         assertTrue(op("DELETE", "users/{id}").isDestructive)
+        assertTrue(op("PATCH", "users/{id}").needsConfirmation, "every change is confirmed")
+        assertTrue(!op("GET", "users/{id}").needsConfirmation && !op("GET", "users/{id}").isDestructive)
+        assertTrue(bop("PUT", "nodes/{id}").needsConfirmation)
         assertTrue(op("PATCH", "users/{id}").needsIfMatch)
         assertEquals("Update user", op("PATCH", "users/{id}").title)
     }
