@@ -46,7 +46,7 @@ File pointers are repository-relative.
 | Subtitle sync offset (±10s) / audio sync (±5s) | ✅ | ✅ | Per-profile |
 | Server subtitle sync to audio (stored and sidecar subtitles) | ✅ | ✅ | Server-gated; per-track status, progress card, reset; retimed tracks reload in place; phone offline copies refresh. `SubtitleSyncController` |
 | Subtitle provider search + download | ✅ | ✅ | |
-| AI subtitle transcription / translation (quota-tracked) | ✅ | ✅ | Silora shows streamed AI cues during generation on phone and TV, with shared subtitle styling and selection/cancellation handling; requires server live delivery. `LiveSubtitleOverlay`, `AiTranslateSheet`, `TvAiTranslateDialog` |
+| AI subtitle transcription / translation (quota-tracked) | ✅ | ✅ | TV: `TvAiTranslateDialog` |
 | AI description translation (on-view, server-gated) | ✅ | ✅ | `DescriptionTranslationController`; gated by `/api/v1/metadata/ai/status`; metadata-language setting in Settings |
 | Intro auto-skip (+ manual skip banner) | ✅ | ✅ | |
 | Shuffle (library, series, season, collection) | ✅ | ✅ | Server-picked random movies and episodes, gated by `/api/v2/shuffles/capabilities`. Picks play from the start; the up-next screen offers Pick Another and Stop shuffling. TV has no mixed-library screen, so mixed libraries shuffle on phone only. [docs](docs/shuffle-api-v2.md) |

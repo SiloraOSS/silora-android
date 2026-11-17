@@ -1,6 +1,5 @@
 package org.siloserver.silo.tv.ui.screens.player
 
-import org.siloserver.silo.common.player.aiTranscribePlan
 import android.content.res.Resources
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -66,7 +65,7 @@ fun TvAiTranslateDialog(
     aiState: AiTranslateUiState,
     /** Text-based session subtitle tracks (PGS/DVD filtered out by the caller). */
     subtitleSources: List<PlayerSubtitleInfo>,
-    /** The playing file's server audio tracks; `index` is the server's audio ordinal. */
+    /** ExoPlayer audio track entries (ordinal index = server audio track index). */
     audioSources: List<PlayerTrackEntry>,
     defaultTargetLanguage: String,
     onSubmit: (kind: String, sourceIndex: Int, sourceLanguage: String?, targetLanguage: String) -> Unit,
@@ -381,10 +380,17 @@ fun TvAiTranslateDialog(
                                         val src = audioSources[
                                             audioSourcePos.coerceIn(0, audioSources.lastIndex),
                                         ]
-                                        // Fork: untagged audio transcribes with the
-                                        // target as a hint instead of translating.
-                                        val plan = aiTranscribePlan(src.language, targetLanguage, canTranslateTranscript)
-                                        onSubmit(plan.kind, src.index, plan.sourceLanguage.orEmpty(), plan.targetLanguage)
+                                        val sameLanguage = tvIsSameLanguage(src.language, targetLanguage)
+                                        if (!canTranslateTranscript) {
+                                            onSubmit("transcribe", src.index, src.language, "")
+                                        } else {
+                                            onSubmit(
+                                                if (sameLanguage) "transcribe" else "transcribe_translate",
+                                                src.index,
+                                                src.language,
+                                                targetLanguage,
+                                            )
+                                        }
                                     }
                                 },
                             )

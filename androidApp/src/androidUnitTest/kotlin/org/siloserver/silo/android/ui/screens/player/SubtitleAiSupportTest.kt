@@ -44,6 +44,13 @@ class SubtitleAiSupportTest {
     }
 
     @Test
+    fun transcribeKindMatchesWebSemantics() {
+        assertEquals("transcribe", transcribeKindFor("en", "en"))
+        assertEquals("transcribe_translate", transcribeKindFor("ja", "en"))
+        assertEquals("transcribe_translate", transcribeKindFor(null, "en"))
+    }
+
+    @Test
     fun quotaLineShowsRemaining() {
         val q = SubtitleAiQuota(limited = true, limit = 10, used = 3, remaining = 7, period = "week")
         assertEquals("7 of 10 transcriptions left for the last 7 days.", quotaLineText(q, resources))

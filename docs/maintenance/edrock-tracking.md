@@ -26,7 +26,10 @@ for a newer release or repeat device validation.
 
 ### Adopted features
 
-These rows describe coverage at the pinned v42 snapshot, including adaptations.
+These historical rows describe coverage at the pinned v42 snapshot, including
+adaptations.
+The two subtitle entries were retired on November 17, 2026; see the retirement
+record below and the current manifest before considering another import.
 They do not claim that whole feature files match edrock or cover later releases.
 Detailed source-commit lists and validation are in [CHANGELOG.md](../../CHANGELOG.md).
 
@@ -117,6 +120,24 @@ identified by `hevc-levels` and the source pin above.
 Other clients: Apple, Roku and Web are N/A; this corrects Android MediaCodec
 diagnostics for Silora's local HEVC switch. No APK packaging, installation,
 device/server validation, push, PR or release is part of this import.
+
+## Retired: AI subtitle fork changes, November 17, 2026
+
+Matt requested retiring `edrock-ai-subs-fixes` and `tv-live-ai-subtitles` to
+align the AI subtitle paths with incorporated official upstream
+`0867eacb14b5ee7a8c46cc2b22e52d1799e599a7` and remove a troubleshooting variable.
+Subtitle-related buffering reports had no confirmed cause. This retires the
+original patches and all subsequent subtitle adaptations recorded above,
+including phone live cues, job recovery/planning and TV inventory fallback.
+The historical v42 coverage remains recorded; it is no longer active scope.
+
+Pre-retirement Silora: `a4742bb151958836a8f8e9b741a59c000792b461`; local
+recovery: `refs/codex/retired-ai-subtitles/2026-11-17`. The
+[retirement and restoration record](2026-11-17-ai-subtitles-retirement.md)
+preserves behavior, source references, validation and restoration guidance.
+Do not reimport either entry without an explicit reactivation request.
+`admin-console`, `trailers`, `home-explore-removal` and `hevc-levels` keep their
+existing status and coverage.
 
 ## Recording the next review or import
 

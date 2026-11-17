@@ -4,8 +4,6 @@ import org.siloserver.silo.network.PlaybackRealtimeClient
 import org.siloserver.silo.network.PlaybackRealtimeEvent
 import org.siloserver.silo.playback.PlaybackAction
 import org.siloserver.silo.playback.decodeMarkersUpdate
-import org.siloserver.silo.playback.decodePlaybackLiveSubtitleEvent
-import org.siloserver.silo.playback.isPlaybackLiveSubtitleEvent
 import org.siloserver.silo.playback.decodePlaybackSubtitleReady
 import org.siloserver.silo.playback.decodePlaybackSubtitleSyncUpdated
 import org.siloserver.silo.playback.decodePlaybackSubtitleTimingChanged
@@ -122,16 +120,7 @@ class TvPlaybackRealtimeController(
                 viewModel.applySubtitleSyncUpdated(decodePlaybackSubtitleSyncUpdated(event))
             "markers_updated" -> viewModel.applyMarkersUpdate(decodeMarkersUpdate(event))
             // chapter_thumbnail_ready: no scrubber-thumbnail UI yet → nothing to update.
-            else -> if (isPlaybackLiveSubtitleEvent(event.name)) {
-                // Fork: live AI subtitles, streamed while a translation runs.
-                decodePlaybackLiveSubtitleEvent(event)?.let(viewModel::applyLiveSubtitleEvent)
-                // The completed event carries the same inventory row as
-                // subtitle_ready, so a missed subtitle_ready no longer leaves
-                // the finished track unknown.
-                if (event.name == "subtitle_translation_completed" && event.payload["track"] != null) {
-                    viewModel.applyAiCompletedSubtitleTrack(decodePlaybackSubtitleReady(event))
-                }
-            }
+            else -> { /* ignore */ }
         }
     }
 }

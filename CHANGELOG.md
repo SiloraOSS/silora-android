@@ -4,6 +4,43 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-17 — retire fork AI subtitle changes in favor of upstream
+
+Retired `edrock-ai-subs-fixes` and `tv-live-ai-subtitles` at Matt's request to
+remove fork-specific AI subtitle behavior as a troubleshooting variable.
+Reported subtitle-related buffering remains unconfirmed. Restored AI APIs,
+transcription planning, realtime handling and player subtitle paths to the
+official upstream revision already incorporated into Silora:
+`0867eacb14b5ee7a8c46cc2b22e52d1799e599a7`.
+
+Removed streamed live cue rendering/decoding, job cooldown/adoption,
+server-ordinal transcription override and TV completed-track/replan fallback.
+Upstream AI generation, polling and finished-subtitle behavior remain.
+The independent Extra small subtitle size and other active fork differences
+remain unchanged. No new upstream commits were merged.
+
+The pre-retirement implementation is preserved at
+`a4742bb151958836a8f8e9b741a59c000792b461` and local recovery ref
+`refs/codex/retired-ai-subtitles/2026-11-17`. Moved both IDs to the retired
+manifest section and updated the checklist and edrock maintenance scope.
+[History and restoration guidance](docs/maintenance/2026-11-17-ai-subtitles-retirement.md)
+retain the original/v42 source references and previous behavior.
+
+**Validation:** 1,278 affected subtitle/player tests passed with zero
+failures/errors/skips: shared release 240, android-shared release 231, phone
+debug 297 and TV debug 510. Phone/TV release Kotlin compilation and full release
+lint passed in 2m 50s under JDK 21; lint baselines were unchanged. Eleven
+restored feature files and both complete player-model subtitle suites match
+the pinned upstream source exactly. Remaining fork deltas in all 22 changed
+runtime/test/resource files are unchanged subsets of their pre-retirement
+deltas. Retired helper/event/overlay/string references are absent.
+Supply-chain, derived Silora strings and diff checks passed. The linked record
+contains the exact Gradle command and restoration pointers. No APK packaging,
+installation or device/server playback test occurred. This entry accompanies
+the local retirement commit. No push, PR, release, version bump or notification
+was performed. Apple, Roku and Web are
+N/A: this removes Android fork additions and restores official Android paths.
+
 ## 2026-11-16 23:50 PST — upstream 0867eacb1
 
 **Merge inputs:** `main`; fork before `45d115e18a71fcb240a48f5967b7739a31d00690`;

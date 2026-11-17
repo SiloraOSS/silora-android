@@ -61,6 +61,11 @@ examples or a historical review as permanent product policy.
   server/primary-profile checks. Retain complete server/account/profile and
   credential ownership, stale-response guards, local settings and pagination.
   A profile-ID-only cache is not equivalent in a multi-account client.
+- **AI subtitles (retired):** Matt retired `edrock-ai-subs-fixes` and
+  `tv-live-ai-subtitles` on November 17, 2026 in favor of official upstream.
+  Keep their historical coverage in the tracking record, but do not treat them
+  as adopted maintenance scope or reimport their code without an explicit
+  reactivation request. The retirement record preserves restoration pointers.
 - **Voice:** follow the current supersession status of `tv-voice` and
   `tv-google-voice`. An upstream equivalent should remain upstream-maintained.
   Review system-keyboard permission prompts separately from recognizer fixes;
@@ -94,10 +99,10 @@ examples or a historical review as permanent product policy.
 
 ## Compare behavior and patches
 
-Start with the adopted IDs `admin-console`, `trailers`,
-`edrock-ai-subs-fixes`, `tv-live-ai-subtitles` and `home-explore-removal`,
-within the requested scope. Check their current manifest status first. Matt
-follows edrock mainly for maintenance of these adopted features and occasional
+Start with the adopted IDs `admin-console`, `trailers` and
+`home-explore-removal`, within the requested scope. The retired subtitle IDs
+are historical references, not active maintenance candidates. Check each ID
+against the current manifest first. Matt follows edrock mainly for maintenance of these adopted features and occasional
 new features he chooses. Maintenance imports do not authorize adding new
 features. Highlight worthwhile discoveries separately, with a plain-language
 explanation, rather than automatically importing them or treating all new
