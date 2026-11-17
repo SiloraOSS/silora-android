@@ -91,6 +91,25 @@ values only to the adopting account and responds to identity switches. Follow it
 integration in `AndroidTvModule.kt` and `AccountLocalData.kt`; retain the account
 isolation/adoption cases in `TvProfileInputPreferencesTest.kt`.
 
+## Requests-first search (`request-search-order`)
+
+Phone and TV default **Show available to request first** to on. Matt requested
+this default and a one-time reset of saved off values on November 17, 2026.
+`RequestSearchPreferences.kt` migrates all saved `.requests_first` false values
+when its store first opens after updating, including inactive identities, and
+writes the installation marker in the same edit. Keep the stable migration
+marker: subsequent launches/updates must preserve a viewer's later opt-out.
+New/unset profiles use true; missing identities must not write unscoped values.
+
+Keep device/server/account/profile isolation, reactive preference/profile
+updates and the `AccountLocalData` cleanup registration. The installation
+marker has no account token and survives account removal. Follow phone
+`SearchScreen.kt`/`SearchResults.kt`/`SettingsPages.kt`, TV
+`TvSearchScreen.kt`/`TvSearchKeyboardSettings.kt`/`TvCatalogGrid.kt`, and
+`RequestSearchPreferencesTest`. Preserve server request gating, media filters,
+library-duplicate suppression, each section's relevance order and TV focus
+navigation for both on/off choices.
+
 ## TV voice search (superseded `tv-voice`)
 
 Matt requested retiring the fork implementation on November 11, 2026 after

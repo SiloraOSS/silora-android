@@ -4,6 +4,52 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-17 — enable requests-first search by default
+
+**Show available to request first** now defaults on for phone and TV. At Matt's
+request, a one-time migration also enables every previously saved disabled
+choice on the installation, including inactive servers, accounts and profiles.
+The migration runs when the shared preference store first opens after updating.
+A viewer can turn the setting off afterward; later launches and updates retain
+that new choice.
+
+The migration changes only saved requests-first values and writes its marker
+in the same SharedPreferences edit. Unset/new profiles use the enabled default;
+missing account/profile identities cannot save unscoped choices. Existing
+account-data cleanup removes signed-out accounts' choices while retaining the
+installation migration marker. Server request gating, result relevance,
+section rendering and TV focus behavior keep their existing implementation.
+
+Updated `request-search-order` in the fork inventory and its technical checklist.
+Added focused regression coverage for old disabled values across identities,
+fresh defaults, later opt-outs, reactive updates, missing identities and
+account cleanup. The upgrade test failed against the old implementation because
+the saved disabled value remained false.
+
+**Validation:** 47 tests passed with zero failures/errors/skips: seven new
+migration/preference tests, 11 existing phone search tests and 29 existing TV
+search tests. Phone/TV release Kotlin compilation and full release lint passed
+in 1m 36s under JDK 21; lint baselines were unchanged. The regression first
+failed against the old implementation on the saved false value, then passed
+with the migration. Whitespace checks passed.
+
+```sh
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew \
+  :android-shared:testReleaseUnitTest --tests '*RequestSearchPreferencesTest' \
+  :androidApp:testDebugUnitTest --tests '*ui.screens.search.*' \
+  :androidTvApp:testDebugUnitTest --tests '*ui.screens.search.*' \
+  :androidApp:compileReleaseKotlinAndroid :androidTvApp:compileReleaseKotlinAndroid \
+  :androidApp:lintRelease :androidTvApp:lintRelease --parallel --console=plain
+```
+
+No APK was packaged or installed, and no device/server interaction test was
+performed. This entry accompanies the requests-first default/migration commit.
+No PR, release, version bump or notification was performed.
+
+Apple, Roku and Web: this migration concerns the Android fork's local preference.
+The existing feature's parity follow-ups remain deferred until a PR opens under
+`AGENTS.md`. No server/API or other-client code changes are part of this work.
+
 ## 2026-11-17 — retire fork AI subtitle changes in favor of upstream
 
 Retired `edrock-ai-subs-fixes` and `tv-live-ai-subtitles` at Matt's request to
