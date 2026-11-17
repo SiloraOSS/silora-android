@@ -4,6 +4,70 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-16 23:50 PST — upstream 0867eacb1
+
+**Merge inputs:** `main`; fork before `45d115e18a71fcb240a48f5967b7739a31d00690`;
+upstream `0867eacb14b5ee7a8c46cc2b22e52d1799e599a7`. Ten upstream commits update audiobook
+playback and detail/player screens, offline listening sync, PCM capability
+reports, card-to-detail transitions, the phone library dock and collapsing
+navigation, long profile names, audiobook covers and the A–Z rail.
+Recovery: `refs/codex/upstream-merge/20261117T073922Z`.
+
+**Upstream commits added:**
+
+- `34cef244f` fix(profiles): show long profile names in full on Who's watching (#965)
+- `8d7b756be` fix(browse): drop the capsule behind the A–Z rail while dragging (#964)
+- `62dc95035` feat(detail): open detail pages from the tapped card on phone and TV (#971)
+- `08213c1f2` fix(audiobooks): send offline listening on downloaded books to the server (#961)
+- `fe3d9c8af` fix(playback): advertise PCM so WAV audiobooks can play (#707)
+- `efe85a83a` fix(cards): show audiobook covers square on phone cards (#974)
+- `35f7839ce` feat(libraries): switch library pages from a dock above the nav bar on phones (#973)
+- `c8846ee92` feat(audiobooks): keep audiobooks playing behind a mini player on phones (#976)
+- `f66681ed8` feat(audiobooks): match the iOS and tvOS detail and player screens (#975)
+- `0867eacb1` feat(navigation): collapse the phone bottom bar on scroll like iOS (#977)
+
+**Silora merge decisions:**
+
+- Resolved the one `HeroActionStack` conflict by combining upstream's audiobook
+  toggle labels, resume progress and connected-TV controls with Silora's Trailer
+  action and narrow-phone overflow placement (`trailers`). Retained the TV
+  Trailer action alongside upstream's audiobook hero changes.
+- Reviewed all 13 overlapping paths. Their added/removed fork lines match the
+  pre-merge deltas, and all 308 other fork paths remain unchanged. Preserved
+  scoped Admin and Night Mode navigation, request-search/input preferences,
+  Home Explore all removal, Night Mode audio binding, HEVC/raw diagnostics,
+  live AI subtitles, Up Next/Skip Credits, identity and signed release tooling.
+  The superseded voice helpers remain upstream implementations. No active
+  difference was retired and no new product override was introduced.
+- Accepted upstream's audiobook playback/session ownership, offline-progress
+  delivery, PCM capability report and phone navigation behavior. Other clients'
+  implementation and evidence remain owned by those upstream changes; this
+  fork merge creates no PR or separate parity change.
+
+**Validation:**
+
+- The required `./build.sh --release=both --tests --lint --signing-dir
+  /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing` passed
+  with JDK 21: signed phone/TV release compilation, R8, full release lint,
+  strict dependency/supply-chain checks, persistent signatures, `org.silora.app`
+  identity, version/non-debuggable checks and matching mappings/checksums.
+- 12,306 Gradle variant cases passed with zero failures, errors or skips:
+  shared 2,556 per debug/release variant; android-shared 2,373 per variant;
+  phone 1,009 debug; TV 1,435 debug; libass 2 per debug/release variant.
+  Phone/TV release host tests remain disabled by upstream's existing
+  debug-only Compose test-manifest configuration; both release APKs and full
+  release lint ran. Lint reported no errors; baselines were unchanged.
+- 149 release/automation/notification script tests passed. A fresh install of
+  translation version `2026.11.16-a0142c1` matched, and derived Silora resources,
+  conflict/diff checks and fork-preservation audit passed.
+- The sandbox's read-only Gradle cache lock was resolved by granting host-cache
+  access and rerunning the unchanged required command. Precommit tested tree
+  `0d9aabf6d37b59f3613979328a2965d58ee2f31d` differs from this final source only in
+  `CHANGELOG.md`. Its archive records the old HEAD and dirty tracked tree
+  because it compiled the uncommitted merge. Exact-commit signed verification
+  is required before push/handoff; its evidence stays in the private execution
+  receipt. No device, server, playback, focus or voice test was performed.
+
 ## 2026-11-16 — retain hardware HEVC levels in diagnostics
 
 Diagnostic reports now retain the decoder's real HEVC levels even when
