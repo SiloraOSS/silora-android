@@ -4,6 +4,60 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-17 15:03 PST — upstream db87f835f
+
+**Merge inputs:** `main`; fork before `746b15350f3b8a4b576a4eadd64400efaa587955`;
+upstream `db87f835ff908dd31a8473c66408ddeeb2e926ba`. One upstream commit adds collection
+rows to Home and library pages on phone and TV, with collection-card navigation,
+media filtering, Home row controls and TV focus/return handling.
+Recovery: `refs/codex/upstream-merge/20261117T225300Z`.
+
+**Upstream commits added:**
+
+- `db87f835f` feat(home): show rows of collections on Home and library pages (#979)
+
+**Silora merge decisions:**
+
+- The merge had no conflicts. Reviewed all five overlapping fork paths:
+  phone routes/MainScreen, TV Home editor/shell and HomeViewModel. Their
+  fork additions/removals match the pre-merge deltas exactly; all 302 other
+  fork paths remain unchanged. Kept Night Mode/Admin navigation, Home Explore
+  all removal's section-type routing, the TV keyboard/remote shell integration
+  and Silora's Home-editor error label alongside the new collection routes.
+- Accepted upstream's `hasCards` handling so collection rows remain visible
+  when Home removes progress items. Kept the fork's profile-owned dismissal
+  observer and Home refresh. Accepted the collection cards, section decoding,
+  hydration, navigation, media filters and translation catalog as upstream.
+- Preserved all 17 active differences. The two AI subtitle entries remain
+  retired, and requests-first retains its enabled default and one-time
+  migration. No edrock patches were imported and no new fork override was
+  added. Other-client parity/evidence belongs to upstream PR #979; this merge
+  opens no PR or separate parity change.
+
+**Validation:**
+
+- The mandatory `./build.sh --release=both --tests --lint --signing-dir
+  /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing` passed
+  under JDK 21 in 5m 16s: signed phone/TV release compilation and packaging,
+  R8, full release lint, dependency/supply-chain checks, persistent signatures,
+  `org.silora.app`, version/non-debuggable checks and matching mappings/checksums.
+- 12,308 Gradle variant cases passed with zero failures/errors/skips:
+  shared 2,553 per debug/release variant; android-shared 2,375 per variant;
+  phone 1,010 debug; TV 1,438 debug; libass 2 per debug/release variant.
+  Phone/TV release host tests remain disabled by the existing upstream test
+  configuration; both release APKs and full release lint ran. Lint baselines
+  are unchanged. The local release build ran 88 release-tooling tests, all
+  passing.
+- A fresh verified install of translation version `2026.11.17-fe23d4e` matched;
+  derived Silora strings, fork-preservation, conflict and whitespace checks
+  passed. Unrelated untracked files remain unchanged. No device/server,
+  playback, focus or visual interaction test occurred.
+- Tested pre-changelog tree `360079f4b6430c73bb03e6579182fa03d84f8433`
+  differs from the final merge source only in this log entry. The precommit
+  archive records the old HEAD and dirty tracked tree because it compiled
+  the uncommitted merge. Exact-commit signed verification is required before
+  push/handoff; its evidence stays in the private execution receipt.
+
 ## 2026-11-17 — enable requests-first search by default
 
 **Show available to request first** now defaults on for phone and TV. At Matt's
