@@ -21,6 +21,9 @@ to rewrite published history from a previous one-time force push.
 - This fork is Silora. `origin` can point at SigmaStreams, while `silora` can
   point at SiloraOSS. Inspect actual remotes; neither name authorizes a push.
   Edrock's fork is a reference for adapted features, not the upstream source.
+  Edrock review/import is optional and uses the separate
+  [silora-edrock-sync](../silora-edrock-sync/SKILL.md) skill when requested.
+  An upstream-only merge or release does not require an edrock check or sync.
 - Read the applicable `AGENTS.md`, repository-root
   [FORK_DIFFERENCES.md](../../../FORK_DIFFERENCES.md), and the
   [technical checklist](references/fork-fixes.md) for affected feature IDs.

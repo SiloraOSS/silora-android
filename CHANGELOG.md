@@ -4,6 +4,34 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-16 22:45 PST — optional edrock maintenance skill
+
+Created `silora-edrock-sync` at Matt's request, with read-only review and
+requested-import modes. It tracks maintenance of adopted edrock features and
+reports occasional new features separately for Matt to choose. The default
+source is the latest published release branch; an explicitly named branch or
+commit takes precedence. Validated imports create local commits unless Matt
+requests otherwise. Pushes and releases retain their separate requested scope.
+
+Silora's documented requirements take priority, including Ignore HEVC Level
+Limits over edrock's numeric picker, Admin access/settings and identity
+isolation, and the current upstream voice-helper policy. The helper verifies
+full source pins, compares actual patches across rebased release branches,
+adapts only requested changes and records coverage per feature.
+
+Seeded `docs/maintenance/edrock-tracking.md` from the completed November 15 v42
+review and verified import commits, including skipped/deferred candidates.
+The manifest remains the authority for intended behavior. Added a pointer from
+the upstream-merge skill explicitly stating that an upstream merge or release
+does not require an edrock review or sync. Existing automations are unchanged.
+
+Both skills passed metadata validation. Relative-link checks, all 12 full
+commit references, the four recorded Silora destinations and the v42 review
+count passed verification against local Git history. `git diff --check`
+passed. This adds maintenance instructions and history; it does not import
+new application changes or check for a newer edrock release. No Android build
+or device test was needed for these documentation-only changes.
+
 ## 2026-11-15 21:15 PST — remove Home progress cards from Explore all
 
 Imported edrock's `d3d39cec329486198cf914e88bb0b608fa971926` at Matt's request.

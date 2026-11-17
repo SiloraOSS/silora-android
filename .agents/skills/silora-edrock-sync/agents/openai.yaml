@@ -1,0 +1,4 @@
+interface:
+  display_name: "Silora Edrock Sync"
+  short_description: "Review and selectively import edrock fork updates"
+  default_prompt: "Use $silora-edrock-sync to review edrock's latest published release branch against Silora and upstream, without changing the checkout."
