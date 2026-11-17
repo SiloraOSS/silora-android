@@ -4,6 +4,38 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-16 — retain hardware HEVC levels in diagnostics
+
+Diagnostic reports now retain the decoder's real HEVC levels even when
+**Ignore HEVC Level Limits** is on. Previously, diagnostics used the adjusted
+playback probe and reported an empty levels list. Matt approved importing this
+maintenance recommendation from the read-only edrock review.
+
+Adapted only the raw-probe/diagnostic subset of edrock
+`c8cfcfc538e1684e2c947bc35a9d2e3c1e599e4b` from published v42
+`c934aaf7ac0aef17881070c0a54ab4cdc56add36`. Silora input:
+`6c82bcc71a216a9227e3b5901e9bab0862c7497a`; recovery:
+`refs/codex/edrock-hevc-diagnostics/20261117T073123Z`. Reused the existing
+hardware cache for diagnostics; playback/download reports still apply Silora's
+switch. Its default, persistence, other decoder bounds and settings-read
+recovery remain unchanged. No numeric picker, decoder-level settings label,
+microphone prompt or newer official upstream commits were imported.
+
+Updated the `hevc-levels` manifest/checklist entry, binder documentation and
+edrock tracking record. Added a focused Robolectric regression covering actual
+hardware/diagnostic reads with the switch on/off/on, other decoder bounds and
+playback evidence after diagnostic reads. It failed against the old code
+because diagnostics lost the hardware's `[153]` level.
+
+Validation passed under JDK 21: 168 affected android-shared release tests, zero
+failures/errors/skips, phone/TV release Kotlin compilation and full release
+lint with unchanged baselines. The combined command completed in 1m 58s;
+`docs/maintenance/edrock-tracking.md` records the exact command and pinned
+inputs. Supply-chain, derived Silora resource, runtime-scope and diff checks
+passed. No APK was packaged or installed and no device/server test occurred.
+Other clients: Apple, Roku and Web are N/A because this is Android MediaCodec
+diagnostics for Silora's device-local switch. No push, PR or release was requested.
+
 ## 2026-11-16 22:45 PST — optional edrock maintenance skill
 
 Created `silora-edrock-sync` at Matt's request, with read-only review and

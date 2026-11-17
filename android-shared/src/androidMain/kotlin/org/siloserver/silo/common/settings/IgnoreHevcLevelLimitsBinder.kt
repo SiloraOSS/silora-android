@@ -11,9 +11,9 @@ import org.siloserver.silo.common.player.MediaCodecCapabilitiesProbe
 
 /**
  * Mirrors the active profile's HEVC level-limit preference into
- * [MediaCodecCapabilitiesProbe], the single source every capability report
- * (playback, downloads, diagnostics) reads, so no call site needs the setting
- * threaded through it.
+ * [MediaCodecCapabilitiesProbe] for playback and download capability reports,
+ * so no call site needs the setting threaded through it. Diagnostics use the
+ * device's unmodified decoder report.
  */
 object IgnoreHevcLevelLimitsBinder {
     fun start(scope: CoroutineScope, store: PlayerSettingsStore) {

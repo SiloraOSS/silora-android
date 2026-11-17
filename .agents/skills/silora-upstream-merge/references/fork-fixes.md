@@ -31,6 +31,15 @@ The binder retains the last applied value and resubscribes after transient
 `IOException`s with exponential delay capped at 30 seconds. Preserve that
 recovery behavior from `ec68d4ecd`, including later preference/profile changes.
 
+Diagnostics always retain the hardware's reported HEVC levels, independent of
+this switch. Keep the cached `rawProbe()` path used by
+`MediaCodecCapabilitiesProbe.diagnosticsSnapshot()` separate from `probe()`'s
+playback/download adjustment. Matt approved this subset of edrock `c8cfcfc538`
+on November 16, 2026; it does not adopt the numeric override or picker.
+`MediaCodecCapabilitiesProbeDiagnosticsTest` exercises the real probe and
+Android diagnostic adapter across on/off/on changes, preserving other decoder
+bounds and playback evidence after diagnostic reads.
+
 ## Night Mode (`night-mode`)
 
 Preserve the local per-server/profile preference, player and settings controls,

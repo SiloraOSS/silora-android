@@ -51,9 +51,13 @@ object MediaCodecCapabilitiesProbe {
     var ignoreHevcLevelLimits: Boolean = PlayerSettingsStore.DEFAULT_IGNORE_HEVC_LEVEL_LIMITS
 
     fun probe(): ProbeResult = withHevcLevelLimitsIgnored(
-        cached ?: synchronized(this) { cached ?: computeProbe().also { cached = it } },
+        rawProbe(),
         ignoreHevcLevelLimits,
     )
+
+    /** The decoders as the device reports them, before applying the HEVC level-limit setting. */
+    private fun rawProbe(): ProbeResult =
+        cached ?: synchronized(this) { cached ?: computeProbe().also { cached = it } }
 
     /**
      * An empty levels list makes the server skip only its level comparison
@@ -79,9 +83,12 @@ object MediaCodecCapabilitiesProbe {
         synchronized(this) { cached = null }
     }
 
-    /** Returns an immutable copy for diagnostics without reconfiguring or opening any codec. */
+    /**
+     * Returns a copy for diagnostics without reconfiguring or opening any codec.
+     * Preserve the device's reported HEVC levels regardless of the playback setting.
+     */
     fun diagnosticsSnapshot(): ProbeResult {
-        val result = probe()
+        val result = rawProbe()
         return result.copy(
             videoCodecs = result.videoCodecs.toSet(),
             videoDecodeCapabilities = result.videoDecodeCapabilities.map { capability ->

@@ -52,6 +52,72 @@ requests a different choice. Preserve current manifest requirements meanwhile.
 | `abac67b21728f46e0d94eaa608576a333942e1a3` | Manifest deduplication is already covered. The dedicated voice recognizer helpers matched Silora and official upstream at this snapshot; this was not another missing Google TV recognizer fix. |
 | Fork release skill, versioning, publishing, README and build-environment notes | Skipped edrock-specific policy and environment instructions. Silora retains its own signing, release workflows, identity and publication scope. |
 
+## Imported: raw HEVC decoder diagnostics, November 16, 2026
+
+Matt approved the preceding review's recommended diagnostic adaptation. This
+entry covers only the raw-diagnostics subset of `hevc-levels`; the whole-branch
+review checkpoint and other feature coverage above remain unchanged.
+
+- Source repository: `https://github.com/edrock200/silo-android.git`.
+- Source branch: `feat/hevc-level-override-v42`.
+- Source snapshot: `c934aaf7ac0aef17881070c0a54ab4cdc56add36`.
+- Source commit: `c8cfcfc538e1684e2c947bc35a9d2e3c1e599e4b`, only the cached
+  raw-probe extraction and diagnostic snapshot call; its numeric override,
+  hardware-level picker helper and capability-evidence comment were excluded.
+- Source upstream base and Silora's incorporated upstream:
+  `40d34e6d9d0c7f3aae82787ece12eb3093ccf6e7`.
+- Silora input: `6c82bcc71a216a9227e3b5901e9bab0862c7497a` on `main`.
+- Official upstream comparison: `0867eacb14b5ee7a8c46cc2b22e52d1799e599a7`.
+  Its ten newer commits were outside this import.
+- Publication was verified live on November 16 in the preceding read-only
+  review: `apk-builds` at `452b0183d493e8885158182c70ad8ad21847beca` identifies
+  v42/build 41 and the source snapshot above. This import uses those pinned
+  inputs and local full Git objects, rather than claiming another release check.
+- Recovery: `refs/codex/edrock-hevc-diagnostics/20261117T073123Z`, pointing to
+  the Silora input above.
+
+**Adapted:** `MediaCodecCapabilitiesProbe.diagnosticsSnapshot()` reads the
+cached hardware probe before the HEVC setting is applied. Diagnostic reports
+retain the decoder's real levels with the switch either on or off. Playback
+and download capability reports retain Silora's default-on Ignore HEVC Level
+Limits behavior, other decoder bounds, saved values, profile scope and
+settings-read recovery. Updated the binder comment and preservation documents
+to distinguish hardware diagnostics from effective playback capabilities.
+
+The decoder-level settings label and proactive system-keyboard microphone
+prompt remain deferred. The numeric picker remains skipped. No other edrock
+feature, release tooling or official upstream code was imported.
+
+**Validation:** 168 affected android-shared release tests passed with zero
+failures, errors or skips. Phone/TV release Kotlin compilation and full release
+lint passed under JDK 21 with existing lint baselines unchanged. The combined
+run completed in 1m 58s. The new Robolectric regression failed against the old implementation:
+diagnostics reported an empty HEVC levels list instead of the hardware's
+`[153]` while the switch was on. It exercises the actual codec probe and Android
+diagnostic adapter while toggling on/off/on, with guards for other decoder
+bounds and unchanged playback evidence after diagnostic reads.
+
+Command (JDK 21):
+
+```sh
+./gradlew :android-shared:testReleaseUnitTest \
+  --tests 'org.siloserver.silo.common.player.MediaCodecCapabilitiesProbe*' \
+  --tests 'org.siloserver.silo.common.player.PlaybackCapabilityDetector*' \
+  --tests 'org.siloserver.silo.common.player.ForceHdrPassthroughTest' \
+  --tests 'org.siloserver.silo.common.diagnostics.DeviceSnapshotCollectorTest' \
+  --tests 'org.siloserver.silo.common.settings.AndroidPlayerSettingsStoreTest' \
+  :androidApp:compileReleaseKotlinAndroid :androidTvApp:compileReleaseKotlinAndroid \
+  :androidApp:lintRelease :androidTvApp:lintRelease --parallel --console=plain
+```
+
+Supply-chain, derived Silora resource, pinned-input/runtime-scope and diff checks
+passed. The destination is the local import commit containing this entry,
+identified by `hevc-levels` and the source pin above.
+
+Other clients: Apple, Roku and Web are N/A; this corrects Android MediaCodec
+diagnostics for Silora's local HEVC switch. No APK packaging, installation,
+device/server validation, push, PR or release is part of this import.
+
 ## Recording the next review or import
 
 Record the date, verified source repository, branch and full SHA, Silora input
