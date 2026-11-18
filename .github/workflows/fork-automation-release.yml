@@ -89,6 +89,7 @@ jobs:
           python3 scripts/test-build-local-release.py
           python3 scripts/test-automation-release.py
           python3 scripts/test-release-order.py
+          python3 scripts/test-gradle-with-retry.py
 
       - name: Read official version tags already present in the source history
         env:
@@ -137,7 +138,7 @@ jobs:
         run: python3 scripts/fork-release.py prepare
 
       - name: Run the full unit test suite
-        run: ./gradlew test -Pandroid.r8.maxWorkers=1 --max-workers=2 --no-parallel --console=plain
+        run: python3 scripts/gradle-with-retry.py test -Pandroid.r8.maxWorkers=1 --max-workers=2 --no-parallel --console=plain
 
       - name: Decode the persistent signing key
         env:
@@ -153,7 +154,7 @@ jobs:
           SILO_RELEASE_KEY_ALIAS: ${{ secrets.SILO_RELEASE_KEY_ALIAS }}
           SILO_RELEASE_KEY_PASSWORD: ${{ secrets.SILO_RELEASE_KEY_PASSWORD }}
         run: |
-          ./gradlew \
+          python3 scripts/gradle-with-retry.py \
             :androidApp:lintRelease :androidTvApp:lintRelease \
             :androidApp:assembleRelease :androidTvApp:assembleRelease \
             -Pandroid.r8.maxWorkers=1 --max-workers=2 --no-parallel --console=plain

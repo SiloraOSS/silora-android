@@ -51,6 +51,13 @@ Every build requires the release-tooling tests, the full Gradle unit test
 suite, full phone and TV release lint, dependency verification, and signed,
 R8-optimized phone and TV release APKs. There is no skip-tests input.
 
+The Gradle test and lint/build steps retry dependency downloads rejected with
+HTTP 429 (Too Many Requests). They wait two minutes before each retry, allowing
+three attempts in total and reusing completed Gradle work. Each retry appears
+as a warning in the job log. Other failures, including code, test, lint, signing
+and dependency-verification errors, stop immediately. Persistent rate limits
+fail the step after the third attempt; the build job retains its 60-minute limit.
+
 The APK verifier checks the signature against the persistent keystore's public
 certificate, `org.silora.app`, the expected phone/TV version codes and version
 name, and `debuggable=false`. The build keeps matching R8 mappings for 90 days.
@@ -156,6 +163,7 @@ Local checks:
 python3 scripts/test-automation-release.py
 python3 scripts/test-fork-release.py
 python3 scripts/test-build-local-release.py
+python3 scripts/test-gradle-with-retry.py
 python3 scripts/test-notify-fork-daily.py
 scripts/check-build-supply-chain.sh
 actionlint .github/workflows/fork-automation-release.yml .github/workflows/fork-automation-notifications.yml
