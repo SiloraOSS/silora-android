@@ -52,11 +52,17 @@ suite, full phone and TV release lint, dependency verification, and signed,
 R8-optimized phone and TV release APKs. There is no skip-tests input.
 
 The Gradle test and lint/build steps retry dependency downloads rejected with
-HTTP 429 (Too Many Requests). They wait two minutes before each retry, allowing
-three attempts in total and reusing completed Gradle work. Each retry appears
-as a warning in the job log. Other failures, including code, test, lint, signing
-and dependency-verification errors, stop immediately. Persistent rate limits
-fail the step after the third attempt; the build job retains its 60-minute limit.
+HTTP 408, 429, 500, 502, 503 or 504. They also retry when Gradle reports a
+module missing, lists its Maven Central POM among the locations it searched,
+and the exact module version already has checksums in dependency verification
+metadata. That retry uses `--refresh-dependencies` so Gradle looks up the
+module again.
+
+Each step allows three attempts total with two minutes between attempts.
+Retries reuse completed Gradle work and appear as warnings in the job log.
+Unknown dependencies, authentication failures, code or test failures, lint
+findings, signing errors and dependency-verification errors stop the step.
+The build job retains its 60-minute limit.
 
 The APK verifier checks the signature against the persistent keystore's public
 certificate, `org.silora.app`, the expected phone/TV version codes and version
