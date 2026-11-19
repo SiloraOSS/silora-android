@@ -4,6 +4,54 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-19 12:04 PST — upstream 61a4bf1ea
+
+**Merge inputs** — `main` at `29c9b3c8aa10634605863f2fa9fcbf733354bde9` and upstream
+`61a4bf1ea2d0f5c1cd9fcd41fd12c40e28fe9d07`. Direct play gets a fresh retry window after sustained
+progress, detail pages prefer the standard edition when there is no viewing
+history to guide the choice, TV menu tabs respond to Down after Back closes
+their menus, and the player hides online subtitle search when the server
+reports no provider. Diagnostics record Media3 player and load error codes.
+Recovery ref `refs/codex/upstream-merge/20261119T200412Z`.
+
+**Upstream commits added**
+
+- `bb59172f8` fix(player): renew direct play retries after sustained progress (#993)
+- `e15879514` fix(detail): open the standard edition before comparing quality (#996)
+- `ed99dff24` docs: send siloserver.org docs changes to a docs issue (#1008)
+- `5d90cf32f` fix(tv): open top bar menus on Down every time, and sooner (#970)
+- `2ee32f414` fix(player): hide subtitle search when the server has no provider (#608)
+- `61a4bf1ea` fix(diagnostics): record Media3 player and load error codes (#635)
+
+**Silora merge decisions**
+
+- The merge applied without conflicts. All six overlapping files retained
+  their fork edits. The new direct-play retry tracking runs alongside the
+  Night Mode audio path (`night-mode`).
+- Phone and TV subtitle-provider checks coexist with the existing Next Up
+  and credits behavior (`up-next-setting`, `up-next-fixes`,
+  `credits-auto-skip`), the extra-small subtitle preset (`tv-subtitle-size`)
+  and TV remote shortcuts (`tv-remote`). The fork AI subtitle patches
+  remain retired.
+- The TV top bar keeps the Silora wordmark (`identity`) and uses upstream
+  menu focus handling. Device diagnostics continue to report raw HEVC levels
+  (`hevc-levels`) alongside the new Media3 error fields.
+
+**Validation**
+
+- The full rerun passed 12,342 Gradle unit tests
+  and 88 release-tooling tests. Phone and TV
+  ran debug host suites because their release host tests are disabled. Shared,
+  android-shared and libass ran both variants. The existing TV collection-ordering
+  test failed once during the initial parallel build and passed on the rerun
+  with four Gradle workers. The source and test were unchanged between attempts.
+- Full phone and TV release lint and dependency checks passed. Both signed,
+  R8-optimized APKs passed signature, application ID, version and non-debuggable
+  checks. The archive includes matching mappings and verified checksums.
+- Validation used staged tree `1fc8f03b3cb8194f22b82ac78758b9ffffaffd7a` before this changelog entry was added.
+  Local APK metadata records the pre-merge HEAD. No devices or live server
+  playback were tested.
+
 ## 2026-11-17 15:03 PST — upstream db87f835f
 
 **Merge inputs:** `main`; fork before `746b15350f3b8a4b576a4eadd64400efaa587955`;

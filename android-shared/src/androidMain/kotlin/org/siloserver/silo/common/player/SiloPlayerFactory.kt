@@ -358,6 +358,7 @@ class SiloPlayerFactory(
         val mediaLoadErrorHandlingPolicy = SiloMediaLoadErrorHandlingPolicy(
             isResumableProgressiveDirectPlay = ::isResumableDirectPlayUri,
         )
+        val progressiveDataSources = mediaLoadErrorHandlingPolicy.trackDirectPlayReads(contentDataSourceFactory)
         fun correctedMediaSourceFactory(
             mode: DolbyVisionTransformMode,
             expectedDynamicRange: String? = null,
@@ -374,7 +375,7 @@ class SiloPlayerFactory(
                     dolbyVisionBaseLayerRoute = dolbyVisionBaseLayerRoute,
                 ),
             )
-            .setDataSourceFactory(contentDataSourceFactory)
+            .setDataSourceFactory(progressiveDataSources)
             .setSubtitleParserFactory(embeddedSubtitleParserFactory)
             .setLoadErrorHandlingPolicy(mediaLoadErrorHandlingPolicy)
         val hlsMediaSourceFactory = HlsMediaSource.Factory(contentDataSourceFactory)
