@@ -1,24 +1,30 @@
 ---
 name: silora-merge-and-release
-description: Merge upstream into Silora and validate signed phone/TV builds, with one approval before push and release. Cloud compilation is the default. Use --local to publish the validated local APKs or --dry-run to preview either route. Merge-only requests use silora-upstream-merge.
+description: Merge upstream and release Silora, or use --release-only to build and publish the current branch without merging, with Discord progress. Use --local for a merge that publishes the locally built APKs. Both support --dry-run and one approval before push and publication. Use silora-upstream-merge for merge-only requests.
 ---
 
 # Silora merge and release
 
-Run Matt's manual upstream merge and release process with the existing merge
-skill and the selected release tooling.
+Run Matt's manual Silora release process with the existing build and release
+tooling.
 
 ## Select the mode first
 
+- `--release-only` or an explicit request to release the current branch
+  without merging selects the [current-branch release](references/release-only.md).
+  It builds both signed APKs locally and reports progress to the existing
+  Discord staff log. Follow that reference for source selection and execution
+  and use the shared approval rules below. This mode also accepts `--dry-run`.
 - The normal flow uses **live** mode and the single approval below. The
-  default release route is **cloud**, using Silora Automation Release.
+  default route for an upstream merge is **cloud**, using Silora Automation
+  Release.
 - `--local` selects the **local** release route. GitHub verifies and publishes
   the exact signed APKs from local validation. Read
   [local APK releases](references/local-release.md) before preparing the merge.
   This route works with live mode or with `--dry-run`.
 - `dry-run`, `--dry-run`, or "run this as a dry run" selects **dry-run** mode.
-  Prepare the selected route through the local merge commit, signed builds,
-  tests and lint, then show the review and stop. Do not push, dispatch any
+  Prepare the selected source and signed builds with tests and lint, then show
+  the review and stop. Do not push, dispatch any
   workflow, create remote tags/drafts/releases, upload assets, or send Discord
   messages. Read
   [dry-run decisions and continuation](references/dry-run.md) before starting;
@@ -34,8 +40,9 @@ skill and the selected release tooling.
   run. Use the same reference. Handle the temporary checkout internally; Matt
   needs only the result, preview ID when useful, and the three choices.
 
-Record the selected mode and release route before any notification or merge.
-An older receipt without a route uses cloud. Dry-run restrictions
+Record the selected operation, mode and release route before any notification
+or merge. Older receipts default to the merge operation and cloud route when
+the fields are absent. Dry-run restrictions
 apply through errors and resumptions until Matt explicitly selects Release
 this result for the concrete review. An unambiguous "Continue with release"
 reply to that review has the same meaning. Record the selection and its approved
@@ -48,8 +55,9 @@ or clean it up automatically.
 ## Scope and authorization
 
 - Repository: `/home/albinoman887/Workspace/SigmaStreams/Silo/source/silo-android`.
-  Read its current instructions and `.agents/skills/silora-upstream-merge/SKILL.md`
-  with that skill's required references. Follow it for merge decisions,
+  Read its current instructions. For an upstream merge, read
+  `.agents/skills/silora-upstream-merge/SKILL.md` with its required references.
+  Follow it for merge decisions,
   validation, changelog, recovery, and commit handling. The local release
   reference defines the commit and build order for exact-SHA APKs.
 - An invocation to run this combined workflow authorizes routine upstream
@@ -58,18 +66,21 @@ or clean it up automatically.
   isolated local preparation described above. A request to create, edit,
   explain, or review the skill does not start a run. Honor narrower user
   instructions.
-- In live mode, use one confirmation after local validation and commit, before
-  any push. Show the concrete result and ask Matt to approve both a normal
-  push to verified `SiloraOSS/silora-android` `main` and the exact-commit GitHub
-  release through the selected route. After approval, push, verify, and hand
-  off without a second routine confirmation. The invocation itself, an earlier run's approval, and
-  the paused automation's unattended authorization do not satisfy this gate.
+- In live mode, use one confirmation after validating the prepared source.
+  Show the concrete result and ask Matt to approve the exact-commit GitHub
+  release and, if necessary, the push to verified `SiloraOSS/silora-android`
+  `main`. After approval, push if needed, verify, and hand off. The
+  invocation itself, an earlier run's approval, and the paused automation's
+  unattended authorization do not satisfy this gate.
 - Leave the saved automation, its paused state/schedule/model, the merge skill,
   GitHub workflows, signing configuration, and notification handlers unchanged.
   Do not create a PR, import edrock changes, or create tags/releases outside
   the reviewed release tooling.
 
 ## Prepare the run
+
+The preparation steps below are for an upstream merge. For `--release-only`,
+start with [current-branch release](references/release-only.md).
 
 Read [execution and notification handling](references/execution.md) and the
 repository docs for the selected route: `docs/automation-releases.md` for cloud
@@ -185,7 +196,8 @@ in the dry-run reference; only release enters the approved publication phase.
 
 ## Review and wait for approval
 
-For live mode, show Matt a concise review containing:
+For a live upstream merge, show Matt a concise review containing the details
+below. For `--release-only`, use the [current-branch review](references/release-only.md#review-and-publish).
 
 - The meaningful upstream changes, conflict decisions, and retained fork fixes.
 - Local checks and their actual results, with device-testing limits.
@@ -217,6 +229,9 @@ honor that narrower scope and stop after the verified push; do not infer release
 approval. Otherwise continue through the release without asking again.
 
 ## Push, dispatch, and verify the approved release
+
+For `--release-only`, follow [review and publish](references/release-only.md#review-and-publish).
+The steps here are for publishing an upstream merge.
 
 This section is live-only, including a prepared dry run explicitly approved
 through Release this result. Success alone or an older approval cannot

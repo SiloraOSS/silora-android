@@ -11,22 +11,23 @@ Do not require Matt to understand or manage Git worktrees.
    and the original checkout's branch, HEAD and status in the private receipt.
    Inspect existing executions read-only. Do not resume or modify live work, reuse its
    approval, send notifications, or write to its handoff/delivery receipts.
-2. Verify/fetch official upstream and Silora main as in the normal flow. This
-   may update local remote-tracking refs and caches; it cannot push or dispatch.
-   Pin the fetched Silora main SHA as the preview base and upstream main SHA
-   as the merge input. Unexpected local commits or edits in Matt's normal
-   checkout stay untouched and are not silently included in the preview.
-   Apply the normal input checks too: if unexpected local-only main commits,
-   divergence or an existing operation would block a live run, report that
-   blocker instead of silently bypassing it and claiming readiness.
+2. For release-only, pin the current branch commit and review baseline from
+   [current-branch release](release-only.md#pin-and-build). For a merge,
+   fetch Silora main as the preview base and official upstream main as the
+   merge input. These fetches update local refs and caches only. Apply the
+   selected operation's source checks before preparing the preview. Report
+   unexpected commits, tracked edits, divergence or an in-progress operation
+   that would block a live run.
 3. Create a worktree in the private execution directory at
    `manual-runs/EXECUTION_ID/checkout` and a uniquely named branch such as
-   `codex/silora-release-dry-run-EXECUTION_ID` from the pinned Silora base.
+   `codex/silora-release-dry-run-EXECUTION_ID` from the pinned Silora base
+   or the pinned branch commit for release-only.
    Neither may already exist. Keep the checkout outside the original source
    directory so it does not introduce untracked files there.
    Record the exact path, branch, repository, initial SHA and ownership in the
    receipt. Do not switch, fast-forward or merge into the original checkout.
-4. In the preview checkout, follow the merge skill, including its fork audit,
+4. For release-only, build and verify the pinned commit in the preview
+   checkout. For a merge, follow the merge skill, including its fork audit,
    recovery ref, signed phone/TV tests/lint/builds, changelog, validation and
    local merge commit. The dry-run request explicitly authorizes this preview
    branch as the target instead of main. With `--local`, follow the
@@ -41,8 +42,8 @@ Do not require Matt to understand or manage Git worktrees.
    branch, HEAD and working state stayed unchanged; report concurrent changes
    accurately rather than trying to restore another person's edits.
 6. Return the dry-run report and three choices defined in `SKILL.md`. Show real
-   failures and unrun checks accurately. No upstream changes means the normal flow would
-   skip; report that outcome without manufacturing a release. A completed
+   failures and unrun checks accurately. For a merge, report a no-change
+   outcome if upstream is already included. A completed
    preview is `dry_run_complete` with its decision pending, not handed off.
 
 Keep the release helpers idle. The cloud dispatch helper starts a real
@@ -55,18 +56,20 @@ Discord delivery is tested by the local dry run.
 
 After the concrete review, offer **Release this result**, **Keep for later**,
 and **Discard**. Explain that Release this result pushes the reviewed commit
-to `SiloraOSS/silora-android` main and publishes through the reviewed workflow.
-For `--local`, the approval covers the exact archived APKs. Selecting that
-action or replying "Continue with release" is the single approval for both
-actions. Keep, Discard
-and silence do not approve publication. Keep a pending preview without
+to `SiloraOSS/silora-android` main if needed and publishes through the reviewed
+workflow. For a local publication, the approval covers the exact archived APKs.
+Selecting that action or replying "Continue with release" is the single approval
+for the actions in the review. Keep, Discard and silence do not approve
+publication. Keep a pending preview without
 scheduling, publishing, or auto-deleting it.
 
 Before acting, identify the exact preview and verify the recorded checkout
 ownership, branch HEAD, clean tracked/index state, absence of unexpected build
 inputs, pinned SHAs, actual validation evidence, remote URL and workflow/helper
 identity. For local, recheck the reviewed archive against its recorded hashes
-and eligibility. The result must include the reviewed fork base and upstream input.
+and eligibility. For a merge, the result must include the reviewed fork base
+and upstream input. For release-only, verify the exact pinned commit and its
+eligibility to fast-forward remote main.
 Fetch/recheck remote main: it must match the reviewed baseline, or the approved
 result when reconciling a previous push. Reconcile existing exact-source release
 handoffs first. Do not combine another preview, silently add new upstream code,
@@ -81,8 +84,8 @@ show the changed review and refresh the choice before pushing. An unknown
 preview, discarded checkout, unexpected edits or failed checks cannot be
 published through a bare release request.
 
-Publish the exact approved commit from the prepared checkout with a normal
-fast-forward-only push, substituting its full lowercase SHA:
+When a push is required, push the exact approved commit from the prepared
+checkout with a normal fast-forward-only push, substituting its full lowercase SHA:
 
 ```sh
 git push silora FULL_APPROVED_RESULT_SHA:refs/heads/main
@@ -99,9 +102,11 @@ the same approval.
 
 Do not backfill `started` or `validating` Discord messages for work already
 completed silently in dry-run mode. For cloud, send the existing `handoff`
-milestone after the run is accepted, with the same execution ID. For local,
-report handoff and results in chat. A real stop before handoff can use the
-normal factual failure handling after the explicit live transition.
+milestone after the run is accepted, with the same execution ID. For
+release-only, use the [publishing milestones](release-only.md#review-and-publish).
+For an upstream merge with `--local`, report handoff and results in chat.
+Use the chosen operation's failure handling for a conclusive stop after
+approval.
 
 ## Keep for later
 

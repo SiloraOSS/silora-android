@@ -20,6 +20,8 @@ REPORT = dict(summary="Merged two upstream fixes and pushed main. No conflicts; 
               upstream_sha=UPSTREAM, merge_sha=SOURCE, recovery_ref="refs/codex/upstream-merge/20261105T205830Z",
               validation="12,450 tests, full phone/TV release lint, signed R8 builds, APK verification, mappings and checksums.",
               changelog_line=7, workflow_run_id=123)
+LOCAL_TAG = "build-2026-11-19.130000.1795122000000000"
+LOCAL_URL = f"https://github.com/{notify.REPO}/releases/tag/{LOCAL_TAG}"
 
 
 def workflow(**changes):
@@ -70,6 +72,43 @@ class PayloadTest(unittest.TestCase):
         self.assertIn("before committing and pushing", body)
         self.assertNotIn("Passed:", body)
 
+    def test_release_only_review_distinguishes_approval_from_upload(self):
+        report = dict(source_sha=SOURCE, validation="Signed phone and TV builds, lint and unit tests passed.")
+        for event, expected in (("release_building", "Running local tests"),
+                                ("release_ready", "Waiting for approval"),
+                                ("release_uploading", "Uploading the signed APKs")):
+            with self.subTest(event=event):
+                payload = notify.payload_for(event, report, "example")
+                body = payload["embeds"][0]["description"]
+                self.assertIn(SOURCE, body)
+                self.assertIn(expected, body)
+                self.assertNotIn("upstream", body.lower())
+                self.assertEqual(payload["allowed_mentions"]["parse"], [])
+
+    def test_publication_requires_a_public_release_and_matching_source_tag(self):
+        report = dict(source_sha=SOURCE, tag=LOCAL_TAG)
+        release = dict(tag_name=LOCAL_TAG, html_url=LOCAL_URL, published_at="2026-11-19T21:00:00Z",
+                       draft=False, prerelease=False, assets=[dict(name="silora-phone.apk"), dict(name="silora-tv.apk")])
+        ref = dict(ref=f"refs/tags/{LOCAL_TAG}", object=dict(sha=SOURCE))
+
+        def response(value):
+            return subprocess.CompletedProcess(["gh", "api"], 0, stdout=json.dumps(value))
+
+        with mock.patch.object(notify.subprocess, "run", side_effect=[response(release), response(ref)]) as gh:
+            embed = notify.payload_for("release_published", report, "example")["embeds"][0]
+            self.assertEqual(embed["url"], LOCAL_URL)
+            self.assertIn(SOURCE, embed["description"])
+            self.assertEqual([call.args[0][-1] for call in gh.call_args_list], [
+                f"repos/{notify.REPO}/releases/tags/{LOCAL_TAG}",
+                f"repos/{notify.REPO}/git/ref/tags/{LOCAL_TAG}",
+            ])
+        for changed_release, changed_ref in ((dict(draft=True), {}), (dict(prerelease=True), {}),
+                                             (dict(assets=[]), {}), ({}, dict(object=dict(sha=UPSTREAM)))):
+            with self.subTest(release=changed_release, ref=changed_ref), mock.patch.object(
+                    notify.subprocess, "run", side_effect=[response(release | changed_release), response(ref | changed_ref)]):
+                with self.assertRaises(notify.NotificationError):
+                    notify.payload_for("release_published", report, "example")
+
     def test_preview_does_not_need_credentials_or_create_a_ledger(self):
         with tempfile.TemporaryDirectory() as tmp:
             state = Path(tmp) / "state"
@@ -118,7 +157,8 @@ class DeliveryTest(unittest.TestCase):
             return dict(id=HOOK, channel_id="other" if self.wrong_channel else notify.CHANNEL,
                         guild_id=notify.GUILD, type=1)
         if payload is not None:
-            intent = json.loads((self.run_folder / "started.json").read_text())
+            event = payload["embeds"][0]["footer"]["text"].split(" · ")[-1]
+            intent = json.loads((self.run_folder / f"{event}.json").read_text())
             self.assertEqual(intent["status"], "pending")
             self.assertNotIn("test-token", json.dumps(intent))
             self.message = dict(id=MESSAGE, channel_id=notify.CHANNEL, webhook_id=HOOK,
@@ -196,6 +236,18 @@ class DeliveryTest(unittest.TestCase):
         with self.assertRaisesRegex(notify.NotificationError, "already ended"):
             self.send()
         self.assertEqual(self.posts(), [])
+
+    def test_release_only_can_publish_after_a_reviewed_retry(self):
+        report = dict(source_sha=SOURCE)
+        self.send("release_building", report)
+        self.send("release_uploading", report)
+        self.assertEqual(self.send("release_uploading", report)["status"], "already_delivered")
+        self.send("release_stopped", report | dict(stage="publication", summary="The publish job failed."))
+        with mock.patch.object(notify, "published_release_url", return_value=LOCAL_URL):
+            self.send("release_published", report | dict(tag=LOCAL_TAG))
+        with self.assertRaisesRegex(notify.NotificationError, "already ended"):
+            self.send("release_ready", report | dict(validation="Signed builds passed."))
+        self.assertEqual(len(self.posts()), 4)
 
     def test_insecure_config_is_rejected_without_network_access(self):
         self.config_path.chmod(0o644)

@@ -1,22 +1,23 @@
 # Publish the signed local APKs
 
-`--local` uses `./release.sh local` and **Silora Publish Local Build**
-(`fork-local-release.yml`) in `SiloraOSS/silora-android`. GitHub verifies the
+`--local` and `--release-only` use `./release.sh local` and **Silora Publish
+Local Build** (`fork-local-release.yml`) in `SiloraOSS/silora-android`. GitHub verifies the
 uploaded payload and publishes under the shared `silora-release` lock. The
 publisher checks Android version ordering and keeps both public APK filenames.
 The build and the release happen on either side of the skill's one approval.
 
 ## Prepare the exact archive
 
-1. Follow the merge skill through the fork audit, conflict resolution, staged
-   diff checks and changelog. For this route, create the local merge commit
+1. For an upstream merge, follow the merge skill through the fork audit,
+   conflict resolution, staged diff checks and changelog. Create the local merge commit
    before the full release build so the build records the exact release SHA.
    Record the checks already performed in `CHANGELOG.md` and state where the
    remaining results will be recorded (the execution review and build
    metadata). Keep the full signed build, lint and tests as gates before
    approval. Attach their actual results to the receipt and review after the
    build. An amendment, including a changelog-only amendment, changes the
-   source SHA and requires an archive built from the new commit.
+   source SHA and requires an archive built from the new commit. For
+   release-only, start with the [committed branch source](release-only.md#pin-and-build).
 2. Verify the pinned inputs are ancestors of HEAD. Require a clean tracked
    tree and index and no untracked build inputs. Run the skill's mandatory
    build from this checkout with the same persistent signing directory and
@@ -26,7 +27,9 @@ The build and the release happen on either side of the skill's one approval.
    repair. After repair, rerun validation on the exact corrected commit.
 3. Validate the archive with `scripts/local-release.py`'s `validate_archive`
    before review. Compare `source_sha` and `upstream_checked_sha` in
-   `build-info.json` with the prepared commit and pinned upstream. Require
+   `build-info.json` with the prepared commit and included upstream. For a merge,
+   the included upstream must match the pinned merge input. For release-only,
+   record and verify the included upstream ancestor. Require
    both targets, clean-source flags, lint and unit-test evidence, both APKs,
    matching R8 mappings, the expected signing certificate and verified
    checksums. Preserve the actual test reports. Build metadata comes from the
@@ -105,9 +108,9 @@ requires a new review.
 
 ## Report in chat
 
-Live local runs can use the existing `started`, `unchanged` and factual
-pre-handoff `failed` events. The installed `validating` template describes a
-pre-commit build, and the `handoff` template accepts only the cloud workflow.
-For local, report validation, handoff and result in chat. The publish-only
-workflow has no existing Discord result listener. A local dry run sends no
-milestones, and its continuation does not backfill dry-run work.
+The [release-only mode](release-only.md) has its own Discord milestones.
+A live upstream merge with `--local` can use the existing `started`,
+`unchanged` and factual pre-handoff `failed` events. The installed
+`validating` template describes a pre-commit build, and the `handoff`
+template accepts only the cloud workflow. Report validation, handoff and the
+result for that route in chat. Dry-run preparation sends no milestones.

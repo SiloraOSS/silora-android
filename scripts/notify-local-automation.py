@@ -24,8 +24,9 @@ GUILD = "1457559352717086917"
 PRIVATE = Path("/home/albinoman887/Workspace/SigmaStreams/Staging/silora-upstream-automation")
 CONFIG = PRIVATE / "config/discord.json"
 STATE = PRIVATE / "local-notifications"
-EVENTS = ("started", "validating", "handoff", "unchanged", "failed", "setup")
-TERMINAL = {"handoff", "unchanged", "failed", "setup"}
+RELEASE_EVENTS = ("release_building", "release_ready", "release_uploading", "release_published", "release_stopped")
+EVENTS = ("started", "validating", "handoff", "unchanged", "failed", "setup") + RELEASE_EVENTS
+TERMINAL = {"handoff", "unchanged", "failed", "setup", "release_published"}
 
 
 class NotificationError(Exception):
@@ -146,6 +147,53 @@ def workflow_for(report):
     return run
 
 
+def published_release_url(report, source):
+    tag = report.get("tag")
+    if not isinstance(tag, str) or not re.fullmatch(r"build-[0-9]{4}-[0-9]{2}-[0-9]{2}\.[0-9]{6}\.[1-9][0-9]*", tag):
+        raise NotificationError("The publication report needs the local build's public release tag.")
+    url = f"https://github.com/{REPO}/releases/tag/{tag}"
+    try:
+        release, ref = [
+            json.loads(subprocess.run(["gh", "api", f"repos/{REPO}/{resource}"],
+                                      check=True, capture_output=True, text=True, timeout=30).stdout)
+            for resource in (f"releases/tags/{tag}", f"git/ref/tags/{tag}")
+        ]
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
+        raise NotificationError("Could not verify the public release on GitHub.") from None
+    assets = {asset["name"] for asset in release.get("assets", [])}
+    if (release.get("tag_name") != tag or release.get("html_url") != url
+            or release.get("draft") is not False or release.get("prerelease") is not False
+            or not release.get("published_at")
+            or not {"silora-phone.apk", "silora-tv.apk"}.issubset(assets)
+            or ref.get("ref") != f"refs/tags/{tag}"
+            or ref.get("object", {}).get("sha") != source):
+        raise NotificationError("GitHub does not show this tag as a public release of the approved commit.")
+    return url
+
+
+def release_payload(event, report):
+    source = sha(report, "source_sha")
+    body = f"Commit `{source}`\n\n"
+    if event == "release_building":
+        return ("🔨 Building Silora release", 0x5865F2,
+                body + "Running local tests, release lint and signed phone and TV builds.", None)
+    if event == "release_ready":
+        return ("🛠️ Silora release ready for approval", 0xFAA61A,
+                body + text(report, "validation") + "\n\nWaiting for approval to release these APKs.", None)
+    if event == "release_uploading":
+        return ("📦 Uploading Silora release", 0x5865F2,
+                body + "The approved commit is on Silora main. Uploading the signed APKs for GitHub to verify and publish.", None)
+    if event == "release_published":
+        url = published_release_url(report, source)
+        return ("✅ Silora release published", 0x2ECC71,
+                body + f"[Download the verified phone and TV APKs]({url}).", url)
+    stage = text(report, "stage")
+    if "\n" in stage or len(stage) > 100:
+        raise NotificationError("Use a short, single-line failure stage.")
+    return ("🚨 Silora release stopped", 0xE74C3C,
+            body + f"Stopped during **{stage}**.\n\n{text(report, 'summary')}", None)
+
+
 def payload_for(event, report, run_id):
     report = report or {}
     url = None
@@ -190,6 +238,8 @@ def payload_for(event, report, run_id):
         title, color = "🔔 Silora local status notifications enabled", 0x5865F2
         body = ("Future local automation runs will report their start, merge preparation and validation, and the validated merge summary when GitHub accepts the handoff. "
                 "Unchanged or stopped runs will get a closing status. GitHub will continue reporting build and release results.")
+    elif event in RELEASE_EVENTS:
+        title, color, body, url = release_payload(event, report)
     else:
         raise NotificationError("Unknown local notification event.")
     if len(body.encode("utf-16-le")) // 2 > 4096:

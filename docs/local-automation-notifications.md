@@ -69,6 +69,39 @@ notification problems in the task and continue otherwise authorized work.
 `--preview` prints the exact payload without contacting Discord or writing a
 receipt. A handoff preview still checks GitHub's actual run metadata.
 
+## Release-only milestones
+
+`$silora-merge-and-release --release-only` sends progress to the same
+**#📋・mod-log** webhook. Use `scripts/notify-local-automation.py` from the
+checkout that provided the release-only skill. The scheduled upstream merge
+continues to use its installed sender.
+
+```sh
+python3 -B scripts/notify-local-automation.py EVENT \
+  --execution-id EXECUTION_ID --report-file PRIVATE_REPORT_JSON
+```
+
+Include the full candidate `source_sha` in every report. Use the same execution
+ID for these events and for any continuation.
+
+| Event | When to send | Additional report fields |
+| --- | --- | --- |
+| `release_building` | Before local tests, lint and signed builds start | None |
+| `release_ready` | The signed archive passed validation and the review is waiting for approval | `validation` with actual checks and planned version |
+| `release_uploading` | The release is approved, the source is verified on main and the upload is about to begin | None |
+| `release_published` | The public tag and downloaded assets match the reviewed source and archive | Exact public `tag` |
+| `release_stopped` | A conclusive stop occurred during preparation, push or publication | Short `stage` and factual `summary` |
+
+The sender checks the public release, APK presence and source tag before sending
+`release_published`. That event closes the notification run. An earlier
+`release_stopped` can still be followed by a verified publication after a
+reviewed retry. Existing event receipts suppress duplicate posts. Use chat for
+any further stop with different details under that execution ID.
+
+Dry-run preparation sends no Discord updates. An approved dry-run continuation
+starts at the applicable publishing milestone. A pending review or uncertain
+push or dispatch remains open while the skill reconciles it.
+
 ## Reports
 
 A validating report needs `summary`, `upstream_sha`, and `recovery_ref`.

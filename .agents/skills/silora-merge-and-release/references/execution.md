@@ -22,7 +22,8 @@ Save private state under:
 ```
 
 Keep directories mode 700 and reports/receipts mode 600. Write receipt updates
-atomically. Record `origin_mode`, current `mode` (`live` or `dry_run`),
+atomically. Record the `operation` (`merge` or `release_only`),
+`origin_mode`, current `mode` (`live` or `dry_run`),
 `release_route` (`cloud` or `local`), the execution ID, chat
 association when available, worktree, stage, pinned inputs, recovery ref,
 tested-tree evidence/build archive/log paths,
@@ -31,8 +32,8 @@ SHA, review, approval, and accepted workflow run as they become known. Begin
 with no approval. Store the actual approval reply or a reliable chat-message
 reference and its exact source, upstream, push destination, workflow, mode and
 release route. Local approvals also bind the reviewed archive hashes, planned
-tag and APK versions. Record
-that the single approval covers both push and release; a previously written
+tag and APK versions. Record whether the single approval covers a push, a
+release, or both. A previously written
 boolean alone does not establish user consent. Never put credentials or raw
 secrets in reports. Keep local draft, dispatch and verification evidence in
 this execution receipt as described in [local APK releases](local-release.md).
@@ -71,8 +72,10 @@ Use the same execution ID. The `validating` and `handoff` events and GitHub
 result notifications below apply to cloud. See [local route reporting](local-release.md#report-in-chat)
 for the publish-only workflow.
 
-Matt authorized retaining the automation's existing staff milestone messages
-for invocations of this combined workflow. Use only the installed sender:
+For `--release-only`, use the repository sender and event names in
+[release-only milestones](../../../../docs/local-automation-notifications.md#release-only-milestones).
+For upstream merge invocations, use the installed sender for the existing
+milestones:
 
 ```sh
 python3 /home/albinoman887/Workspace/SigmaStreams/Staging/silora-upstream-automation/local-notifier/notify-local-automation.py EVENT \
@@ -113,7 +116,7 @@ Reconcile pending sends read-only: a known confirmed message ID can be read
 again; an unknown POST outcome requires inspecting the existing channel and
 using the documented `--message-id` reconciliation. Never erase intents or
 blindly repeat a POST. Do not send a terminal failure while repairing and
-continuing the same run. After accepted handoff, GitHub owns result messages.
+continuing the same run. After a cloud handoff, GitHub owns result messages.
 
 A missing logger or configuration/network error does not bypass any merge,
 validation, signing, push, or approval gate. Preserve its receipt, report the
