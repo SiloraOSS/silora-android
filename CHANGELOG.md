@@ -4,6 +4,41 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-20 11:28 PST — upstream 63c898084
+
+**Merge inputs** — `main` at `451bc2edc4eb874080c9bf5037d5905ac5573738` and official upstream
+`63c8980846923db8bc96481bcf6bf000760286f7`. Home refreshes watch state on return and retries
+transient section reads. Device sign-in approval now uses device-neutral copy
+and drops the legacy match-word footnotes. Upstream adds 17 locales and
+recognizes Hebrew and Indonesian under the codes devices report.
+Recovery ref `refs/codex/upstream-merge/20261120T192747Z`.
+
+**Upstream commits added**
+
+- `1b4732d90` fix(home): refresh watch state when Android Home returns (#1009)
+- `63c898084` fix(pairing): make device sign-in approval copy device-neutral and remove legacy match-word footnotes (#1014)
+
+**Silora merge decisions**
+
+- Git merged the three overlapping files without conflicts. The phone starts
+  Home hidden and refreshes on resume. TV still defers pending refreshes until
+  focus is restored. The shared Home model retains profile-scoped removal
+  notifications from Explore all and uses the upstream refresh path after
+  a successful dismissal (`home-explore-removal`).
+- Regenerated Silora brand strings for all 17 added locales (`identity`).
+  The generated Hebrew brand strings inherit the catalog's CLDR plural
+  forms. The upstream lint exception now covers that generated file too.
+- Retained the v49 Admin console and older-server episode labels, app IDs,
+  and existing release tooling. The pairing and locale changes follow
+  upstream behavior.
+
+**Validation**
+
+The fork overlap, upstream commit list, generated strings, supply-chain checks
+and staged diff were reviewed before the merge commit. The exact-commit local
+release build records the signed APKs and mappings. The execution review records
+full tests, release lint and artifact results. Device testing is outside this run.
+
 ## 2026-11-20 — Edrock v49 Admin console update
 
 Admin Now Playing shows the series name, episode number and episode title on
