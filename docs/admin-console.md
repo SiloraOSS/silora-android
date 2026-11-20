@@ -21,13 +21,15 @@ command identities when retrying a lost reply. Dedicated screens keep their
 action-specific confirmations. These controls depend on the connected server’s
 API and permissions.
 
-The asset lists 472 operations. The generic console filters out file uploads,
+The asset lists 474 operations, including plugin capabilities and provisioning
+status. The generic console filters out file uploads,
 binary downloads and raw-protocol operations such as the log WebSocket; these
 require web admin. It binds item actions using path positions, supports editable
 key/value maps and explicit clearing of form values, and masks credential fields.
 JSON operations remain subject to the connected server’s version and schema
-requirements. The dashboard shows server-provided transcode reasons, and running
-tasks show their start time when the server supplies it.
+requirements. The dashboard shows series and episode titles with both current
+and older servers and shows server-provided transcode reasons. Running tasks
+show their start time when the server supplies it.
 
 Matt requested the ten-commit range from edrock200/silo-android
 [`3cb8886ed`](https://github.com/edrock200/silo-android/commit/3cb8886ed5b5cb96f3140b8d7786d323143f2814)
@@ -52,11 +54,11 @@ on November 8, 2026. This is the `admin-console` entry in
 
 ## Refreshing the API contract
 
-The current asset matches edrock v42 at `c934aaf7ac0aef17881070c0a54ab4cdc56add36`.
-It regenerates from official silo-server `699f84ec`'s OpenAPI contract and
-contains 472 admin operations. Its `info.source` stamp is
-`3e256e30 2026-11-15`: the extractor records the last commit that changed the
-contract file, which can differ from the selected server checkout's HEAD.
+The current asset matches Edrock v49 at `f640a73de80299c08ca3b1ff53d5f6e013dbcb30`.
+It regenerates from the official silo-server OpenAPI contract at
+`975bbf41b33ccdce5bdc1d14daa9742748042be9` and contains 474 admin operations.
+The `info.source` stamp, `2c2dc7c 2026-11-19`, identifies the last commit that
+changed the contract file in that server checkout.
 The console shows that stamp and does not fetch a new spec at runtime.
 To update from a deliberately selected server checkout, run:
 
@@ -73,6 +75,10 @@ Use the server handlers and web admin pages to confirm what changed. Add new
 controls to both clients when they belong in these dedicated screens; other
 operations are picked up from the regenerated asset. Record the server source
 and validation in the changelog. Keep Silora’s existing release workflow.
+
+`AdminPlaybackSessionTest` checks the Now Playing labels for both response
+formats. The current contract uses `series_title` and `media_title`. Older
+servers can send `series_name` and a separate `episode_name`.
 
 ## November 15, 2026 update
 

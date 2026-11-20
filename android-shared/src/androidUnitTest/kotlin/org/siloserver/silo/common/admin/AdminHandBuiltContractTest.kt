@@ -73,7 +73,8 @@ class AdminHandBuiltContractTest {
         assertRecord(AdminOps.STATS, AdminDashboardStats.serializer())
         assertRecord(AdminOps.RESOURCES, AdminSystemResources.serializer())
         assertRecord(AdminOps.REQUEST_COUNTS, AdminRequestCounts.serializer())
-        assertList(AdminOps.SESSIONS, AdminPlaybackSession.serializer())
+        // episode_name is a fallback for servers predating the bundled contract.
+        assertList(AdminOps.SESSIONS, AdminPlaybackSession.serializer(), optional = setOf("episode_name"))
         for (command in listOf(AdminOps.SESSION_PAUSE, AdminOps.SESSION_RESUME, AdminOps.SESSION_STOP)) {
             assertBody(command, "command_id", "sequence")
         }

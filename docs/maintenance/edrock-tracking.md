@@ -139,6 +139,72 @@ Do not reimport either entry without an explicit reactivation request.
 `admin-console`, `trailers`, `home-explore-removal` and `hevc-levels` keep their
 existing status and coverage.
 
+## Imported: v49 Admin console, November 20, 2026
+
+Matt requested the Admin update from the November 20 audit. This entry
+advances import coverage for `admin-console`. The v42 whole-branch checkpoint
+above remains the recorded review baseline.
+
+- Source: `https://github.com/edrock200/silo-android.git`, branch
+  `feat/hevc-level-override-v49`, pin `f640a73de80299c08ca3b1ff53d5f6e013dbcb30`.
+- On November 20 the live branch heads matched the pinned inputs.
+  The APK branch at `13cf2b064a6070a11f64d6b6cf5caf51f5188070` identifies
+  the source branch and commit as build 48.
+  [APK publication](https://github.com/edrock200/silo-android/blob/13cf2b064a6070a11f64d6b6cf5caf51f5188070/README.md)
+- Edrock upstream base: `1b4732d90beb0f63832072a29c663205b9046a28`.
+  Official upstream comparison: `63c8980846923db8bc96481bcf6bf000760286f7`.
+- Silora input: `cc38f956a2c001bef54010b2e7822b8cbb7603f2` on `main`,
+  with incorporated upstream `61a4bf1ea2d0f5c1cd9fcd41fd12c40e28fe9d07`.
+  Recovery ref: `refs/codex/edrock-admin-v49/20261120T191654Z`.
+
+**Adapted** Edrock `5ddea7d5d056ee40713c38eed229d01dc300ec00` for Now
+Playing. The shared phone and TV model reads `series_title` and uses
+`media_title` for the episode when the older `episode_name` is absent. It
+also accepts the legacy `series_name`. The hand-built contract check still
+requires current response fields and allows the legacy episode field.
+
+**Imported** the cumulative asset changes from these Admin commits, including
+the asset hunk in the Now Playing fix above:
+
+- `ecbf63f3c08bf3650c2575bd8d5bca6140716d72` adds API key and section preview fields.
+- `d1396718667ac725768e079607dc9a551d197771` updates settings check and rating schemas.
+- `7ad67f9390dcac7889fd8043fb503f46244424e2` adds permission-gated catalog file paths.
+- `6861da56b2b0ea70f81c254d819a96eef3ab07b5` adds environment flags and plugin schedule details.
+- `f6c24a62558a6504f0400b0fcb94bc78a2d11373` adds plugin capabilities, provisioning status and sign-in binding fields.
+
+The 474-operation asset was regenerated from official silo-server
+`975bbf41b33ccdce5bdc1d14daa9742748042be9` OpenAPI blob
+`bcedcb134aa795d22b5b25d5f18f82afd204db16` and matches Edrock byte for
+byte. The asset records the contract's last-change stamp,
+`2c2dc7c 2026-11-19`. The two new plugin operations are reads. Generic
+forms use the existing Admin access and server permission checks.
+
+### Validation
+
+JDK 21 ran 40 release Admin tests, with 18 in `shared` and 22 in
+`android-shared`. All passed with zero failures, errors or skips. The three
+new tests exercised the console's JSON decode path for current and older
+episode fields and standalone media. Phone and TV release Kotlin compilation
+and lint passed with the existing baselines. Supply-chain, generated-resource
+and diff checks passed. APK packaging, installation and live server checks
+were outside this import.
+
+```sh
+./gradlew :shared:testReleaseUnitTest --tests 'org.siloserver.silo.admin.*' \
+  :android-shared:testReleaseUnitTest --tests 'org.siloserver.silo.common.admin.*' \
+  :androidApp:compileReleaseKotlinAndroid :androidTvApp:compileReleaseKotlinAndroid \
+  :androidApp:lintRelease :androidTvApp:lintRelease --parallel --max-workers=4 --console=plain
+```
+
+The final shared-only rerun passed after aligning the regression test decoder
+with `AdminService`.
+
+Scope excludes Edrock's release tooling and the official upstream refreshes
+carried on his branch. Trailers and Home removal were already covered in the
+audit. The HEVC picker and retired subtitle patches were skipped, and the
+keyboard microphone prompt remains deferred. The destination is the local
+`admin-console` import commit containing this entry and source pin.
+
 ## Recording the next review or import
 
 Record the date, verified source repository, branch and full SHA, Silora input

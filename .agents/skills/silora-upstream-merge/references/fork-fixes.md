@@ -148,6 +148,18 @@ Streamer success and investigation limits remain in
 `docs/maintenance/2026-11-11-streamer-voice-investigation.md`; they are historical
 evidence, not validation of a later APK.
 
+## Admin console (`admin-console`)
+
+Follow [Admin console maintenance](../../../../docs/admin-console.md) and the
+current contract in `android-shared/src/androidMain/assets/admin/openapi-admin.json`.
+Preserve the default-off profile menu setting, full server/account/profile
+credential scope, primary-profile access checks, stale-response guards and
+pagination. The dedicated phone and TV dashboards use `AdminPlaybackSession`.
+Keep the `series_name` alias and `episode_name` fallback for older servers,
+with `series_title` and `media_title` checked against the current bundled
+contract. Run the Admin contract, asset, access and pagination checks and the
+shared playback-session decoding tests.
+
 ## Trailers (`trailers`)
 
 Keep embedded YouTube playback, external fallback, and the detail-page Trailer

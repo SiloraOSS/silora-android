@@ -4,6 +4,31 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-20 — Edrock v49 Admin console update
+
+Admin Now Playing shows the series name, episode number and episode title on
+phone and TV with both generations of the server response. The app accepts
+`series_title` alongside the legacy `series_name` and uses `media_title` when
+the server omits `episode_name`.
+
+Refreshed the bundled server Admin contract to 474 operations. The generic
+console picks up plugin capabilities and provisioning status, plus updated
+fields for plugin settings, catalog, playback history and downloads. Silora's
+existing default-off Admin entry and account/profile access checks apply to
+these operations.
+
+Matt requested the Admin update from Edrock v49
+(`f640a73de80299c08ca3b1ff53d5f6e013dbcb30`).
+[Source commits, contract provenance and recovery ref](docs/maintenance/edrock-tracking.md#imported-v49-admin-console-november-20-2026)
+
+All 40 focused release Admin tests passed. Phone and TV release Kotlin
+compilation and lint passed with the existing baselines. Device and
+live-server validation remain pending.
+
+Other clients — Apple and Roku are outside the scope of Silora's Admin
+console. Web Admin already reads the revised session fields from the server.
+[Web Admin activity](https://github.com/Silo-Server/silo-server/blob/975bbf41b33ccdce5bdc1d14daa9742748042be9/web/src/pages/AdminActivity.tsx)
+
 ## 2026-11-19 12:04 PST — upstream 61a4bf1ea
 
 **Merge inputs** — `main` at `29c9b3c8aa10634605863f2fa9fcbf733354bde9` and upstream

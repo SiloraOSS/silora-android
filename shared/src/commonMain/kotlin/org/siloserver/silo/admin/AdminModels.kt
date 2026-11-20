@@ -1,7 +1,9 @@
 package org.siloserver.silo.admin
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import org.siloserver.silo.model.request.MediaRequest
 
@@ -123,9 +125,12 @@ data class AdminPlaybackSession(
     @SerialName("profile_name") val profileName: String? = null,
     @SerialName("media_title") val mediaTitle: String = "",
     @SerialName("media_type") val mediaType: String = "",
-    @SerialName("series_name") val seriesName: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("series_name")
+    @SerialName("series_title") val seriesName: String? = null,
     @SerialName("season_number") val seasonNumber: Int? = null,
     @SerialName("episode_number") val episodeNumber: Int? = null,
+    // Older servers send a separate episode name. Newer servers use media_title.
     @SerialName("episode_name") val episodeName: String? = null,
     @SerialName("client_label") val clientLabel: String? = null,
     @SerialName("client_name") val clientName: String? = null,
@@ -155,7 +160,9 @@ data class AdminPlaybackSession(
         get() {
             if (seriesName.isNullOrBlank()) return null
             val code = if (seasonNumber != null && episodeNumber != null) "S${seasonNumber}E$episodeNumber" else null
-            return listOfNotNull(code, episodeName?.takeIf { it.isNotBlank() } ?: mediaTitle.takeIf { it != seriesName })
+            val title = episodeName?.takeIf { it.isNotBlank() }
+                ?: mediaTitle.takeIf { it.isNotBlank() && it != seriesName }
+            return listOfNotNull(code, title)
                 .joinToString(" · ").takeIf { it.isNotBlank() }
         }
 
