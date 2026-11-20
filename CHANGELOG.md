@@ -4,6 +4,30 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-20 15:50 PST — upstream c6dfd52a6
+
+**Merge inputs** — `main` at `11bff4ef1b34886f9aba0ba65540b0d73eac6f4c` and official upstream
+`c6dfd52a631ccc158c1f4580756b6d4148e9e985`. The TV hero backdrop blends artwork into
+the page gradient with less banding on dark images. Recovery ref
+`refs/codex/upstream-merge/20261120T235009Z`.
+
+**Upstream commits added**
+
+- `c6dfd52a6` fix(tv): stop the hero backdrop banding on dark art (#1015)
+
+**Silora merge decisions**
+
+The one changed source file matched upstream after the conflict-free merge.
+The prepared merge below remains its first parent, with Silora's Home
+removal, Admin console, and branded locale resources.
+
+**Validation**
+
+The staged source matched the upstream blob. Generated brand resources,
+supply-chain checks and the staged diff passed. The execution review records
+the full test and lint results, signed APKs, and matching mappings for this
+exact commit. Device testing is outside this run.
+
 ## 2026-11-20 11:28 PST — upstream 63c898084
 
 **Merge inputs** — `main` at `451bc2edc4eb874080c9bf5037d5905ac5573738` and official upstream
