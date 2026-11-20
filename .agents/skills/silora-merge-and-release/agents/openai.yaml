@@ -1,0 +1,4 @@
+interface:
+  display_name: "Silora Merge and Release"
+  short_description: "Merge and release Silora with cloud or local builds"
+  default_prompt: "Use $silora-merge-and-release to merge upstream into Silora and ask me once before pushing and releasing. Add --local to publish the validated local APKs."
