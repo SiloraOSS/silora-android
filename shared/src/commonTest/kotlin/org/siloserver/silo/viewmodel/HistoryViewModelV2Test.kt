@@ -21,7 +21,7 @@ class HistoryViewModelV2Test {
         withTimeout(10_000) { vm.uiState.first { !it.isLoading && !it.isLoadingMore && !it.isRefreshing } }
     }
 
-    @Test fun actualRepositoryPagesEmptyAndDuplicateCardsThenRequiresExplicitReload() = runTest {
+    @Test fun loadsThroughEmptyAndDuplicatePagesAndSurfacesCursorFailure() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val cursors = mutableListOf<String?>()
         val client = HttpClient(MockEngine { request ->
@@ -30,27 +30,46 @@ class HistoryViewModelV2Test {
             val cursor = request.url.parameters["cursor"]; cursors += cursor
             if (cursor == "expired") respond("""{"type":"https://siloserver.org/problems/invalid_cursor","title":"Expired","status":400}""", HttpStatusCode.BadRequest, headersOf(HttpHeaders.ContentType, "application/problem+json"))
             else respond(when (cursor) {
-                null -> page(null, "visible")
+                null -> if (cursors.size == 1) page(null, "visible") else page(null, "end")
                 "visible" -> page("show", "duplicate")
-                "duplicate" -> page("show", "expired")
+                "duplicate" -> page("show", "empty")
+                "empty" -> page(null, "older")
+                "older" -> page("older-show", "expired")
+                "end" -> page(null)
                 else -> error("Unexpected cursor")
             }, headers = headersOf(HttpHeaders.ContentType, "application/json"))
         })
         val vm = HistoryViewModel(PersonalDataRepository(PersonalDataApi(client)))
         try {
-            settled(vm); assertTrue(vm.uiState.value.items.isEmpty()); assertTrue(vm.uiState.value.hasMore)
-            vm.loadMore(); settled(vm)
-            assertEquals("show", vm.uiState.value.items.single().contentId)
-            assertEquals("episode-show", vm.uiState.value.historyWatches["show"]?.mediaItemId)
-            assertNull(vm.uiState.value.total)
-            vm.loadMore(); settled(vm)
-            assertEquals(1, vm.uiState.value.items.size); assertTrue(vm.uiState.value.hasMore)
-            vm.loadMore(); settled(vm)
-            assertNotNull(vm.uiState.value.error); assertEquals(1, vm.uiState.value.items.size)
-            vm.loadMore(); assertEquals(listOf(null, "visible", "duplicate", "expired"), cursors)
-            vm.retry(); settled(vm)
-            assertEquals(null, cursors.last()); assertNull(vm.uiState.value.error)
-            assertTrue(vm.uiState.value.items.isEmpty()); assertTrue(vm.uiState.value.historyWatches.isEmpty())
+            val first = settled(vm)
+            assertEquals("show", first.items.single().contentId)
+            assertEquals("episode-show", first.historyWatches["show"]?.mediaItemId)
+            assertTrue(first.hasMore)
+            assertNull(first.total)
+            assertEquals(listOf(null, "visible"), cursors)
+
+            vm.loadMore()
+            val more = settled(vm)
+            assertEquals(listOf("show", "older-show"), more.items.map { it.contentId })
+            assertEquals(setOf("show", "older-show"), more.historyWatches.keys)
+            assertTrue(more.hasMore)
+            assertNull(more.error)
+            assertEquals(listOf(null, "visible", "duplicate", "empty", "older"), cursors)
+
+            vm.loadMore()
+            val failed = settled(vm)
+            assertNotNull(failed.error)
+            assertEquals(more.items, failed.items)
+            vm.loadMore()
+            assertEquals(listOf(null, "visible", "duplicate", "empty", "older", "expired"), cursors)
+
+            vm.retry()
+            val reloaded = settled(vm)
+            assertEquals(listOf(null, "end"), cursors.takeLast(2))
+            assertNull(reloaded.error)
+            assertTrue(reloaded.items.isEmpty())
+            assertTrue(reloaded.historyWatches.isEmpty())
+            assertFalse(reloaded.hasMore)
         } finally { vm.viewModelScope.coroutineContext[Job]?.cancelAndJoin(); client.close(); Dispatchers.resetMain() }
     }
 
@@ -65,7 +84,8 @@ class HistoryViewModelV2Test {
             val cursor = request.url.parameters["cursor"]; cursors += cursor
             val body = when (cursor) {
                 null -> if (firstPages++ == 0) page("old", "old-next") else page("fresh", "fresh-next")
-                "old-next" -> withContext(NonCancellable) {
+                "old-next" -> page(null, "old-following")
+                "old-following" -> withContext(NonCancellable) {
                     oldStarted.complete(Unit); releaseOld.await(); oldFinished.complete(Unit); page("stale", "stale-next")
                 }
                 "fresh-next" -> page("newer")
@@ -77,13 +97,15 @@ class HistoryViewModelV2Test {
         try {
             settled(vm); vm.loadMore()
             withContext(Dispatchers.Default) { withTimeout(10_000) { oldStarted.await() } }
+            assertTrue(vm.uiState.value.isLoadingMore)
+            vm.loadMore()
             vm.refresh(); settled(vm)
             releaseOld.complete(Unit)
             withContext(Dispatchers.Default) { withTimeout(10_000) { oldFinished.await() } }
             vm.loadMore(); settled(vm)
             assertEquals(listOf("fresh", "newer"), vm.uiState.value.items.map { it.contentId })
             assertEquals(setOf("fresh", "newer"), vm.uiState.value.historyWatches.keys)
-            assertEquals(listOf(null, "old-next", null, "fresh-next"), cursors)
+            assertEquals(listOf(null, "old-next", "old-following", null, "fresh-next"), cursors)
             assertFalse(vm.uiState.value.hasMore)
         } finally { releaseOld.complete(Unit); vm.viewModelScope.coroutineContext[Job]?.cancelAndJoin(); client.close(); Dispatchers.resetMain() }
     }

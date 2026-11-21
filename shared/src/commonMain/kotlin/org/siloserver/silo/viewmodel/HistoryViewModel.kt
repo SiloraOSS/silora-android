@@ -72,29 +72,45 @@ class HistoryViewModel(
         state.update { it.copy(isLoading = reset && !refreshing, isRefreshing = refreshing,
             isLoadingMore = !reset, error = null) }
         loadJob = viewModelScope.launch {
-            val result = repository.listHistory(continuation = cursor)
-            currentCoroutineContext().ensureActive()
-            if (requestGeneration != generation || requestIdentity != identityTransitions.generation.value) return@launch
-            when (result) {
-                is ApiResult.Success -> {
-                    continuation = result.data.continuation
-                    hasLoadedOnce = true
-                    state.update { previous ->
-                        val watches = result.data.items.associate { it.item.contentId to it.watch }
-                        previous.copy(items = (if (reset) emptyList() else previous.items) + result.data.items.map { it.item },
-                            historyWatches = (if (reset) emptyMap() else previous.historyWatches) + watches,
-                            hasMore = continuation != null, total = null,
-                            isLoading = false, isRefreshing = false, isLoadingMore = false, error = null)
+            var nextCursor = cursor
+            while (true) {
+                val result = repository.listHistory(continuation = nextCursor)
+                currentCoroutineContext().ensureActive()
+                if (requestGeneration != generation || requestIdentity != identityTransitions.generation.value) return@launch
+                when (result) {
+                    is ApiResult.Success -> {
+                        val page = result.data
+                        nextCursor = page.continuation
+                        // Older watches of a title can leave a page with no new cards.
+                        // Keep this load in flight until cards arrive or history ends.
+                        if (page.items.isEmpty() && nextCursor != null) continue
+
+                        continuation = nextCursor
+                        hasLoadedOnce = true
+                        state.update { previous ->
+                            val watches = page.items.associate { it.item.contentId to it.watch }
+                            previous.copy(
+                                items = (if (reset) emptyList() else previous.items) + page.items.map { it.item },
+                                historyWatches = (if (reset) emptyMap() else previous.historyWatches) + watches,
+                                hasMore = nextCursor != null,
+                                total = null,
+                                isLoading = false,
+                                isRefreshing = false,
+                                isLoadingMore = false,
+                                error = null,
+                            )
+                        }
+                    }
+                    is ApiResult.Error -> state.update {
+                        val retained = if (result.error == "identity_changed") PersonalListUiState() else it
+                        retained.copy(isLoading = false, isLoadingMore = false, isRefreshing = false, error = result.text ?: UiText.Raw(result.message))
+                    }
+                    is ApiResult.NetworkError -> state.update {
+                        it.copy(isLoading = false, isLoadingMore = false, isRefreshing = false,
+                            error = result.exception.message?.let(UiText::Raw) ?: UiText.Key(SharedString.HistoryLoadFailed))
                     }
                 }
-                is ApiResult.Error -> state.update {
-                    val retained = if (result.error == "identity_changed") PersonalListUiState() else it
-                    retained.copy(isLoading = false, isLoadingMore = false, isRefreshing = false, error = result.text ?: UiText.Raw(result.message))
-                }
-                is ApiResult.NetworkError -> state.update {
-                    it.copy(isLoading = false, isLoadingMore = false, isRefreshing = false,
-                        error = result.exception.message?.let(UiText::Raw) ?: UiText.Key(SharedString.HistoryLoadFailed))
-                }
+                return@launch
             }
         }
     }

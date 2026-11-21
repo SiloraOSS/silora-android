@@ -219,11 +219,6 @@ fun TvHistoryScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     PersonalListResumeRefresh(viewModel.uiState, { viewModel.hasLoadedOnce }, viewModel::refresh)
-    LaunchedEffect(state.items.isEmpty(), state.hasMore, state.isLoadingMore, state.isLoading, state.error) {
-        if (state.items.isEmpty() && state.hasMore && !state.isLoading && !state.isLoadingMore && !state.isRefreshing && state.error == null) {
-            viewModel.loadMore()
-        }
-    }
     PersonalGrid(
         title = stringResource(CommonR.string.personal_history_watchHistoryTitle),
         surfaceKey = "personal-history",
