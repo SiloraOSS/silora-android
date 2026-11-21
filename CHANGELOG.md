@@ -4,6 +4,22 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-21 — Edrock v51 Admin API spec
+
+Updated the bundled Admin API spec for phone and TV from edrock build 50
+(`904a1d13b`). The console descriptions now explain why deployment-managed
+AI providers reject edits and deletion. The spec also documents
+deployment-managed transcode nodes, the server-wide Requests switch, episode
+details in task backlog samples, and missing collection items in restore previews.
+
+The asset matches the official silo-server contract at `ae610da1` and lists
+475 operations. The new request image route is filtered by the generic console,
+which still exposes 459 callable operations. The source pins and recovery ref
+are in the [Edrock tracking record](docs/maintenance/edrock-tracking.md).
+
+All 40 Admin release unit tests passed. Phone and TV release compilation and
+lint passed with the existing lint baselines.
+
 ## 2026-11-20 15:50 PST — upstream c6dfd52a6
 
 **Merge inputs** — `main` at `11bff4ef1b34886f9aba0ba65540b0d73eac6f4c` and official upstream

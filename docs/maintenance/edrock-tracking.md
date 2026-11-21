@@ -205,6 +205,50 @@ audit. The HEVC picker and retired subtitle patches were skipped, and the
 keyboard microphone prompt remains deferred. The destination is the local
 `admin-console` import commit containing this entry and source pin.
 
+## Imported: v51 Admin API spec, November 21, 2026
+
+Matt requested the bundled Admin spec refresh from the November 21 review.
+This advances only the spec coverage for `admin-console`. The v42 whole-branch
+checkpoint remains the recorded review baseline.
+
+- The live `apk-builds` head confirmed build 50 uses
+  `feat/hevc-level-override-v51` at `904a1d13b4f9cf448ec372289d8a3961f8c17142`.
+  [APK publication](https://github.com/edrock200/silo-android/blob/7f4e25db3ce069179e477849dea6bdf50ba2af41/README.md)
+- Silora input: `2853428de2432728e3c41d7b7ecfc39733d469b1` on `main`.
+  Both Silora and edrock use Android upstream base
+  `c6dfd52a631ccc158c1f4580756b6d4148e9e985`. The live official comparison was
+  `9f5de310783ad1b542c9984b82449c46158942a4`.
+  Recovery ref: `refs/codex/edrock-admin-v51/20261121T231006Z`.
+- The asset includes the cumulative spec changes from
+  `8ac235aaa99ef0068decdaa6a051646c8e6fcb0c` and
+  `ee8a6fac8db3998c457f8e4063557c15e21be706`. It matches the output of
+  Silora's generator from official silo-server
+  `ae610da189a658b79b78b33e21574e9c355baab3`, OpenAPI blob
+  `3ae87cc7c1116b7814495c08a8b72b630a9b945a`. The asset stamp records
+  `1a933718 2026-11-21`, the last contract change at that revision.
+
+The spec adds deployment management fields for transcode nodes and AI providers,
+the global Requests status, and detail for task backlog and backup restore
+previews. The only added operation serves request artwork. The generic console
+filters that raw image response, so Admin Requests continues to use TMDB
+thumbnails. The 459 callable operations and their request schemas match the
+prior bundle. The destination is the commit containing this entry and spec.
+
+### Validation
+
+The regenerated asset matches the pinned edrock blob byte for byte. JDK 21 ran
+40 Admin release unit tests, with 18 in `shared` and 22 in `android-shared`.
+All passed with zero failures, errors, or skips. Phone and TV release compilation
+and lint passed with the existing baselines. Supply-chain and generated-resource
+checks passed. Device and live-server checks remain unverified.
+
+```sh
+./gradlew :shared:testReleaseUnitTest --tests 'org.siloserver.silo.admin.*' \
+  :android-shared:testReleaseUnitTest --tests 'org.siloserver.silo.common.admin.*' \
+  :androidApp:compileReleaseKotlinAndroid :androidTvApp:compileReleaseKotlinAndroid \
+  :androidApp:lintRelease :androidTvApp:lintRelease --parallel --max-workers=4 --console=plain
+```
+
 ## Recording the next review or import
 
 Record the date, verified source repository, branch and full SHA, Silora input

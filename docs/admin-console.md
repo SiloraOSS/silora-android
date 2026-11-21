@@ -21,10 +21,10 @@ command identities when retrying a lost reply. Dedicated screens keep their
 action-specific confirmations. These controls depend on the connected server’s
 API and permissions.
 
-The asset lists 474 operations, including plugin capabilities and provisioning
-status. The generic console filters out file uploads,
-binary downloads and raw-protocol operations such as the log WebSocket; these
-require web admin. It binds item actions using path positions, supports editable
+The asset lists 475 operations, including plugin capabilities and provisioning
+status. The generic console filters out file uploads, binary downloads and
+raw-protocol operations such as the log WebSocket and request artwork.
+It binds item actions using path positions, supports editable
 key/value maps and explicit clearing of form values, and masks credential fields.
 JSON operations remain subject to the connected server’s version and schema
 requirements. The dashboard shows series and episode titles with both current
@@ -54,10 +54,10 @@ on November 8, 2026. This is the `admin-console` entry in
 
 ## Refreshing the API contract
 
-The current asset matches Edrock v49 at `f640a73de80299c08ca3b1ff53d5f6e013dbcb30`.
+The current asset matches Edrock v51 at `904a1d13b4f9cf448ec372289d8a3961f8c17142`.
 It regenerates from the official silo-server OpenAPI contract at
-`975bbf41b33ccdce5bdc1d14daa9742748042be9` and contains 474 admin operations.
-The `info.source` stamp, `2c2dc7c 2026-11-19`, identifies the last commit that
+`ae610da189a658b79b78b33e21574e9c355baab3` and contains 475 admin operations.
+The `info.source` stamp, `1a933718 2026-11-21`, identifies the last commit that
 changed the contract file in that server checkout.
 The console shows that stamp and does not fetch a new spec at runtime.
 To update from a deliberately selected server checkout, run:
