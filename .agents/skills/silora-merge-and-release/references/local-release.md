@@ -4,7 +4,7 @@
 Local Build** (`fork-local-release.yml`) in `SiloraOSS/silora-android`. GitHub verifies the
 uploaded payload and publishes under the shared `silora-release` lock. The
 publisher checks Android version ordering and keeps both public APK filenames.
-The build and the release happen on either side of the skill's one approval.
+The same archive checks apply to interactive and invocation approval.
 
 ## Prepare the exact archive
 
@@ -50,11 +50,12 @@ The build and the release happen on either side of the skill's one approval.
    clean commit and review its new artifact identity before proceeding.
 
 Show the planned tag, reviewed workflow, exact source SHA, archive path, phone
-and TV versions and hashes in the approval review. Ask to push the reviewed
-commit and publish those APKs through the publish-only job. On resumption,
-verify HEAD, both pinned inputs, all archive file hashes, and remote main
-against the review. Reconcile the exact tag before applying the ordering check
-to a release already attempted. An older cloud preview can use this route
+and TV versions and hashes in the approval review. Use
+[the shared approval rules](../SKILL.md#apply-live-approval) to bind the
+approved push and publication to these APKs. Before pushing, verify HEAD, both
+pinned inputs, all archive file hashes, and remote main against the review.
+Reconcile the exact tag before applying the ordering check to a release
+already attempted. An older cloud preview can use this route
 only after an explicit route change, a clean exact-commit build and a new review.
 
 ## Publish and verify
@@ -109,8 +110,10 @@ requires a new review.
 ## Report in chat
 
 The [release-only mode](release-only.md) has its own Discord milestones.
-A live upstream merge with `--local` can use the existing `started`,
-`unchanged` and factual pre-handoff `failed` events. The installed
+A live `--local` merge invocation, including the
+[unpublished-main fallback](unpublished-main.md),
+can use the existing `started`, `unchanged` and factual pre-handoff `failed`
+events. Report an already-published result in chat if a build already ran. The installed
 `validating` template describes a pre-commit build, and the `handoff`
 template accepts only the cloud workflow. Report validation, handoff and the
 result for that route in chat. Dry-run preparation sends no milestones.

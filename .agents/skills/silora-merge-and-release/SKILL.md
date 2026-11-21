@@ -1,6 +1,6 @@
 ---
 name: silora-merge-and-release
-description: Merge upstream and release Silora, or use --release-only to build and publish the current branch without merging, with Discord progress. Use --local for a merge that publishes the locally built APKs. Both support --dry-run and one approval before push and publication. Use silora-upstream-merge for merge-only requests.
+description: Merge upstream and release Silora, or release unpublished main commits when upstream is current. Use --github (default) for GitHub builds, --local for locally built APKs, or --release-only for the current branch. Use --approved to approve a live release in the invocation or --dry-run to preview. Use silora-upstream-merge for merge-only requests.
 ---
 
 # Silora merge and release
@@ -14,21 +14,29 @@ tooling.
   without merging selects the [current-branch release](references/release-only.md).
   It builds both signed APKs locally and reports progress to the existing
   Discord staff log. Follow that reference for source selection and execution
-  and use the shared approval rules below. This mode also accepts `--dry-run`.
-- The normal flow uses **live** mode and the single approval below. The
-  default route for an upstream merge is **cloud**, using Silora Automation
-  Release.
-- `--local` selects the **local** release route. GitHub verifies and publishes
-  the exact signed APKs from local validation. Read
+  and use the shared approval rules below.
+- **Live** mode defaults to one confirmation. `--github` selects the
+  **cloud** route, the default for a merge-and-release invocation. **Silora
+  Automation Release** builds and publishes the exact validated commit.
+- `--local` selects the **local** route. GitHub verifies and publishes the
+  exact signed APKs from local validation. Read
   [local APK releases](references/local-release.md) before preparing the merge.
-  This route works with live mode or with `--dry-run`.
+  Both routes check for [unpublished main commits](references/unpublished-main.md)
+  when upstream is already included.
+- `--approved` in Matt's explicit request to run a live release approves the
+  required push to `SiloraOSS/silora-android` `main` and publication for that
+  execution. It works with both release routes and with `--release-only`.
+  For example, `$silora-merge-and-release --local --approved` validates and
+  publishes both signed APKs for an eligible release without the confirmation
+  pause.
 - `dry-run`, `--dry-run`, or "run this as a dry run" selects **dry-run** mode.
   Prepare the selected source and signed builds with tests and lint, then show
   the review and stop. Do not push, dispatch any
   workflow, create remote tags/drafts/releases, upload assets, or send Discord
   messages. Read
   [dry-run decisions and continuation](references/dry-run.md) before starting;
-  it keeps preview changes separate from Matt's normal checkout.
+  it keeps preview changes separate from Matt's normal checkout. If the
+  invocation also includes `--approved`, follow the dry-run flow.
 - After a successful dry-run review, offer three clear choices:
   **Release this result**, **Keep for later**, and **Discard**. Release this
   result approves pushing that exact prepared commit to Silora main and
@@ -40,9 +48,9 @@ tooling.
   run. Use the same reference. Handle the temporary checkout internally; Matt
   needs only the result, preview ID when useful, and the three choices.
 
-Record the selected operation, mode and release route before any notification
-or merge. Older receipts default to the merge operation and cloud route when
-the fields are absent. Dry-run restrictions
+Record the selected operation, mode, release route and any invocation approval
+before any notification or merge. Older receipts default to the merge
+operation and cloud route when those fields are absent. Dry-run restrictions
 apply through errors and resumptions until Matt explicitly selects Release
 this result for the concrete review. An unambiguous "Continue with release"
 reply to that review has the same meaning. Record the selection and its approved
@@ -66,12 +74,11 @@ or clean it up automatically.
   isolated local preparation described above. A request to create, edit,
   explain, or review the skill does not start a run. Honor narrower user
   instructions.
-- In live mode, use one confirmation after validating the prepared source.
-  Show the concrete result and ask Matt to approve the exact-commit GitHub
-  release and, if necessary, the push to verified `SiloraOSS/silora-android`
-  `main`. After approval, push if needed, verify, and hand off. The
-  invocation itself, an earlier run's approval, and the paused automation's
-  unattended authorization do not satisfy this gate.
+- Bind approval to the validated commit, destination, workflow and, for
+  local releases, the exact signed archive before publication. Use Matt's
+  `--approved` invocation for that live execution or get the usual confirmation
+  after validation. This covers one release, including the push if needed.
+  Keep the same validation and pre-push checks for both paths.
 - Leave the saved automation, its paused state/schedule/model, the merge skill,
   GitHub workflows, signing configuration, and notification handlers unchanged.
   Do not create a PR, import edrock changes, or create tags/releases outside
@@ -115,23 +122,24 @@ If the current checkout is on another development branch, preserve it and reuse
 or create an isolated main worktree, normally
 `.worktrees/silora-upstream-automation`. Verify existing worktree ownership and
 state before use. Fast-forward a clean main that is merely behind Silora main;
-create a missing local main from the fetched branch if needed. Unexpected
-local-only commits, divergence, tracked edits, or an existing Git operation
-require inspection and a reported decision before publication. Do not switch
-someone else's branch, stash/reset their edits, abort their operation, rebase,
-or force-push. Preserve unrelated untracked files. Dry-run mode instead uses
-the separate preview checkout described in its reference; it must not move
-local main or modify an existing live execution.
+create a missing local main from the fetched branch if needed. Inspect
+local-only commits before publication. A clean `main` ahead of Silora main can
+supply the candidate when upstream is already included. Unexpected commits,
+divergence, tracked edits, or an existing Git operation require inspection
+before proceeding. Do not switch someone else's branch, stash/reset their
+edits, abort their operation, rebase, or force-push. Preserve unrelated
+untracked files. Dry-run mode uses its separate preview checkout and keeps
+local main and existing live executions intact.
 
-Pin the full `fork_before` and `upstream_tip` SHAs. A failed fetch is a failure,
-not evidence of no changes. If upstream is already included, close with the
-existing `unchanged` milestone in live mode and report that result without
-adding a merge, changelog entry, build, push, or dispatch. Check unfinished executions before
-taking this shortcut: an awaiting-approval merge must be resumed, not forgotten
-because upstream is now included. Fork-only changes or a missing previous
-release do not authorize a new release on this no-change path. A dry run with
-no new upstream changes reports an honest no-change preview and stops; it
-does not fabricate a merge, passing checks, or a release to demonstrate the format.
+Pin the full `fork_before` and `upstream_tip` SHAs. Establish the upstream
+status from a successful fetch. Reconcile unfinished executions before taking
+the no-upstream path, including a prepared merge awaiting approval.
+
+If upstream is already included, follow
+[release unpublished main commits](references/unpublished-main.md) before
+building on either route. If the source already matches GitHub Latest, stop
+and report the reason. Send `unchanged` for a live no-change result when no
+build ran. Dry runs make the same decision without notifications.
 
 ## Merge, validate, and commit locally
 
@@ -175,8 +183,8 @@ main before preparing the review. If it moved, inspect the new history and
 safely integrate it only within the authorized merge scope. Repeat validation
 for any added code and prepare an exact-commit archive if the local release
 source changed. Stop for unexpected/unreviewed work. Record the current remote
-SHA as the reviewed push baseline. Persist the local result, evidence, and
-`awaiting_approval` state for live mode. Do not push yet.
+SHA as the reviewed push baseline. Persist the local result and evidence,
+then record approval below before pushing.
 
 In dry-run mode, show the same factual review below with **Dry run — nothing
 pushed or released** at the top. Include actual checks, the local preview
@@ -188,16 +196,20 @@ as unsent and report only verified remote state. Record
 `dry_run_complete` and present the three choices above. The review must identify
 the exact source/upstream SHAs, push destination, release route, workflow, and enabled
 publication so Release this result can approve both actions. Wait for Matt's
-selection before any push, workflow dispatch, or notification. If preparation failed or
-there is no new merge to release, show the actual outcome; do not offer release
-as ready or infer approval to bypass failed/unrun checks. Keep the preview
+selection before any push, workflow dispatch, or notification. If preparation
+failed or produced no release candidate, show that result and omit the release
+choice. Keep the preview
 pending until an explicit choice. Keep, discard and release use their sections
 in the dry-run reference; only release enters the approved publication phase.
 
-## Review and wait for approval
+## Record the review and approval
 
-For a live upstream merge, show Matt a concise review containing the details
-below. For `--release-only`, use the [current-branch review](references/release-only.md#review-and-publish).
+For a live merge or release of unpublished main commits, show Matt a concise
+review with the details below. If upstream was already included, show the
+commits since GitHub Latest and the pinned existing source. Report the merge
+changelog and recovery ref only when applicable. For a direct `--release-only`
+invocation, use the [current-branch review](references/release-only.md#review-and-publish)
+with the same approval rules.
 
 - The meaningful upstream changes, conflict decisions, and retained fork fixes.
 - Local checks and their actual results, with device-testing limits.
@@ -209,29 +221,34 @@ below. For `--release-only`, use the [current-branch review](references/release-
   (`fork-automation-release.yml`), its GitHub compilation, and its configured
   notifications. For local, show the archive, APK versions, hashes and
   publish-only workflow as described in [local APK releases](references/local-release.md).
-- The merge is committed locally and waiting for approval. On resumption,
-  report any independently verified push or release state.
+- The current push and publication status, including any verified work from
+  this execution on resumption.
 
-Ask whether to **push this exact commit and start its GitHub release**, and
-**wait for an explicit reply**. This is the single routine confirmation.
-Use an available approval/input surface or end the turn with the question.
-Persist the review and its source/upstream/push destination/workflow/mode in the
-private receipt, with the release route and, for local, the exact reviewed
-archive identity. Do not push, dispatch even a validation-only workflow, create
-tags/drafts, upload assets, or invoke a publisher while waiting. Waiting,
-deferral, or declining publication is not a validation failure and must not
-send a false `failed` or `handoff` milestone. Preserve the local commit and
-resume record.
+### Apply live approval
 
-On confirmation, verify the reply approves both actions in this review and
-record that scope in the receipt. If Matt explicitly approves only pushing,
-honor that narrower scope and stop after the verified push; do not infer release
-approval. Otherwise continue through the release without asking again.
+Save the review in the private receipt with its source, upstream, push
+destination, workflow, mode and route. For local publication, include the
+exact archive identity.
+
+- With `--approved` from this live invocation, post the validated review as a
+  progress update. Bind the recorded invocation to these exact inputs and
+  actions, record stage `approved`, then continue through push and publication
+  in the same run.
+- Otherwise, record stage `awaiting_approval`, ask Matt to approve the exact
+  push and release, and wait for an explicit reply. Ask for publication alone
+  if the source is already on GitHub main. Record the reply and its scope.
+  If Matt approves only the push, stop after verifying it.
+
+Wait for a recorded approval before pushing, dispatching workflows, creating
+tags or drafts, or uploading assets. While waiting, preserve the local commit
+and resume record. Deferral or decline leaves publication pending or closed
+without a `failed` or `handoff` milestone.
 
 ## Push, dispatch, and verify the approved release
 
-For `--release-only`, follow [review and publish](references/release-only.md#review-and-publish).
-The steps here are for publishing an upstream merge.
+For a direct `--release-only` invocation or a local unpublished-main release,
+follow [review and publish](references/release-only.md#review-and-publish).
+The steps here also cover a GitHub release of unpublished main commits.
 
 This section is live-only, including a prepared dry run explicitly approved
 through Release this result. Success alone or an older approval cannot
@@ -244,12 +261,14 @@ archive before pushing. Remote main must still equal the reviewed baseline,
 or the approved result when reconciling a previously attempted push. Do not
 force-push, substitute a moved branch or fresh upstream tip, or silently merge
 new code after approval. If the source, push destination, route, workflow, or
-approved archive must change, validate as appropriate, show an updated review, and obtain
-fresh approval of the changed plan. New upstream commits alone do not replace
-the already pinned upstream SHA.
+approved archive must change after approval has been bound, validate the new
+result, show an updated review, and obtain fresh approval. This applies to
+invocation approval as well. New upstream commits alone do not replace the
+pinned upstream SHA.
 
-For normal live preparation, push with `git push silora main`. For an approved
-dry-run result, use the exact-commit refspec in its continuation reference;
+For normal live preparation, push with `git push silora main` if the commit
+still needs to reach GitHub. For an approved dry-run result, use the
+exact-commit refspec in its continuation reference if a push is needed;
 this pushes the same approved source without moving Matt's normal checkout.
 Then independently read GitHub main and require it to equal the approved
 result. Reconcile an uncertain push by
@@ -278,9 +297,11 @@ Verify the helper still targets `SiloraOSS/silora-android`,
 `fork-automation-release.yml`, and `main`. Keep its durable receipts and run
 matching; reconcile an accepted active/successful run rather than dispatching
 another. Verify the accepted run ID, `headSha`, upstream identity, workflow,
-branch, and publication mode, then send `handoff` with the real evidence.
-An uncertain response is unresolved state; never delete a receipt or blindly
-redispatch. Reconcile old Manual Release handoffs too when present.
+branch, and publication mode. Send `handoff` for a completed merge with
+its actual changelog and recovery ref. For unpublished main commits, report
+the handoff in chat and let GitHub send its configured workflow notifications.
+An uncertain response is unresolved state. Reconcile it and any old Manual
+Release handoffs before another dispatch.
 
 Follow the accepted run through completion, with bounded waits and concise
 updates for meaningful changes. Preserve GitHub's tests, full release lint,

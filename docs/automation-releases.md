@@ -1,8 +1,8 @@
 # Releases from the local merge automation
 
 **Silora Automation Release** builds and releases one exact commit supplied by
-the local upstream-merge automation. It lives beside **Silora Manual Release**
-and **Silora Daily**. The release routes share signing secrets, versioning,
+the local upstream-merge automation or the manual merge-and-release skill. It
+lives beside **Silora Manual Release** and **Silora Daily**. The release routes share signing secrets, versioning,
 download filenames and a publication lock. The publishers now also share a
 version-order check: an older or equal build cannot replace the current Latest
 release. Notification handlers retain their existing scope.
@@ -16,13 +16,14 @@ without creating a tag, a draft, or a public release.
 
 The local task still runs `$silora-upstream-merge`, validates both signed
 release builds with tests and full release lint, commits the merge and its
-changelog, pushes to `silora main`, and checks the remote SHA. No upstream merge
-happens inside this GitHub workflow.
+changelog, pushes to `silora main`, and checks the remote SHA. When upstream
+is already included and main has unpublished source, the manual skill can
+validate and hand off that existing commit through the same workflow.
 
-The handoff supplies two full lowercase commit SHAs:
+The handoff supplies two full lowercase commit SHAs.
 
-- `source_sha`: the validated, pushed Silora merge.
-- `upstream_sha`: the official upstream snapshot used for that merge.
+- `source_sha` is the validated Silora commit on GitHub main.
+- `upstream_sha` is the official upstream snapshot included in that commit.
 
 The source must equal the workflow's selected `main` commit and its checkout.
 The upstream commit must be an ancestor of that source and of official upstream
@@ -30,12 +31,12 @@ The upstream commit must be an ancestor of that source and of official upstream
 after acquiring the release lock. A race or stale queued request fails before
 building. Later branch changes do not change the selected source or its tag.
 
-Use the helper after the push, from the validated checkout, substituting the
-two SHAs recorded during the merge:
+Use the helper from the validated checkout after verifying GitHub main.
+Supply the two pinned SHAs.
 
 ```sh
 python3 scripts/dispatch-automation-release.py \
-  --source-sha FULL_VALIDATED_MERGE_SHA \
+  --source-sha FULL_VALIDATED_SOURCE_SHA \
   --upstream-sha FULL_PINNED_UPSTREAM_SHA \
   --receipt-dir /home/albinoman887/Workspace/SigmaStreams/Staging/silora-upstream-automation/handoffs
 ```

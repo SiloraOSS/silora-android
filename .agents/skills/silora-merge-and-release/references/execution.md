@@ -22,21 +22,25 @@ Save private state under:
 ```
 
 Keep directories mode 700 and reports/receipts mode 600. Write receipt updates
-atomically. Record the `operation` (`merge` or `release_only`),
-`origin_mode`, current `mode` (`live` or `dry_run`),
+atomically. Record the `operation`
+(`merge`, `release_only`, or `release_unpublished_main`), `origin_mode`, current `mode` (`live` or `dry_run`),
 `release_route` (`cloud` or `local`), the execution ID, chat
 association when available, worktree, stage, pinned inputs, recovery ref,
 tested-tree evidence/build archive/log paths,
 validation results, local merge SHA, reviewed remote baseline, verified pushed
-SHA, review, approval, and accepted workflow run as they become known. Begin
-with no approval. Store the actual approval reply or a reliable chat-message
-reference and its exact source, upstream, push destination, workflow, mode and
-release route. Local approvals also bind the reviewed archive hashes, planned
-tag and APK versions. Record whether the single approval covers a push, a
-release, or both. A previously written
-boolean alone does not establish user consent. Never put credentials or raw
-secrets in reports. Keep local draft, dispatch and verification evidence in
-this execution receipt as described in [local APK releases](local-release.md).
+SHA, review, approval, and accepted workflow run as they become known. For a
+live `--approved` request, save the actual invocation or a reliable chat-message
+reference in the new receipt as authorization for that execution. Bind it to
+the prepared result only after validation. For an interactive run, record the
+actual reply or a reliable reference after presenting the review.
+
+Before any push or publication, record the exact source, upstream, push
+destination, workflow, mode, route and approved actions. Local approvals also
+bind the reviewed archive hashes, planned tag and APK versions. Keep
+invocation approval with its execution. Other receipts, boolean fields and
+scheduled automation settings cannot supply approval. Keep credentials out of
+reports. Record local draft, dispatch and verification evidence as described in
+[local APK releases](local-release.md).
 
 Before a new run, inspect unfinished manual executions and existing private
 automation receipts for the same repository. Resume or reconcile relevant
@@ -90,9 +94,9 @@ Discord posts. Do not turn staff milestones into member announcements.
 | Event | When to send | Report fields |
 | --- | --- | --- |
 | `started` | Once per new execution, before workspace/fetch/merge work | None |
-| `validating` | Cloud route, merge audit and resolutions complete and local checks about to start | `summary`, `upstream_sha`, `recovery_ref` |
-| `unchanged` | Fresh upstream already included and no unfinished run to resume | `upstream_sha` |
-| `handoff` | Cloud route, approval received, push verified and exact publishing run accepted | `summary`, `upstream_sha`, `merge_sha`, `validation`, `recovery_ref`, `changelog_line`, `workflow_run_id` |
+| `validating` | Cloud merge, audit and resolutions complete and local checks about to start | `summary`, `upstream_sha`, `recovery_ref` |
+| `unchanged` | Fresh upstream is already included and the selected route concludes without building or releasing | `upstream_sha` |
+| `handoff` | Cloud merge, approval received, push verified and exact publishing run accepted | `summary`, `upstream_sha`, `merge_sha`, `validation`, `recovery_ref`, `changelog_line`, `workflow_run_id` |
 | `failed` | Local work has actually stopped before accepted handoff | `stage`, factual `summary`, optional `recovery_ref` |
 
 An approval wait sends no terminal event. A decline or deferral is recorded in
@@ -103,7 +107,12 @@ change. A continuation after the approved push can proceed to its approved
 release without another routine confirmation. Do not send another
 start/validating post on continuation.
 
-Handoff summaries must match the chat review and measured validation results.
+For an [unpublished-main release](unpublished-main.md), report validation and
+handoff in chat. The GitHub route's configured workflow notifications still
+report the cloud build and result.
+
+Handoff summaries for actual merges must match the chat review and measured
+validation results.
 Use the actual line number in the pushed `CHANGELOG.md` and the accepted run
 ID. The sender independently verifies the run and builds the GitHub links.
 It currently states no device testing occurred; do not use that template to
