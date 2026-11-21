@@ -147,23 +147,63 @@ class ForkReleaseTest(unittest.TestCase):
                 release.package(root, self.info(), root / "dist")
             self.assertFalse((root / "dist").exists())
 
-    def test_checksums_cover_actual_apks_and_source_metadata(self):
+    def test_package_checksums_and_release_notes_use_the_selected_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+
+            def git(*args):
+                return subprocess.run(
+                    ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", *args],
+                    cwd=root, check=True, capture_output=True, text=True,
+                ).stdout.strip()
+
+            def commit(subject):
+                git("commit", "--allow-empty", "--quiet", "-m", subject)
+                return git("rev-parse", "HEAD")
+
+            git("init", "--quiet")
+            base = commit("Upstream release")
+            git("tag", "-a", UPSTREAM["tag"], "-m", "Official build")
+            git("update-ref", f"{release.UPSTREAM_TAG_REFS}{UPSTREAM['tag']}", git("rev-parse", UPSTREAM["tag"]))
+            commit("Oldest included upstream change")
+            for index in range(1, release.UPSTREAM_NOTES_LIMIT):
+                commit(f"fix: included upstream change {index}")
+            tip = commit("fix: include the [latest] upstream change")
+            future = commit("Future upstream change")
+            git("update-ref", "refs/silo-upstream/heads/main", future)
+            git("switch", "--detach", tip)
+            source = commit("Silora-only change")
+            info = dict(self.info(), source_sha=source, upstream_checked_sha=tip)
+
             for module in ("androidApp", "androidTvApp"):
                 path = root / module / "build/outputs/apk/release" / f"{module}-universal-release.apk"
                 path.parent.mkdir(parents=True)
                 path.write_bytes(module.encode())
             out = root / "dist"
-            release.package(root, self.info(), out)
+            release.package(root, info, out)
             self.assertEqual({path.name for path in out.iterdir()}, {
                 "silora-phone.apk", "silora-tv.apk", "build-info.json", "SHA256SUMS", "RELEASE_NOTES.md",
             })
-            self.assertEqual(json.loads((out / "build-info.json").read_text())["source_sha"], "a" * 40)
+            self.assertEqual(json.loads((out / "build-info.json").read_text())["source_sha"], source)
             for line in (out / "SHA256SUMS").read_text().splitlines():
                 digest, name = line.split("  ")
                 self.assertEqual(digest, hashlib.sha256((out / name).read_bytes()).hexdigest())
             self.assertEqual(len((out / "SHA256SUMS").read_text().splitlines()), 3)
+
+            notes = (out / "RELEASE_NOTES.md").read_text()
+            self.assertIn("**Ignore HEVC Level Limits** is on by default", notes)
+            self.assertNotIn("defaulting to 6.2", notes)
+            self.assertIn("Based on [Silo 1.0.0 (26)]", notes)
+            self.assertIn(f"{release.UPSTREAM_NOTES_LIMIT + 1} upstream commits since that release", notes)
+            self.assertEqual(notes.split("## Downloads")[0].count("\n- ["), release.UPSTREAM_NOTES_LIMIT)
+            self.assertIn(f"/commit/{tip}) fix: include the \\[latest\\] upstream change", notes)
+            self.assertIn(f"/compare/{base}...{tip})", notes)
+            for subject in ("Oldest included upstream change", "Future upstream change", "Silora-only change"):
+                self.assertNotIn(subject, notes)
+
+            at_tag = release.upstream_changelog(root, dict(info, upstream_checked_sha=base))
+            self.assertIn("The included upstream source is at that release tag.", at_tag)
+            self.assertNotIn("\n- [", at_tag)
 
 
 class BuildDecisionTest(unittest.TestCase):

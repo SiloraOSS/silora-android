@@ -115,6 +115,9 @@ class ReleaseArchiveTests(unittest.TestCase):
         patch = mock.patch.object(build, "ROOT", self.root)
         patch.start()
         self.addCleanup(patch.stop)
+        changelog = mock.patch.object(build.fork_release, "upstream_changelog", return_value="")
+        changelog.start()
+        self.addCleanup(changelog.stop)
         self.info = build.fork_release.metadata(
             dt.datetime(2026, 10, 30, tzinfo=dt.timezone.utc), 1, "a" * 40, "b" * 40,
             upstream={"version": "1.0.0", "build": 28, "tag": "v1.0.0-beta.28"},

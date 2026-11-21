@@ -381,14 +381,18 @@ Multiple builds on the same day share this visible date.
 
 The base version comes from the official Silo build tag with the highest
 repository-wide build number included in the checked upstream snapshot, such as
-`v1.0.0-beta.26`. Both workflows use official tags in a separate namespace;
-the daily workflow fetches them, while the manual workflow reads tag metadata
-without fetching upstream Git objects. Fork tags and newer upstream tags outside
-the included snapshot cannot change its version. Main can contain
-changes after that tagged release, so `build-info.json` and the release notes
-retain both the base tag and exact checked source SHAs. A missing official build
-tag stops publication rather than inventing a version. The upstream build number
-is also preserved in the client build header reported to Silo.
+`v1.0.0-beta.26`. Daily and local builds fetch official tags into a separate
+namespace. Manual and Automation builds use tag metadata for commits already
+in the checkout. The version calculation requires an official build tag
+reachable from the included upstream snapshot. The upstream build number is
+also preserved in the client build header reported to Silo.
+
+The shared release packager writes `RELEASE_NOTES.md` from the build's base
+tag and exact included upstream commit. It lists up to 12 of the most recent
+upstream commits in that range, with a link to the full comparison and to
+Silora's changelog at the packaged source commit. GitHub uses the same file
+for the release description. `build-info.json` records the base tag, included
+upstream SHA and Silora source SHA.
 
 Android's internal version codes still use elapsed UTC seconds since 2026 plus a
 fork-specific base, remaining monotonic even if the workflow run counter resets.

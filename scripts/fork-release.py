@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 
@@ -19,6 +20,9 @@ spec.loader.exec_module(release_version)
 
 BUILD_TAG = re.compile(r"build-(\d{4}-\d{2}-\d{2})\.(\d{6})\.([1-9]\d*)")
 LEGACY_TAG = re.compile(r"(?:daily|manual)-(\d{4}-\d{2}-\d{2})\.([1-9]\d*)")
+UPSTREAM_REPOSITORY = "https://github.com/Silo-Server/silo-android"
+UPSTREAM_TAG_REFS = "refs/silo-upstream/tags/"
+UPSTREAM_NOTES_LIMIT = 12
 
 
 def build_decision(source_sha, releases, tree_for, force=False):
@@ -85,7 +89,7 @@ def upstream_version(root, upstream_sha):
     """
     tags = subprocess.run(
         ["git", "for-each-ref", f"--merged={upstream_sha}",
-         "--format=%(refname:strip=3)", "refs/silo-upstream/tags/"],
+         "--format=%(refname:strip=3)", UPSTREAM_TAG_REFS],
         cwd=root, check=True, capture_output=True, text=True,
     ).stdout.splitlines()
     builds = []
@@ -166,6 +170,40 @@ def prepare():
             print(f"{key}={info[key]}", file=out)
 
 
+def upstream_changelog(root, info):
+    """Describe the official commits included after the build's base tag."""
+    tag = info["upstream_version_tag"]
+    tip = info["upstream_checked_sha"]
+
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=root, check=True,
+                              capture_output=True, encoding="utf-8").stdout
+
+    base = git("rev-parse", "--verify", f"{UPSTREAM_TAG_REFS}{tag}^{{commit}}").strip()
+    git("merge-base", "--is-ancestor", base, tip)
+    commits = git("log", "--date-order", "--encoding=UTF-8", "--format=%H%x09%s",
+                  f"{base}..{tip}", "--").splitlines()
+    version = f"Silo {info['upstream_version']} ({info['build_number']})"
+    release_url = f"{UPSTREAM_REPOSITORY}/releases/tag/{quote(tag, safe='')}"
+    parts = ["## Upstream changes\n\n", f"Based on [{version}]({release_url}). "]
+    if not commits:
+        parts.append("The included upstream source is at that release tag.\n\n")
+        return "".join(parts)
+
+    count = len(commits)
+    noun = "commit" if count == 1 else "commits"
+    parts.append(f"This build includes {count} upstream {noun} since that release.")
+    if count > UPSTREAM_NOTES_LIMIT:
+        parts.append(f" The {UPSTREAM_NOTES_LIMIT} most recent are listed below.")
+    parts.append("\n\n")
+    for commit in commits[:UPSTREAM_NOTES_LIMIT]:
+        sha, subject = commit.split("\t", 1)
+        subject = re.sub(r"([\\`*_\[\]<>~])", r"\\\1", subject)
+        parts.append(f"- [`{sha[:9]}`]({UPSTREAM_REPOSITORY}/commit/{sha}) {subject}\n")
+    parts.append(f"\n[Full upstream comparison]({UPSTREAM_REPOSITORY}/compare/{base}...{tip})\n\n")
+    return "".join(parts)
+
+
 def package(root, info, out, *, targets=("phone", "tv")):
     sources = {
         "silora-phone.apk": root / "androidApp/build/outputs/apk/release/androidApp-universal-release.apk",
@@ -176,6 +214,7 @@ def package(root, info, out, *, targets=("phone", "tv")):
     for path in sources.values():
         if not path.is_file() or path.stat().st_size == 0:
             raise ValueError(f"missing or empty release APK: {path}")
+    changelog = upstream_changelog(root, info)
     out.mkdir(parents=True, exist_ok=True)
     for name, source in sources.items():
         shutil.copyfile(source, out / name)
@@ -185,11 +224,11 @@ def package(root, info, out, *, targets=("phone", "tv")):
         f"{hashlib.sha256((out / name).read_bytes()).hexdigest()}  {name}\n" for name in names))
     (out / "RELEASE_NOTES.md").write_text(
         f"{info['title']}\n\n"
-        "Unofficial, optimized release builds of Silora, a fork of the Silo Android clients. "
-        "Includes the fork's HEVC level override, defaulting to 6.2.\n\n"
-        f"Version: **{info['version_name']}**. Based on Silo `{info['upstream_version_tag']}` "
-        "plus the upstream changes included in the source snapshot below. "
-        "The Silora date uses Pacific time (MMDDYYYY).\n\n"
+        "Silora is a fork of the Silo Android clients. **Ignore HEVC Level Limits** is on by default. "
+        "Silora omits HEVC level limits from the capabilities it reports for playback and downloads "
+        "so it can attempt playback even when a file exceeds the decoder's reported HEVC level.\n\n"
+        + changelog
+        + "## Downloads\n\n"
         + ("- `silora-phone.apk`: Android phones and tablets.\n" if "phone" in targets else "")
         + ("- `silora-tv.apk`: Android TV / Google TV.\n" if "tv" in targets else "")
         + ("- Both APKs are universal and signed with the persistent release key.\n" if len(targets) == 2
@@ -199,8 +238,9 @@ def package(root, info, out, *, targets=("phone", "tv")):
         "- Latest TV APK: https://github.com/SiloraOSS/silora-android/releases/latest/download/silora-tv.apk\n\n"
         "Silora uses its own application ID and installs separately from Silo. "
         "Later Silora builds signed with the same release key can update in place.\n\n"
-        f"Source: https://github.com/SiloraOSS/silora-android/tree/{info['source_sha']}\n\n"
-        f"Upstream checked: https://github.com/Silo-Server/silo-android/commit/{info['upstream_checked_sha']}\n\n"
+        f"[Silora source](https://github.com/SiloraOSS/silora-android/tree/{info['source_sha']}) · "
+        f"[Silora changelog](https://github.com/SiloraOSS/silora-android/blob/{info['source_sha']}/CHANGELOG.md) · "
+        f"[Included upstream source]({UPSTREAM_REPOSITORY}/commit/{info['upstream_checked_sha']})\n\n"
         "Verify downloads with `sha256sum --check SHA256SUMS`. "
         "Source code is available under AGPL-3.0-or-later; third-party notices remain in the repository.\n")
 
