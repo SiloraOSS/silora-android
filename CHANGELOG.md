@@ -4,6 +4,30 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-21 15:17 PST — upstream 9f5de3107
+
+**Merge inputs** — `main` at `938a94a1d87b5dc7a2939ea40be42c313d01d410`
+and official upstream `9f5de310783ad1b542c9984b82449c46158942a4`. The upstream
+translation sync keeps `/activate` in left-to-right order in the Arabic and
+Hebrew TV sign-in instructions. Recovery ref
+`refs/codex/upstream-merge/20261121T231745Z`.
+
+**Upstream commits added**
+
+- `9f5de3107` chore(i18n): sync translations 2026.11.21-f78acfd (#1018)
+
+**Silora merge decisions**
+
+The translation catalog and metadata merged without conflicts. The generated
+Silora brand resources still match the catalog. The v51 Admin contract and
+the temporary Android TV Watch History pagination fix are in the first parent.
+
+**Validation**
+
+The staged translation files matched upstream. The generated brand resource,
+supply-chain, and staged diff checks passed. The release review records the
+test results, full lint, and signed APKs and mappings from this exact commit.
+
 ## 2026-11-21 — Edrock v51 Admin API spec
 
 Updated the bundled Admin API spec for phone and TV from edrock build 50
