@@ -193,6 +193,14 @@ transports, rollback after refusal/reload, duplicate requests, profile changes,
 Home refresh and audiobook isolation. Existing `HomeDismissal*` tests cover the
 Home-row contract. TV focus and menu interaction still need device validation.
 
+## Android TV Watch History (`watch-history-paging`)
+
+Fork commit `b2964e389` changes shared `viewmodel/HistoryViewModel.kt` and
+TV `ui/screens/personal/TvPersonalScreens.kt`. The empty-page regression
+in `HistoryViewModelV2Test` checks that a populated page followed by
+duplicate-only and empty pages with advancing cursors still reaches the
+next title. It also checks that an invalid cursor surfaces an error.
+
 ## Retired AI subtitle entries (`edrock-ai-subs-fixes`, `tv-live-ai-subtitles`)
 
 Matt requested retiring both entries on November 17, 2026 to remove
