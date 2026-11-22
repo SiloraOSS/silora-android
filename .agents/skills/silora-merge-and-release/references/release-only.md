@@ -4,8 +4,8 @@
 Silora source with the existing local APK publisher. It skips the upstream
 merge and the upstream no-change decision. A single approval covers the
 exact commit, the archived APKs and the fast-forward of remote `main` when
-needed. Use `$silora-merge-and-release --release-only --approved` to give
-that approval in the live invocation. When this flow is entered via the
+needed. Use `$silora-merge-and-release --release-only --unattended` to authorize
+the push if needed and publication without a confirmation pause. For the
 [unpublished-main fallback on the local route](unpublished-main.md#prepare-and-publish),
 build the eligible pinned `main` commit using that invocation's recorded
 operation, mode, approval rules and progress notifications.

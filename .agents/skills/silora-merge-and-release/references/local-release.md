@@ -122,7 +122,7 @@ with the existing #📋・mod-log webhook, the same execution ID and the pinned
 
 - Send `release_building` before the local build.
 - Send `release_ready` when an interactive approval is pending. With
-  `--approved`, proceed to the approved publication steps.
+  `--unattended`, proceed to the approved publication steps.
 - Send `release_uploading` after verifying the approved SHA on GitHub main and
   before the upload. Send `release_published` after public asset verification.
 - Use `release_stopped` for a conclusive stop after the candidate is pinned.

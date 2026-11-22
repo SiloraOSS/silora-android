@@ -29,7 +29,7 @@ association when available, worktree, stage, pinned inputs, recovery ref,
 tested-tree evidence/build archive/log paths,
 validation results, local merge SHA, reviewed remote baseline, verified pushed
 SHA, review, approval, and accepted workflow run as they become known. For a
-live `--approved` request, save the actual invocation or a reliable chat-message
+live `--unattended` request, save the actual invocation or a reliable chat-message
 reference in the new receipt as authorization for that execution. Bind it to
 the prepared result only after validation. For an interactive run, record the
 actual reply or a reliable reference after presenting the review.

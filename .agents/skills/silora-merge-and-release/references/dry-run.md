@@ -65,7 +65,7 @@ and **Discard**. Explain that Release this result pushes the reviewed commit
 to `SiloraOSS/silora-android` main if needed and publishes through the reviewed
 workflow. For a local publication, the approval covers the exact archived APKs.
 Selecting that action or replying "Continue with release" is the single approval
-for the actions in the review. `--approved` applies to live invocations only.
+for the actions in the review. `--unattended` applies to live invocations only.
 A dry-run preview still needs the explicit release choice. Keep, Discard and
 silence leave publication unapproved. Keep a pending preview without
 scheduling, publishing, or auto-deleting it.

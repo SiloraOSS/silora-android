@@ -1,6 +1,6 @@
 ---
 name: silora-merge-and-release
-description: Merge upstream and release Silora, or release unpublished main commits when upstream is current. Use --github (default) for GitHub builds, --local for locally built APKs, or --release-only for the current branch. Use --approved to approve a live release in the invocation or --dry-run to preview. Use silora-upstream-merge for merge-only requests.
+description: Merge upstream and release Silora, or release unpublished main commits when upstream is current. Use --github (default) for GitHub builds, --local for locally built APKs, or --release-only for the current branch. Use --unattended to skip the push and publication confirmation for one live release, or --dry-run to preview. Use silora-upstream-merge for merge-only requests.
 ---
 
 # Silora merge and release
@@ -23,12 +23,12 @@ tooling.
   [local APK releases](references/local-release.md) before preparing the merge.
   Both routes check for [unpublished main commits](references/unpublished-main.md)
   when upstream is already included.
-- `--approved` in Matt's explicit request to run a live release approves the
-  required push to `SiloraOSS/silora-android` `main` and publication for that
-  execution. It works with both release routes and with `--release-only`.
-  For example, `$silora-merge-and-release --local --approved` validates and
-  publishes both signed APKs for an eligible release without the confirmation
-  pause.
+- `--unattended` in Matt's explicit request to run a live release authorizes
+  the push to `SiloraOSS/silora-android` `main` if needed and publication for
+  that run. Run the same validation and skip the confirmation pause. It works
+  with both release routes and with `--release-only`. For example,
+  `$silora-merge-and-release --local --unattended` validates and publishes
+  both signed APKs for an eligible release. `--approved` remains an alias.
 - `dry-run`, `--dry-run`, or "run this as a dry run" selects **dry-run** mode.
   Prepare the selected source and signed builds with tests and lint, then show
   the review and stop. Do not push, dispatch any
@@ -36,7 +36,7 @@ tooling.
   messages. Read
   [dry-run decisions and continuation](references/dry-run.md) before starting;
   it keeps preview changes separate from Matt's normal checkout. If the
-  invocation also includes `--approved`, follow the dry-run flow.
+  invocation also includes `--unattended`, follow the dry-run flow.
 - After a successful dry-run review, offer three clear choices:
   **Release this result**, **Keep for later**, and **Discard**. Release this
   result approves pushing that exact prepared commit to Silora main and
@@ -76,7 +76,7 @@ or clean it up automatically.
   instructions.
 - Bind approval to the validated commit, destination, workflow and, for
   local releases, the exact signed archive before publication. Use Matt's
-  `--approved` invocation for that live execution or get the usual confirmation
+  `--unattended` invocation for that live execution or get the usual confirmation
   after validation. This covers one release, including the push if needed.
   Keep the same validation and pre-push checks for both paths.
 - Leave the saved automation, its paused state/schedule/model, the merge skill,
@@ -234,7 +234,7 @@ Save the review in the private receipt with its source, upstream, push
 destination, workflow, mode and route. For local publication, include the
 exact archive identity.
 
-- With `--approved` from this live invocation, post the validated review as a
+- With `--unattended` from this live invocation, post the validated review as a
   progress update. Bind the recorded invocation to these exact inputs and
   actions, record stage `approved`, then continue through push and publication
   in the same run.
