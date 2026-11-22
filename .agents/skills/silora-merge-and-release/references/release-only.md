@@ -31,8 +31,8 @@ operation, mode, approval rules and progress notifications.
    Record the remote SHA as the review baseline.
 4. In live mode build from the pinned clean checkout. In dry-run mode use the
    [preview checkout](dry-run.md#prepare-the-preview) starting at the pinned
-   branch commit, and leave the original checkout alone. For a direct live
-   `--release-only` invocation, send `release_building` before running the build.
+   branch commit, and leave the original checkout alone. For live runs, send
+   `release_building` per the [local APK milestones](local-release.md#staff-milestones).
    Run the full release build once:
 
    ```sh
@@ -60,8 +60,7 @@ source and archive checks and review its actual validation evidence. Skip
    and hashes. Name **Silora Publish Local Build**, which verifies and
    publishes these APKs. Include the push to main only when needed.
 2. For live releases, use [the shared approval rules](../SKILL.md#apply-live-approval).
-   For a direct live `--release-only` invocation, send `release_ready` when
-   waiting for interactive approval. For a dry run, present **Release this result**, **Keep for later** and **Discard**
+   For a dry run, present **Release this result**, **Keep for later** and **Discard**
    under the [shared preview rules](dry-run.md#release-this-result). An
    approved preview starts with the first applicable publishing milestone.
 3. Recheck the candidate and archive hashes, tracked tree, release eligibility,
@@ -70,17 +69,10 @@ source and archive checks and review its actual validation evidence. Skip
    with no force flag. Verify GitHub main equals that SHA even if a push was
    unnecessary. A moved baseline or different candidate needs a new review.
    A push-only approval stops at the verified push.
-4. Follow [publish and verify](local-release.md#publish-and-verify) to upload
-   the archive, reconcile uncertain outcomes, monitor the job and verify the
-   public release. For a direct `--release-only` invocation, send
-   `release_uploading` just before the approved upload and `release_published`
-   after tag, public status and full asset read-back match the approved archive.
-5. Use the shared retry and reconciliation rules. A direct `--release-only`
-   invocation sends `release_stopped` for a conclusive stop, with the known
-   stage and reason. On a reviewed retry, keep the execution ID and report
-   publication once verified. Report delivery issues alongside the actual
-   build or release outcome.
-
-See the [release-only Discord events](../../../../docs/local-automation-notifications.md#release-only-milestones)
-for the direct invocation's reports. Report the commit, push status,
-validation, and verified release link or exact stopping point in chat.
+4. Follow [publish and verify](local-release.md#publish-and-verify) through
+   the upload, publish-only job, full asset read-back and Discord delivery.
+   Use the [local APK milestones](local-release.md#staff-milestones) for
+   `release_stopped` if the release conclusively stops.
+5. Use the shared retry and reconciliation rules. On a reviewed retry, keep the
+   execution ID. Report the commit, push status, validation, verified release
+   and announcement links or exact stopping point in chat.

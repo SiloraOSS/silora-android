@@ -73,13 +73,10 @@ Keep for later records a saved preview without approval, notifications,
 automatic cleanup or future scheduled work. If Matt selects Release this
 result, do not replay start/validating messages for the completed local preview.
 Use the same execution ID. The `validating` and `handoff` events and GitHub
-result notifications below apply to cloud. See [local route reporting](local-release.md#report-in-chat)
-for the publish-only workflow.
-
-For `--release-only`, use the repository sender and event names in
-[release-only milestones](../../../../docs/local-automation-notifications.md#release-only-milestones).
-For upstream merge invocations, use the installed sender for the existing
-milestones:
+result notifications below apply to cloud. Use the checkout notifier for
+[local APK milestones](local-release.md#staff-milestones) on `--local` and
+`--release-only`. For upstream-merge start and pre-candidate events, and
+cloud merge milestones, use the installed sender:
 
 ```sh
 python3 /home/albinoman887/Workspace/SigmaStreams/Staging/silora-upstream-automation/local-notifier/notify-local-automation.py EVENT \
@@ -88,8 +85,9 @@ python3 /home/albinoman887/Workspace/SigmaStreams/Staging/silora-upstream-automa
 
 Append `--report-file PRIVATE_REPORT_JSON` for events that require a report.
 Use the existing SiloraOSS webhook in #📋・mod-log. Never print its URL/token,
-create a replacement webhook, use `setup` for a normal run, or make other
-Discord posts. Do not turn staff milestones into member announcements.
+create a replacement webhook, or use `setup` for a normal run. Keep staff
+milestones distinct from the
+[release announcement](release-announcement.md) sent through Discord tools.
 
 | Event | When to send | Report fields |
 | --- | --- | --- |
@@ -97,7 +95,7 @@ Discord posts. Do not turn staff milestones into member announcements.
 | `validating` | Cloud merge, audit and resolutions complete and local checks about to start | `summary`, `upstream_sha`, `recovery_ref` |
 | `unchanged` | Fresh upstream is already included and the selected route concludes without building or releasing | `upstream_sha` |
 | `handoff` | Cloud merge, approval received, push verified and exact publishing run accepted | `summary`, `upstream_sha`, `merge_sha`, `validation`, `recovery_ref`, `changelog_line`, `workflow_run_id` |
-| `failed` | Local work has actually stopped before accepted handoff | `stage`, factual `summary`, optional `recovery_ref` |
+| `failed` | Work stopped before cloud handoff or before a local APK candidate was pinned | `stage`, factual `summary`, optional `recovery_ref` |
 
 An approval wait sends no terminal event. A decline or deferral is recorded in
 the execution receipt and reported in chat; do not falsely describe it as a
@@ -107,9 +105,9 @@ change. A continuation after the approved push can proceed to its approved
 release without another routine confirmation. Do not send another
 start/validating post on continuation.
 
-For an [unpublished-main release](unpublished-main.md), report validation and
-handoff in chat. The GitHub route's configured workflow notifications still
-report the cloud build and result.
+For an [unpublished-main release](unpublished-main.md), use the staff
+milestones for the selected route. On the GitHub route, report validation and
+handoff in chat and let the workflow report its cloud build and result.
 
 Handoff summaries for actual merges must match the chat review and measured
 validation results.

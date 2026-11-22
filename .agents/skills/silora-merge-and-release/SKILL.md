@@ -155,6 +155,10 @@ before running the build below. Commit the reviewed merge and changelog first,
 add `--output-file` to the build command, and bind the resulting archive to the
 review.
 
+For a live `--local` run, send the first
+[local APK milestone](references/local-release.md#staff-milestones) after the
+merge commit is pinned and before building.
+
 For every new upstream merge, including documentation-only merges, require
 both signed local release builds with tests and full release lint:
 
@@ -234,9 +238,10 @@ exact archive identity.
   progress update. Bind the recorded invocation to these exact inputs and
   actions, record stage `approved`, then continue through push and publication
   in the same run.
-- Otherwise, record stage `awaiting_approval`, ask Matt to approve the exact
-  push and release, and wait for an explicit reply. Ask for publication alone
-  if the source is already on GitHub main. Record the reply and its scope.
+- Otherwise, record stage `awaiting_approval`. On the local route, send
+  `release_ready` through the repository notifier. Ask Matt to approve the
+  exact push and release, or publication alone when the source is already on
+  GitHub main. Wait for an explicit reply and record its scope.
   If Matt approves only the push, stop after verifying it.
 
 Wait for a recorded approval before pushing, dispatching workflows, creating
@@ -310,7 +315,9 @@ notifications. Do not duplicate its build/result posts locally. Claim release
 success only after the run and result receipt confirm publication (or a
 verified already-published source), and read back the public release's source
 tag, non-draft status, and required assets. A successful validation-only or
-skipped run alone is not publication evidence.
+skipped run alone is not publication evidence. After this execution publishes
+and verifies a new release, apply the
+[standing Discord changelog announcement](references/release-announcement.md).
 
 Review failures before retrying. Do not automatically rerun jobs or dispatch a
 replacement. Present the failure and proposed retry to Matt for fresh release
@@ -319,5 +326,5 @@ after a reviewed failure requires `--retry-reviewed RUN_ID` for that matching
 source/upstream/mode, with the helper's existing uncertain-outcome protections.
 
 Finish with the source/upstream SHAs, validation and limits, push result,
-changelog/recovery reference, Actions run, and verified release link or exact
-failure/waiting state. Keep it concise.
+changelog/recovery reference, Actions run, verified release link and changelog
+announcement link or exact failure/waiting state. Keep it concise.

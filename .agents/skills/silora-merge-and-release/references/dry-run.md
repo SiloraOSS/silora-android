@@ -110,10 +110,10 @@ the same approval.
 
 Do not backfill `started` or `validating` Discord messages for work already
 completed silently in dry-run mode. For a cloud merge, send `handoff` after
-the run is accepted, with the same execution ID. For a direct release-only
-invocation, use its [publishing milestones](release-only.md#review-and-publish).
-For a local merge or an unpublished-main release, report handoff in chat
-and follow the selected workflow through publication.
+the run is accepted, with the same execution ID. Local APK releases start
+with their next [publishing milestone](local-release.md#staff-milestones).
+For an unpublished-main GitHub release, report the handoff in chat. After
+verified publication use the [standing changelog announcement](release-announcement.md).
 Use the chosen operation's failure handling for a conclusive stop after
 approval.
 

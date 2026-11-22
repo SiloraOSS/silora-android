@@ -4,6 +4,14 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-21 — Release notifications
+
+Local APK releases now report the build, interactive approval wait, upload
+and verified publication in #mod-log. The merge-and-release skill posts a
+release-notes embed in #silo-daily-changelog after it verifies a new GitHub
+release. Its single list identifies Silora and Silo upstream changes and links
+to that build's APKs and full release notes.
+
 ## 2026-11-21 15:17 PST — upstream 9f5de3107
 
 **Merge inputs** — `main` at `938a94a1d87b5dc7a2939ea40be42c313d01d410`

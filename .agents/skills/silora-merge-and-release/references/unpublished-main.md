@@ -55,6 +55,7 @@ Before pushing or handing off, recheck Latest along with the normal checks
 for the selected route. If the same source has since been released, report
 that result and stop. Continue against a newer baseline only if the candidate
 still qualifies and the approved source and workflow match. Report progress
-in chat. Use the existing `started`, `unchanged` and factual pre-handoff
-`failed` milestones when applicable. GitHub owns the cloud workflow's
-configured result notifications.
+in chat. For local APK builds, use the
+[staff milestones](local-release.md#staff-milestones). For GitHub builds,
+use the existing cloud notifications and the standing changelog announcement
+after verified publication.

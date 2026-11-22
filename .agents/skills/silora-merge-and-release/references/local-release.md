@@ -71,7 +71,8 @@ absolute path and use the same signing directory as the build:
 
 Before invoking it, save the push receipt, approved archive identity,
 planned tag, dispatch time window and existing publish-only run IDs for
-the approved SHA in the private execution receipt. Mark the handoff pending
+the approved SHA in the private execution receipt. Send `release_uploading`
+before the approved upload. Mark the handoff pending
 before the first mutation. The publisher verifies the binaries and source,
 creates or resumes the exact draft, verifies the uploaded bytes and queues
 the publish-only job. Record the command outcome. `./helper.sh` would run
@@ -94,7 +95,11 @@ Compare the APK and mapping hashes with the reviewed archive.
 Check the published metadata for the exact source, upstream, local archive
 tag and versions. Read back GitHub Latest and report if a newer release has
 since superseded this build. Save the actual release URL and run evidence
-in the receipt. A queued job or matching draft is progress only.
+in the receipt. A queued job or matching draft is progress only. Send
+`release_published` after verification, then use the
+[standing changelog announcement](release-announcement.md) for the new
+release. Resume any outstanding Discord delivery from the same execution
+receipt.
 
 On interruption, inspect the exact tag, draft assets and matching runs
 before calling the publisher again. Adopt an accepted active run or an
@@ -107,13 +112,22 @@ failed-job rerun when the archive is still eligible. Keep public assets and
 receipts intact. A stale archive or changed source, route or artifact identity
 requires a new review.
 
-## Report in chat
+## Staff milestones
 
-The [release-only mode](release-only.md) has its own Discord milestones.
-A live `--local` merge invocation, including the
-[unpublished-main fallback](unpublished-main.md),
-can use the existing `started`, `unchanged` and factual pre-handoff `failed`
-events. Report an already-published result in chat if a build already ran. The installed
-`validating` template describes a pre-commit build, and the `handoff`
-template accepts only the cloud workflow. Report validation, handoff and the
-result for that route in chat. Dry-run preparation sends no milestones.
+For any live local APK release, use the checkout's
+[repository notifier](../../../../docs/local-automation-notifications.md#local-apk-release-milestones)
+with the existing #📋・mod-log webhook, the same execution ID and the pinned
+`source_sha`. The older installed merge sender remains the entry point for
+`started` and early upstream checks on merge invocations.
+
+- Send `release_building` before the local build.
+- Send `release_ready` when an interactive approval is pending. With
+  `--approved`, proceed to the approved publication steps.
+- Send `release_uploading` after verifying the approved SHA on GitHub main and
+  before the upload. Send `release_published` after public asset verification.
+- Use `release_stopped` for a conclusive stop after the candidate is pinned.
+  Reconcile pending deliveries and uncertain releases before treating them as
+  stops. If Latest already contains the same source, report the actual result.
+
+Dry-run preparation sends no milestones. A preview promoted to live begins
+with the next applicable publication milestone.

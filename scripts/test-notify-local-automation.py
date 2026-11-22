@@ -249,6 +249,18 @@ class DeliveryTest(unittest.TestCase):
             self.send("release_ready", report | dict(validation="Signed builds passed."))
         self.assertEqual(len(self.posts()), 4)
 
+    def test_local_merge_start_and_release_milestones_share_one_receipt(self):
+        report = dict(source_sha=SOURCE)
+        self.send("started")
+        self.send("release_building", report)
+        self.send("release_ready", report | dict(validation="Signed builds passed."))
+        self.send("release_uploading", report)
+        with mock.patch.object(notify, "published_release_url", return_value=LOCAL_URL):
+            self.send("release_published", report | dict(tag=LOCAL_TAG))
+        self.assertEqual(len(self.posts()), 5)
+        run = json.loads((self.run_folder / "run.json").read_text())
+        self.assertEqual(run["terminal_event"], "release_published")
+
     def test_insecure_config_is_rejected_without_network_access(self):
         self.config_path.chmod(0o644)
         with self.assertRaisesRegex(notify.NotificationError, "mode 600"):
