@@ -64,6 +64,33 @@ published, failed, unchanged, declined, dry_run_complete, dry_run_kept, or disca
 Distinguish local failure from a GitHub failure after handoff. A normal approval wait remains resumable and is
 not a failure.
 
+## Resume an interrupted execution
+
+- Match the request to one receipt and recover the recorded route, pins, and
+  approval scope. A new invocation, a read-only inspection, and an explicit
+  stop are distinct from resuming that execution. An explicit stop keeps the
+  run paused. An already accepted GitHub job can continue independently, so
+  check its live state and report whether publication has already occurred.
+- Before a local commit, match the recorded worktree, `HEAD`, `MERGE_HEAD`,
+  recovery ref, and staged/unstaged changes. If the commit completed before the
+  receipt was saved, inspect its parents, diff and matching changelog entry
+  before adopting it. Preserve unexplained changes and leave other Git
+  operations alone. Reuse checks only if their completed evidence matches the
+  tested tree. With a missing or incomplete local build receipt, recover an
+  archive only if its identity and all validation evidence can be established.
+  Otherwise rerun the affected checks and build before binding approval.
+- Record `push_pending` before attempting the push. On recovery, a remote at
+  the approved SHA establishes acceptance. A remote still at the reviewed
+  baseline allows the same fast-forward attempt after rechecking eligibility.
+  A third SHA requires inspection. Reconcile a dispatch, tag, draft or public
+  result before attempting publication again. An approval for one archive or
+  workflow never carries over to a replacement.
+- If the workflow or notification result is uncertain, record it separately
+  from the push and public release status. A lost status response can follow
+  successful publication. Match the exact tag, source, assets and run before
+  sending a completion or an announcement. Reuse the original message and
+  delivery receipts when recovering a Discord send.
+
 ## Notifications
 
 This section is live-only. A dry run sends no milestones, including start,

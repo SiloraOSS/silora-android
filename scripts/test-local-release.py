@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -134,7 +135,8 @@ class ReleaseTests(ArchiveFixture, unittest.TestCase):
     def test_shared_order_check_uses_the_local_authenticated_transport(self):
         with mock.patch.object(release.order, "ensure_newer") as check:
             release.ensure_newer(self.info)
-            check.assert_called_once_with(self.info, release.REPO, transport=release.gh)
+            check.assert_called_once_with(self.info, release.REPO, transport=release.gh,
+                                          reject_published_source=False)
 
     def test_existing_tag_is_never_retargeted(self):
         with mock.patch.object(release, "api", return_value=[{"ref": "refs/tags/test", "object": {"sha": "d" * 40}}]), \
@@ -179,6 +181,8 @@ class FakeGitHubTests(ArchiveFixture, unittest.TestCase):
         self.ref = None
         self.commands = []
         self.latest_base = self.info["version_code_base"] - 1
+        self.latest_source = None
+        self.main_head = self.info["source_sha"]
         patch = mock.patch.object(release, "gh", side_effect=self.gh)
         patch.start()
         self.addCleanup(patch.stop)
@@ -202,6 +206,10 @@ class FakeGitHubTests(ArchiveFixture, unittest.TestCase):
                                    + ([visible] if visible else [])])
             if path.endswith("releases/latest"):
                 return json.dumps({"tag_name": "previous"})
+            if path.endswith("git/ref/heads/main"):
+                return json.dumps({"object": {"sha": self.main_head}})
+            if path.endswith(f"actions/workflows/{release.WORKFLOW}"):
+                return "{}"
             if "git/matching-refs" in path:
                 return json.dumps([self.ref] if self.ref else [])
             if "compare/" in path:
@@ -212,7 +220,9 @@ class FakeGitHubTests(ArchiveFixture, unittest.TestCase):
         if args[:2] == ("release", "download"):
             target = Path(args[args.index("--dir") + 1])
             if args[2] == "previous":
-                (target / "build-info.json").write_text(json.dumps({"version_code_base": self.latest_base}))
+                (target / "build-info.json").write_text(json.dumps({
+                    "version_code_base": self.latest_base, "source_sha": self.latest_source,
+                }))
             else:
                 for p in self.remote.iterdir():
                     shutil.copyfile(p, target / p.name)
@@ -233,6 +243,99 @@ class FakeGitHubTests(ArchiveFixture, unittest.TestCase):
                "GITHUB_REPOSITORY": release.REPO, "GITHUB_REF": "refs/heads/main"}
         with mock.patch.dict(os.environ, env):
             release.finalize(release.public_tag(self.info), self.info["source_sha"], release.digest(self.remote / "SHA256SUMS"))
+
+    def reviewed_options(self, *, unit_tests=True):
+        self.info["validation"]["unit_tests"] = unit_tests
+        self.write_info()
+        staged = self.root / "reviewed"
+        staged.mkdir()
+        release.stage_files(self.archive, self.info, staged)
+        return {"reviewed_manifest": release.digest(staged / "SHA256SUMS"),
+                "dispatch_receipt": self.root / "dispatch.json"}
+
+    def test_reviewed_command_rejects_replacement_with_valid_own_checksums(self):
+        options = self.reviewed_options()
+        (self.archive / "silora-tv.apk").write_bytes(b"different archive")
+        self.checksums()
+        args = ["local-release.py", "local", str(self.archive), "--publish",
+                "--reviewed-manifest-sha256", options["reviewed_manifest"],
+                "--dispatch-receipt", str(options["dispatch_receipt"])]
+        with mock.patch.object(sys, "argv", args), mock.patch.object(release, "verify_local"):
+            with self.assertRaisesRegex(ValueError, "differs from the reviewed archive"):
+                release.main()
+        self.assertIsNone(self.ref)
+        self.assertIsNone(self.draft)
+        self.assertFalse(options["dispatch_receipt"].exists())
+
+    def test_reviewed_command_requires_unit_test_evidence(self):
+        with self.assertRaisesRegex(ValueError, "requires an archive built with --tests"):
+            release.upload_and_dispatch(self.archive, self.info, **self.reviewed_options(unit_tests=False))
+        self.assertEqual(self.commands, [])
+
+    def test_reviewed_dispatch_intent_survives_lost_response_and_prevents_resubmit(self):
+        options = self.reviewed_options()
+        receipt = options["dispatch_receipt"]
+
+        def respond(*args):
+            result = self.gh(*args)
+            if args[:2] == ("workflow", "run"):
+                self.assertIn("require_exact_head=true", args)
+                saved = json.loads(receipt.read_text())
+                self.assertEqual(saved["source_sha"], self.main_head)
+                self.assertEqual(saved["manifest_sha256"], options["reviewed_manifest"])
+                raise subprocess.CalledProcessError(1, args)
+            return result
+
+        with mock.patch.object(release, "gh", side_effect=respond):
+            with self.assertRaises(subprocess.CalledProcessError):
+                release.upload_and_dispatch(self.archive, self.info, **options)
+            with self.assertRaisesRegex(ValueError, "intent already exists"):
+                release.upload_and_dispatch(self.archive, self.info, **options)
+        self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(sum(c[:2] == ("workflow", "run") for c in self.commands), 1)
+
+    def test_reviewed_dispatch_stops_when_main_advances_during_upload(self):
+        options = self.reviewed_options()
+
+        def respond(*args):
+            result = self.gh(*args)
+            if args[:2] == ("release", "upload"):
+                self.main_head = "d" * 40
+            return result
+
+        with mock.patch.object(release, "gh", side_effect=respond):
+            with self.assertRaisesRegex(ValueError, "main differs"):
+                release.upload_and_dispatch(self.archive, self.info, **options)
+        self.assertTrue(self.draft["draft"])
+        self.assertFalse(options["dispatch_receipt"].exists())
+        self.assertFalse(any(c[:2] == ("workflow", "run") for c in self.commands))
+
+    def test_reviewed_finalize_rejects_a_dispatch_on_the_wrong_commit(self):
+        release.upload_and_dispatch(self.archive, self.info)
+        with mock.patch.dict(os.environ, REQUIRE_EXACT_HEAD="true", GITHUB_SHA="d" * 40):
+            with self.assertRaisesRegex(ValueError, "Dispatch commit differs"):
+                self.finish()
+        self.assertTrue(self.draft["draft"])
+
+    def test_reviewed_job_keeps_the_original_archive_after_a_later_main_advance(self):
+        release.upload_and_dispatch(self.archive, self.info, **self.reviewed_options(),
+                                    reject_published_source=True)
+        issued_source = self.main_head
+        self.main_head = "d" * 40
+        with mock.patch.dict(os.environ, REQUIRE_EXACT_HEAD="true", GITHUB_SHA=issued_source,
+                             REJECT_PUBLISHED_SOURCE="true"):
+            self.finish()
+        self.assertFalse(self.draft["draft"])
+        self.assertEqual((self.remote / "silora-tv.apk").read_bytes(), (self.archive / "silora-tv.apk").read_bytes())
+
+    def test_reviewed_finalize_rejects_latest_from_same_source_under_another_tag(self):
+        release.upload_and_dispatch(self.archive, self.info, reject_published_source=True)
+        self.assertIn("reject_published_source=true", self.commands[-1])
+        self.latest_source = self.info["source_sha"]
+        with mock.patch.dict(os.environ, REJECT_PUBLISHED_SOURCE="true"):
+            with self.assertRaisesRegex(ValueError, "Latest already contains the reviewed source"):
+                self.finish()
+        self.assertTrue(self.draft["draft"])
 
     def test_local_upload_then_locked_publication_keeps_exact_apks(self):
         release.upload_and_dispatch(self.archive, self.info)

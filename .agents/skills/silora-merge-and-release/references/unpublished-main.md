@@ -51,9 +51,10 @@ unpublished range since Latest and the checks actually run. Follow the usual
 approval rules for either route. In a dry run, build only in the preview
 checkout and wait for the explicit release choice.
 
-Before pushing or handing off, recheck Latest along with the normal checks
-for the selected route. If the same source has since been released, report
-that result and stop. Continue against a newer baseline only if the candidate
+Before binding approval, [recheck the upstream pin](../SKILL.md#recheck-the-upstream-pin).
+Before pushing or handing off, recheck Latest along with the normal checks for
+the selected route. If the same source has since been released, report that
+result and stop. Continue against a newer baseline only if the candidate
 still qualifies and the approved source and workflow match. Report progress
 in chat. For local APK builds, use the
 [staff milestones](local-release.md#staff-milestones). For GitHub builds,

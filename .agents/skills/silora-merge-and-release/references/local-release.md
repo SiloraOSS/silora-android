@@ -66,8 +66,17 @@ absolute path and use the same signing directory as the build:
 
 ```sh
 ./release.sh local "$archive" --publish \
+  --reviewed-manifest-sha256 "$reviewed_manifest_sha256" \
+  --dispatch-receipt "$local_dispatch_receipt" \
   --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing
 ```
+
+Use the staged checksum manifest hash saved at review and a stable receipt
+path under `handoffs/` named `<planned-tag>-local.json`. Use the same path
+across chats for this tag. Include `--reject-published-source` for merges and
+unpublished-main releases. A direct `--release-only` request can explicitly
+publish a new build of the same source. Verify the prepared checkout has the
+reviewed publisher and workflow support before pushing or uploading.
 
 Before invoking it, save the push receipt, approved archive identity,
 planned tag, dispatch time window and existing publish-only run IDs for
@@ -79,11 +88,13 @@ the publish-only job. Record the command outcome. `./helper.sh` would run
 another build, so use the archive handoff above.
 
 Find the accepted run on the selected workflow in the verified repository.
-Check branch `main`, event `workflow_dispatch`, and the exact approved head
-SHA. When the publisher yields no run ID, use the pre-dispatch snapshot,
-dispatch time, and matching run metadata, and confirm tag/source inputs in
-the job logs when available. Report a run ID as confirmed only when it can
-be tied to this handoff. Follow progress with bounded waits and use the
+Check branch `main`, event `workflow_dispatch`, approved head SHA, and the
+run title `Silora local TAG MANIFEST_SHA256`. Use the pre-dispatch snapshot
+and receipt timestamp when several attempts appear. The workflow rejects a
+different head for this reviewed handoff. After a correctly pinned dispatch,
+a normal advance of `main` can leave the approved source eligible if it is
+still an ancestor and passes publication checks. Follow progress with bounded
+waits and use the
 exact public tag and asset read-back as the publication authority even if
 run correlation is incomplete.
 
@@ -101,16 +112,21 @@ in the receipt. A queued job or matching draft is progress only. Send
 release. Resume any outstanding Discord delivery from the same execution
 receipt.
 
-On interruption, inspect the exact tag, draft assets and matching runs
-before calling the publisher again. Adopt an accepted active run or an
-already verified release. A complete draft with an uncertain dispatch
-requires reconciliation, since the publisher can dispatch a second run.
-When the existing evidence proves the dispatch did not occur, resume upload
-or dispatch with the same approved archive. For a failed run, inspect the
-failure and seek the same reviewed retry approval as for cloud. Prefer a
-failed-job rerun when the archive is still eligible. Keep public assets and
-receipts intact. A stale archive or changed source, route or artifact identity
-requires a new review.
+On interruption, inspect the exact tag, draft assets and matching runs before
+calling the publisher again. The publisher checks the reviewed manifest before
+uploading and writes the dispatch intent before submitting the workflow. With
+no intent and no matching job, resume a matching partial or complete draft
+with the original archive. With an intent, adopt an accepted job or verify the
+public release. If the intent is present and no job is visible, keep the
+outcome uncertain and inspect the unfiltered workflow history and exact run
+title. An interrupted invocation may have stopped either side of the send.
+Keep the original intent. If absence of a dispatch is established and a new
+attempt is approved, record the evidence and use a separate retry receipt.
+For a failed run, inspect the failure and seek the same reviewed retry approval
+as for cloud. Prefer a failed-job rerun when the archive is still eligible.
+Verify any same-source Latest release before reporting it or attributing an
+announcement to this execution. A stale archive or changed source, route or
+artifact identity requires a new review.
 
 ## Staff milestones
 

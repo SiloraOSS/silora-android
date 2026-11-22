@@ -48,6 +48,9 @@ tooling.
   run. Use the same reference. Handle the temporary checkout internally; Matt
   needs only the result, preview ID when useful, and the three choices.
 
+Resolve unrecognized mode flags and conflicting route choices before starting
+live work. In particular, `--github` and `--local` select different routes.
+
 Record the selected operation, mode, release route and any invocation approval
 before any notification or merge. Older receipts default to the merge
 operation and cloud route when those fields are absent. Dry-run restrictions
@@ -190,6 +193,15 @@ source changed. Stop for unexpected/unreviewed work. Record the current remote
 SHA as the reviewed push baseline. Persist the local result and evidence,
 then record approval below before pushing.
 
+### Recheck the upstream pin
+
+Recheck official upstream before binding approval. Use the scoped upstream
+fetch and verify the pinned commit is still on official upstream main. If
+upstream advanced normally, keep the pinned commit and report the newer tip
+when relevant. If the pin was removed by a rewrite, hold the prepared result
+for review. Apply the same check to a resumed run before a pending push or
+handoff. If Matt requests the newer tip, prepare and validate a new candidate.
+
 In dry-run mode, show the same factual review below with **Dry run — nothing
 pushed or released** at the top. Include actual checks, the local preview
 commit and diff, and the proposed push and release steps. For cloud, label
@@ -271,12 +283,11 @@ result, show an updated review, and obtain fresh approval. This applies to
 invocation approval as well. New upstream commits alone do not replace the
 pinned upstream SHA.
 
-For normal live preparation, push with `git push silora main` if the commit
-still needs to reach GitHub. For an approved dry-run result, use the
-exact-commit refspec in its continuation reference if a push is needed;
-this pushes the same approved source without moving Matt's normal checkout.
-Then independently read GitHub main and require it to equal the approved
-result. Reconcile an uncertain push by
+If the approved commit still needs to reach GitHub, push the exact recorded
+SHA with `git push silora FULL_APPROVED_RESULT_SHA:refs/heads/main`. Use the
+same no-force refspec for both live and promoted dry-run results. Then
+independently read GitHub main and require it to equal the approved result.
+Reconcile an uncertain push by
 exact SHA instead of guessing or dispatching without verified acceptance.
 Persist the verified push. Recheck remote main before handoff; a moved remote
 must not result in a release of different code. If either action stops, retain
@@ -311,7 +322,9 @@ Release handoffs before another dispatch.
 Follow the accepted run through completion, with bounded waits and concise
 updates for meaningful changes. Preserve GitHub's tests, full release lint,
 signed builds, artifact verification, publication lock, and configured Discord
-notifications. Do not duplicate its build/result posts locally. Claim release
+notifications. Once cloud preparation accepts the pinned source, a later normal
+advance of main does not substitute new code or cancel the job by itself.
+Let GitHub send its build and result notifications. Claim release
 success only after the run and result receipt confirm publication (or a
 verified already-published source), and read back the public release's source
 tag, non-draft status, and required assets. A successful validation-only or

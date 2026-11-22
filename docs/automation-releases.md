@@ -94,6 +94,10 @@ If the dispatch response is uncertain, repeat the same command to reconcile it.
 If no matching run is visible, the helper stops; it does not blindly dispatch
 again. Inspect GitHub before resolving an uncertain receipt. Do not delete a
 pending receipt merely to bypass that stop.
+If main moved between the final check and dispatch, search recent workflow
+runs without the expected-head filter. A run can have the requested inputs in
+its title and a different dispatch commit. The workflow rejects that run at
+preparation. Verify its outcome before resolving the missing match.
 
 A failed or cancelled run needs review. After inspecting the failure, a new
 dispatch can be requested with `--retry-reviewed RUN_ID`. The helper requires
@@ -107,7 +111,7 @@ running and one pending run per concurrency group; a newer pending run may
 replace an older pending run. This is not a first-in, first-out queue. See
 [GitHub's concurrency documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency).
 
-Under that lock, publishing skips a source SHA that already has a complete,
+Under that lock, the cloud publisher skips a source SHA that already has a complete,
 regular public release. Drafts, prereleases, failed builds, and incomplete
 releases do not satisfy that check. Public assets are never replaced. Rerunning
 an interrupted publish verifies an already public payload before reporting

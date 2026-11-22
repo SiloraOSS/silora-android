@@ -23,7 +23,7 @@ def version_base(info):
     return value
 
 
-def ensure_newer(info, repo=REPO, *, transport=None):
+def ensure_newer(info, repo=REPO, *, transport=None, reject_published_source=False):
     command = transport or gh
     candidate = version_base(info)
     # An empty repository can publish its first release. Network/authentication
@@ -38,7 +38,10 @@ def ensure_newer(info, repo=REPO, *, transport=None):
         command("release", "download", latest["tag_name"], "--repo", repo,
            "--pattern", "build-info.json", "--dir", temp)
         previous = json.loads((Path(temp) / "build-info.json").read_text())
-    if candidate <= version_base(previous):
+    previous_base = version_base(previous)
+    if reject_published_source and info.get("source_sha") and previous.get("source_sha") == info["source_sha"]:
+        raise ValueError("GitHub Latest already contains the reviewed source. Verify that release before retrying")
+    if candidate <= previous_base:
         raise ValueError("A public release is newer than or equal to this build; build again before publishing")
 
 

@@ -113,10 +113,10 @@ def check_source(source):
         raise ValueError("Build source must already be pushed and included in Silora main")
 
 
-def ensure_newer(info):
+def ensure_newer(info, *, reject_published_source=False):
     # Use this transport so local preview, recovery and publication tests all
     # exercise the same authenticated GitHub reads as the other release paths.
-    order.ensure_newer(info, REPO, transport=gh)
+    order.ensure_newer(info, REPO, transport=gh, reject_published_source=reject_published_source)
 
 
 def public_tag(info):
@@ -190,19 +190,55 @@ def verify_remote_subset(tag, expected, existing):
     return set(names)
 
 
-def upload_and_dispatch(directory, info):
+def require_main_head(source):
+    if api("git/ref/heads/main")["object"]["sha"] != source:
+        raise ValueError("GitHub main differs from the reviewed source. Reconcile the release before retrying")
+
+
+def record_dispatch_intent(path, tag, source, manifest_hash):
+    record = {"status": "dispatch_pending", "workflow": WORKFLOW, "tag": tag,
+              "source_sha": source, "manifest_sha256": manifest_hash,
+              "attempted_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent) as stream:
+        json.dump(record, stream, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+        # Publish a complete intent exactly once, even if two processes reach dispatch.
+        try:
+            os.link(stream.name, path)
+        except FileExistsError:
+            raise ValueError("A dispatch intent already exists. Reconcile the GitHub job before retrying") from None
+        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+def upload_and_dispatch(directory, info, *, reviewed_manifest=None, dispatch_receipt=None,
+                        reject_published_source=False):
     with tempfile.TemporaryDirectory(prefix="silora-stage-") as temp:
         staged = Path(temp)
         info = stage_files(directory, info, staged)
         tag, source = info["tag"], info["source_sha"]
         manifest_hash = digest(staged / "SHA256SUMS")
+        if reviewed_manifest is not None and manifest_hash != reviewed_manifest:
+            raise ValueError("Staged checksum manifest differs from the reviewed archive")
+        if reviewed_manifest is not None and info["validation"].get("unit_tests") is not True:
+            raise ValueError("Reviewed publication requires an archive built with --tests")
         existing = release_for(tag)
         if existing and not existing["draft"]:
-            if verify_remote_subset(tag, staged, existing) != FILES:
-                raise ValueError("Published release is incomplete; public releases are never overwritten")
+            check_tag(tag, source)
+            if existing.get("prerelease") or verify_remote_subset(tag, staged, existing) != FILES:
+                raise ValueError("Inspect the exact tag. Expected a complete regular release")
             print(existing["html_url"])
             return
-        ensure_newer(info)
+        if dispatch_receipt is not None:
+            if dispatch_receipt.exists():
+                raise ValueError("A dispatch intent already exists. Reconcile the GitHub job before retrying")
+            require_main_head(source)
+        ensure_newer(info, reject_published_source=reject_published_source)
         check_tag(tag, source, create=True)
         if existing is None:
             gh("release", "create", tag, "--repo", REPO, "--verify-tag", "--draft",
@@ -215,11 +251,17 @@ def upload_and_dispatch(directory, info):
         existing = release_for(tag)
         if existing is None or not existing["draft"] or verify_remote_subset(tag, staged, existing) != FILES:
             raise ValueError("Could not verify every uploaded draft asset")
-        gh("workflow", "run", WORKFLOW, "--repo", REPO, "--ref", "main",
-           "-f", f"tag={tag}", "-f", f"source_sha={source}", "-f", f"manifest_sha256={manifest_hash}")
+        inputs = ["-f", f"tag={tag}", "-f", f"source_sha={source}", "-f", f"manifest_sha256={manifest_hash}"]
+        if dispatch_receipt is not None:
+            require_main_head(source)
+            record_dispatch_intent(dispatch_receipt, tag, source, manifest_hash)
+            inputs += ["-f", "require_exact_head=true"]
+        if reject_published_source:
+            inputs += ["-f", "reject_published_source=true"]
+        gh("workflow", "run", WORKFLOW, "--repo", REPO, "--ref", "main", *inputs)
         print(f"Verified draft uploaded: {tag}\nPublish-only job queued; no GitHub compilation.\n"
               f"Follow completion: https://github.com/{REPO}/actions/workflows/{WORKFLOW}\n"
-              "If dispatch failed or was interrupted, retry the same local command; matching drafts are reused.")
+              "If dispatch was interrupted, inspect the exact tag and GitHub runs before retrying.")
 
 
 def finalize(tag, source, manifest_hash):
@@ -230,6 +272,8 @@ def finalize(tag, source, manifest_hash):
         raise ValueError("Final publication must run in the locked Silora Publish Local Build workflow")
     if not build.fork_release.BUILD_TAG.fullmatch(tag) or not HEX40.fullmatch(source) or not HEX64.fullmatch(manifest_hash):
         raise ValueError("Invalid publish job inputs")
+    if os.environ.get("REQUIRE_EXACT_HEAD") == "true" and os.environ.get("GITHUB_SHA") != source:
+        raise ValueError("Dispatch commit differs from the reviewed source")
     existing = release_for(tag)
     if existing is None:
         raise ValueError("Verified local draft is missing")
@@ -241,7 +285,7 @@ def finalize(tag, source, manifest_hash):
         if existing["draft"]:
             # Called inside the shared silora-release concurrency group. A newer
             # GitHub build finishing while the PC uploads cannot become a downgrade.
-            ensure_newer(info)
+            ensure_newer(info, reject_published_source=os.environ.get("REJECT_PUBLISHED_SOURCE") == "true")
             gh("release", "edit", tag, "--repo", REPO, "--title", info["title"],
                "--notes-file", Path(temp) / "RELEASE_NOTES.md", "--draft=false", "--prerelease=false", "--latest")
         published = release_for(tag)
@@ -259,6 +303,9 @@ def main():
     local = commands.add_parser("local", help="verify an archived local build; add --publish to release it")
     local.add_argument("directory", type=Path)
     local.add_argument("--publish", action="store_true")
+    local.add_argument("--reviewed-manifest-sha256", help="require the checksum manifest recorded when reviewing the staged archive")
+    local.add_argument("--dispatch-receipt", type=Path, help="persist dispatch intent in a private file before contacting GitHub")
+    local.add_argument("--reject-published-source", action="store_true", help="stop if GitHub Latest already has the same source SHA")
     local.add_argument("--signing-dir", type=Path, default=Path(os.environ.get("SILORA_SIGNING_DIR", ROOT.parent / "silora-signing")))
     github = commands.add_parser("github", help="start the existing GitHub compilation workflow")
     github.add_argument("--tests", action="store_true")
@@ -267,6 +314,12 @@ def main():
     for flag in ("tag", "source", "manifest-sha256"):
         finish.add_argument(f"--{flag}", required=True)
     args = parser.parse_args()
+    if args.mode == "local" and (args.reviewed_manifest_sha256 is not None or args.dispatch_receipt is not None):
+        if not (args.publish and HEX64.fullmatch(args.reviewed_manifest_sha256 or "") and args.dispatch_receipt):
+            local.error("reviewed publication requires --publish, --reviewed-manifest-sha256 and --dispatch-receipt")
+        args.dispatch_receipt = args.dispatch_receipt.expanduser().absolute()
+        if not args.dispatch_receipt.parent.is_dir():
+            local.error("the dispatch receipt must be in an existing private directory")
     if args.mode == "github":
         command = ["workflow", "run", "fork-manual-release.yml", "--repo", REPO, "--ref", "main",
                    "-f", f"run_tests={str(args.tests).lower()}"]
@@ -293,9 +346,11 @@ def main():
             if args.publish:
                 # Fail before creating a draft when the new workflow is not installed.
                 api(f"actions/workflows/{WORKFLOW}")
-                upload_and_dispatch(snapshot, info)
+                upload_and_dispatch(snapshot, info, reviewed_manifest=args.reviewed_manifest_sha256,
+                                    dispatch_receipt=args.dispatch_receipt,
+                                    reject_published_source=args.reject_published_source)
             else:
-                ensure_newer(info)
+                ensure_newer(info, reject_published_source=args.reject_published_source)
                 print("Preview only; no tag, draft or workflow created. Add --publish to release these exact APKs.")
 
 

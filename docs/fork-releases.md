@@ -166,9 +166,13 @@ suffix, so daily change detection recognizes the release.
 
 Publication checks version codes again after acquiring the release lock. If a
 newer build shipped while the PC was uploading, the older draft stays unpublished;
-build again before releasing. Matching interrupted drafts can be resumed by
-repeating the same local command. Existing public releases and conflicting assets
-are never replaced. A failed upload or dispatch leaves a draft for inspection.
+build again before releasing. After an interruption, inspect the matching draft
+and workflow runs first. A matching partial upload can be resumed if no dispatch
+occurred. The release skill passes the reviewed staged manifest hash and a private
+dispatch receipt to the publisher. It also requires the publish job to start
+from the reviewed commit and checks for the same source in Latest for a combined
+merge-and-release run. Existing public releases and conflicting assets are never
+replaced. A failed or uncertain upload or dispatch leaves evidence for inspection.
 
 After creating a draft, the local publisher checks for it up to six times, waiting
 two seconds between checks (ten seconds of waiting total). This handles a short
