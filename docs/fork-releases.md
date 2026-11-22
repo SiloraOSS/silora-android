@@ -387,12 +387,13 @@ in the checkout. The version calculation requires an official build tag
 reachable from the included upstream snapshot. The upstream build number is
 also preserved in the client build header reported to Silo.
 
-The shared release packager writes `RELEASE_NOTES.md` from the build's base
-tag and exact included upstream commit. It lists up to 12 of the most recent
-upstream commits in that range, with a link to the full comparison and to
-Silora's changelog at the packaged source commit. GitHub uses the same file
-for the release description. `build-info.json` records the base tag, included
-upstream SHA and Silora source SHA.
+The shared release packager writes `RELEASE_NOTES.md` for GitHub's release
+description. The **Recent changes** section lists up to 12 commits from the
+packaged source's history in newest-first Git date order. Each bullet links
+to the commit and ends with **(Silora)** or **(Silo Upstream)** based on
+whether the commit is part of the included upstream snapshot.
+`build-info.json` records the base tag, included upstream SHA and Silora
+source SHA.
 
 Android's internal version codes still use elapsed UTC seconds since 2026 plus a
 fork-specific base, remaining monotonic even if the workflow run counter resets.

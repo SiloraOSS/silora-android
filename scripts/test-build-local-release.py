@@ -115,7 +115,7 @@ class ReleaseArchiveTests(unittest.TestCase):
         patch = mock.patch.object(build, "ROOT", self.root)
         patch.start()
         self.addCleanup(patch.stop)
-        changelog = mock.patch.object(build.fork_release, "upstream_changelog", return_value="")
+        changelog = mock.patch.object(build.fork_release, "recent_changes", return_value="")
         changelog.start()
         self.addCleanup(changelog.stop)
         self.info = build.fork_release.metadata(

@@ -150,30 +150,39 @@ class ForkReleaseTest(unittest.TestCase):
     def test_package_checksums_and_release_notes_use_the_selected_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            now = dt.datetime(2026, 10, 22, tzinfo=dt.timezone.utc)
 
             def git(*args):
+                nonlocal now
+                now += dt.timedelta(seconds=1)
                 return subprocess.run(
                     ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", *args],
                     cwd=root, check=True, capture_output=True, text=True,
+                    env=dict(os.environ, GIT_AUTHOR_DATE=now.isoformat(), GIT_COMMITTER_DATE=now.isoformat()),
                 ).stdout.strip()
 
             def commit(subject):
                 git("commit", "--allow-empty", "--quiet", "-m", subject)
                 return git("rev-parse", "HEAD")
 
-            git("init", "--quiet")
-            base = commit("Upstream release")
-            git("tag", "-a", UPSTREAM["tag"], "-m", "Official build")
-            git("update-ref", f"{release.UPSTREAM_TAG_REFS}{UPSTREAM['tag']}", git("rev-parse", UPSTREAM["tag"]))
-            commit("Oldest included upstream change")
-            for index in range(1, release.UPSTREAM_NOTES_LIMIT):
-                commit(f"fix: included upstream change {index}")
+            git("init", "--quiet", "--initial-branch=silo-upstream")
+            base = commit("Initial upstream commit")
+            earlier_upstream = [commit(f"fix: upstream change {index}") for index in range(12)]
+            git("switch", "--create", "silora", base)
+            earlier_silora = commit("Earlier Silora change")
+            git("switch", "silo-upstream")
             tip = commit("fix: include the [latest] upstream change")
+            git("update-ref", f"{release.UPSTREAM_TAG_REFS}{UPSTREAM['tag']}", tip)
+            git("switch", "silora")
+            git("merge", "--no-ff", "-m", "Merge Silo upstream", "silo-upstream")
+            merge = git("rev-parse", "HEAD")
+            source = commit("Latest Silora change")
+            info = dict(self.info(), source_sha=source, upstream_checked_sha=tip)
+            git("switch", "silo-upstream")
             future = commit("Future upstream change")
             git("update-ref", "refs/silo-upstream/heads/main", future)
-            git("switch", "--detach", tip)
-            source = commit("Silora-only change")
-            info = dict(self.info(), source_sha=source, upstream_checked_sha=tip)
+            git("switch", "silora")
+            commit("Future Silora change")
 
             for module in ("androidApp", "androidTvApp"):
                 path = root / module / "build/outputs/apk/release" / f"{module}-universal-release.apk"
@@ -193,17 +202,24 @@ class ForkReleaseTest(unittest.TestCase):
             notes = (out / "RELEASE_NOTES.md").read_text()
             self.assertIn("**Ignore HEVC Level Limits** is on by default", notes)
             self.assertNotIn("defaulting to 6.2", notes)
-            self.assertIn("Based on [Silo 1.0.0 (26)]", notes)
-            self.assertIn(f"{release.UPSTREAM_NOTES_LIMIT + 1} upstream commits since that release", notes)
-            self.assertEqual(notes.split("## Downloads")[0].count("\n- ["), release.UPSTREAM_NOTES_LIMIT)
-            self.assertIn(f"/commit/{tip}) fix: include the \\[latest\\] upstream change", notes)
-            self.assertIn(f"/compare/{base}...{tip})", notes)
-            for subject in ("Oldest included upstream change", "Future upstream change", "Silora-only change"):
-                self.assertNotIn(subject, notes)
+            self.assertNotIn("## Upstream changes", notes)
+            recent = notes.split("## Recent changes\n\n", 1)[1].split("\n\n", 1)[0]
+            silora = "https://github.com/SiloraOSS/silora-android/commit"
+            upstream = "https://github.com/Silo-Server/silo-android/commit"
+            self.assertEqual(recent.splitlines(), [
+                f"- [`{source[:9]}`]({silora}/{source}) Latest Silora change (Silora)",
+                f"- [`{merge[:9]}`]({silora}/{merge}) Merge Silo upstream (Silora)",
+                f"- [`{tip[:9]}`]({upstream}/{tip}) fix: include the \\[latest\\] upstream change (Silo Upstream)",
+                f"- [`{earlier_silora[:9]}`]({silora}/{earlier_silora}) Earlier Silora change (Silora)",
+                *[
+                    f"- [`{sha[:9]}`]({upstream}/{sha}) fix: upstream change {index} (Silo Upstream)"
+                    for index, sha in reversed(list(enumerate(earlier_upstream))[4:])
+                ],
+            ])
 
-            at_tag = release.upstream_changelog(root, dict(info, upstream_checked_sha=base))
-            self.assertIn("The included upstream source is at that release tag.", at_tag)
-            self.assertNotIn("\n- [", at_tag)
+            initial = release.recent_changes(root, dict(info, source_sha=base, upstream_checked_sha=base))
+            self.assertEqual(initial, "## Recent changes\n\n"
+                             f"- [`{base[:9]}`]({upstream}/{base}) Initial upstream commit (Silo Upstream)\n\n")
 
 
 class BuildDecisionTest(unittest.TestCase):
