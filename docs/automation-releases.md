@@ -84,6 +84,13 @@ build info, and the receipt. Existing permanent APK download URLs keep working.
 
 ## Duplicates and recovery
 
+The scheduled merge and manual release skill use the same [local release
+coordinator](../.agents/skills/silora-merge-and-release/references/execution.md#coordinate-with-other-local-runs)
+before sending start notifications, modifying a checkout, building, pushing,
+or handing off to GitHub. A scheduled run skips an occurrence when the local
+reservation is busy. GitHub's concurrency group covers the remote phase after
+the verified handoff.
+
 The local helper locks its private receipt directory and records dispatch
 intent before contacting GitHub. It searches for a matching run by source,
 upstream, and mode, then records its ID and URL. Repeating the command adopts

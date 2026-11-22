@@ -58,6 +58,10 @@ sender, including `--preview` for handoff (which requires a real accepted run). 
 planned notification stages as unsent. No GitHub compilation/publication or
 Discord delivery is tested by the local dry run.
 
+Take the [local reservation](execution.md#coordinate-with-other-local-runs)
+before mutating shared refs or worktrees. Release it when returning the
+preview, and reclaim it before promotion or discard.
+
 ## Release this result
 
 After the concrete review, offer **Release this result**, **Keep for later**,

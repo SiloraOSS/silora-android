@@ -63,6 +63,12 @@ publication. No choice leaves the preview pending without external actions.
 Keep for later explicitly saves it for resumption; do not schedule publication
 or clean it up automatically.
 
+Before sending a start milestone or modifying the checkout or shared Git refs,
+claim the [shared local release reservation](references/execution.md#coordinate-with-other-local-runs).
+Use it for preparation, push, and handoff. Release it when pausing for a user
+decision, finishing local work, or handing off to GitHub. Reclaim it before
+resuming local work and recheck the recorded inputs.
+
 ## Scope and authorization
 
 - Repository: `/home/albinoman887/Workspace/SigmaStreams/Silo/source/silo-android`.

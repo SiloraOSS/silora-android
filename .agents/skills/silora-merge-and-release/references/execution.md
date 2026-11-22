@@ -64,6 +64,46 @@ published, failed, unchanged, declined, dry_run_complete, dry_run_kept, or disca
 Distinguish local failure from a GitHub failure after handoff. A normal approval wait remains resumable and is
 not a failure.
 
+## Coordinate with other local runs
+
+The manual skill and the scheduled merge share one coordinator on this machine.
+Use the script from the normal checkout, with its default private state directory.
+Use one execution receipt ID for the whole run, including approval pauses and
+resumptions. Each new claim gives that execution a new reservation token.
+
+```sh
+coordinator=/home/albinoman887/Workspace/SigmaStreams/Silo/source/silo-android/scripts/silora-release-lock.py
+python3 "$coordinator" claim --execution-id "$execution_id"
+python3 "$coordinator" run --token "$reservation_token" -- git fetch --no-tags upstream refs/heads/main:refs/remotes/upstream/main
+python3 "$coordinator" release --token "$reservation_token"
+```
+
+Read the token from the successful claim's JSON. Keep it in private execution
+state for the active session. Use `run --token ... -- COMMAND` from the selected
+working directory for every local mutation in this workflow, including shared
+ref updates, worktree changes, merge operations, builds, pushes, release
+handoffs, and local progress sends. Pass the token on each tool call. Wrap the
+actual foreground command, including any shell redirections that write shared
+files, so the child process holds the lock until the command exits. Read-only
+status checks and monitoring an accepted GitHub run can run outside the lock.
+
+Claim before start notifications and reconcile existing execution and handoff
+receipts before doing work. A claim that exits 75 means another execution owns
+the reservation or a guarded command is still active. In a manual run, report
+the active execution and stop or monitor read-only. On the schedule, skip this
+occurrence quietly. A coordination error stops the mutating steps.
+
+The reservation bridges tool calls and expires after 15 minutes without a
+guarded command or `renew --token ...`. An active command holds the kernel lock
+even when it runs longer than that window, and a completed command refreshes
+the reservation. Renew during active preparation if extended read-only work
+needs more time. Release before an approval or product-decision wait, after a
+verified GitHub handoff, or when local work ends. On resumption, obtain a fresh
+token and recheck the checkout, source pins, remote baseline and existing
+handoffs before continuing. Preserve previous receipts across crashes and
+reboots. For an isolated dry run, use the reservation when changing shared
+refs or worktrees, then release it while the preview awaits a choice.
+
 ## Resume an interrupted execution
 
 - Match the request to one receipt and recover the recorded route, pins, and
