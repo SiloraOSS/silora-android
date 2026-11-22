@@ -33,8 +33,19 @@ The helper verifies the exact published GitHub tag and both APKs before
 sending. It uses the SigmaUtils `discord-tools announce` command for a
 single teal embed with the release title and Pacific publication date, short
 highlights, build-specific APK links and the full GitHub release notes.
-It sends without role pings, buttons, or an extra audit post. Shorten the
+After SigmaUtils's persistent view is deployed and verified, the post pings
+only **Silora Updates** (`1573885206174371840`) and includes **Get Silora
+Updates** and **Stop Silora Updates** on the same embed. The buttons add or
+remove only that role for the member who clicks. Before deployment the helper
+can still post the release embed with no pings or buttons. Shorten the
 highlights if they exceed the embed limit.
+
+The local readiness marker is
+`Staging/silora-upstream-automation/config/silora-updates.ready`. Record the
+verified SigmaUtils deployment in it once the running bot includes the
+tested controls. Remove it on rollback to a version without the view. The read-only embed preview
+always shows the proposed role and buttons. An authorized automated release
+uses the marker to choose the live payload and sends no extra audit post.
 
 Per-release state stays private under
 `Staging/silora-upstream-automation/release-announcements/`. A delivered

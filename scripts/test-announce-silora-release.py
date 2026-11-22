@@ -36,6 +36,14 @@ RELEASE = {
 
 
 class ReleaseAnnouncementTest(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.ready = Path(temp.name) / "silora-updates.ready"
+        ready = patch.object(announce, "UPDATES_READY", self.ready)
+        ready.start()
+        self.addCleanup(ready.stop)
+
     def test_verifies_the_exact_public_tag(self):
         with patch.object(announce.release, "api", side_effect=[RELEASE, {"sha": SOURCE}]) as api:
             self.assertEqual(announce.verified_release(TAG, SOURCE), RELEASE)
@@ -84,6 +92,17 @@ class ReleaseAnnouncementTest(unittest.TestCase):
                     self.assertIn("--embed", command)
                     self.assertIn("--no-roles", command)
                     self.assertNotIn("--dry-run", command)
+
+    def test_verified_bot_deployment_enables_the_release_ping_and_controls(self):
+        self.ready.touch()
+        dry_run = subprocess.CompletedProcess([], 0, "Dry run", "")
+        posted = subprocess.CompletedProcess([], 0, f"Posted and verified: {MESSAGE}\n", "")
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(announce, "STATE", Path(directory)):
+                with patch.object(announce.subprocess, "run", side_effect=[dry_run, posted]) as run:
+                    self.assertEqual(announce.publish(TAG, SOURCE, RELEASE, HIGHLIGHTS, "nonce"), MESSAGE)
+                    self.assertIn("--silora-updates", run.call_args.args[0])
+                    self.assertNotIn("--no-roles", run.call_args.args[0])
 
     def test_unconfirmed_delivery_preserves_the_message_id_and_stops_retries(self):
         dry_run = subprocess.CompletedProcess([], 0, "Dry run", "")

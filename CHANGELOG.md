@@ -11,6 +11,8 @@ and verified publication in #mod-log. The merge-and-release skill posts a
 release-notes embed in #silo-daily-changelog after it verifies a new GitHub
 release. Its single list identifies Silora and Silo upstream changes and links
 to that build's APKs and full release notes.
+After the SigmaUtils notification view is deployed, the same post pings the
+opt-in Silora Updates role and includes buttons to subscribe or unsubscribe.
 
 ## 2026-11-21 15:17 PST — upstream 9f5de3107
 

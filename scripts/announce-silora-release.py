@@ -23,6 +23,7 @@ release = load_script("silora_release", "automation-release.py")
 receipts = load_script("local_notifications", "notify-local-automation.py")
 TOOLS = receipts.PRIVATE.parents[1] / "Tools/discord-tools"
 STATE = receipts.PRIVATE / "release-announcements"
+UPDATES_READY = receipts.PRIVATE / "config/silora-updates.ready"
 CHANNEL = "1568502343631114260"
 MESSAGE = re.compile(
     rf"^Posted and verified: (https://discord\.com/channels/{receipts.GUILD}/{CHANNEL}/[0-9]+)$",
@@ -74,8 +75,9 @@ def embed_body(result, highlights):
     return body + "\n"
 
 
-def announcement_args(body_file, nonce):
-    return ["post", CHANNEL, str(body_file), "--embed", "--no-roles",
+def announcement_args(body_file, nonce, *, updates_enabled=False):
+    audience = "--silora-updates" if updates_enabled else "--no-roles"
+    return ["post", CHANNEL, str(body_file), "--embed", audience,
             "--input-format", "body", "--nonce", nonce]
 
 
@@ -113,12 +115,14 @@ def publish(tag, source, result, body, nonce):
             raise ValueError(f"Announcement delivery is uncertain. Inspect {path} before retrying.")
 
         # Freeze the exact body and destination before the only possible send.
-        args = announcement_args(body_file(folder, body), nonce)
+        updates_enabled = UPDATES_READY.is_file()
+        args = announcement_args(body_file(folder, body), nonce, updates_enabled=updates_enabled)
         command = [str(TOOLS / "discord-tools"), "announce", *args]
         check = subprocess.run([*command, "--dry-run"], check=True, text=True, capture_output=True)
         if any(line.startswith("Audit channel: ") for line in check.stdout.splitlines()):
             raise ValueError("Discord announce is configured to post an extra audit message.")
         record = dict(tag=tag, source_sha=source, channel_id=CHANNEL, status="pending",
+                      updates_enabled=updates_enabled,
                       nonce=nonce, body_sha256=hashlib.sha256(body.encode()).hexdigest(),
                       attempted_at=receipts.now())
         receipts.save(path, record)
@@ -156,7 +160,9 @@ def main():
         else:
             folder = args.preview_dir.resolve()
             folder.mkdir(mode=0o700)
-            output, review = render(folder, announcement_args(body_file(folder, body), nonce))
+            output, review = render(folder, announcement_args(
+                body_file(folder, body), nonce, updates_enabled=True,
+            ))
             print(json.dumps({"preview": str(output), "channel": review["channel"], "audit": review["audit"]}))
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError, receipts.NotificationError) as error:
         parser.exit(1, f"{error}\n")
