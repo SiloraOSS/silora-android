@@ -142,6 +142,7 @@ import org.siloserver.silo.android.ui.screens.servers.ServerSwitchDestination
 import org.siloserver.silo.android.ui.screens.settings.SettingsDownloadsScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsInterfaceScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsNotificationsScreen
+import org.siloserver.silo.android.ui.screens.settings.PhoneUpdates
 import org.siloserver.silo.android.ui.screens.settings.SettingsProfileSelectionScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsNightModeScreen
 import org.siloserver.silo.android.ui.screens.settings.SettingsPlaybackScreen
@@ -1600,6 +1601,9 @@ fun AppNavigation(
         composable(Route.Settings.route) {
             SettingsScreen(
                 onOpenInterface = { navController.navigate(Route.SettingsInterface.route) },
+                onOpenUpdates = if (PhoneUpdates.available) {
+                    { navController.navigate(Route.SettingsUpdates.route) }
+                } else null,
                 onOpenPlayback = { navController.navigate(Route.SettingsPlayback.route) },
                 onOpenSubtitles = { navController.navigate(Route.SettingsSubtitles.route) },
                 onOpenDownloads = { navController.navigate(Route.SettingsDownloads.route) },
@@ -1668,6 +1672,9 @@ fun AppNavigation(
                 viewModel = koinViewModel(viewModelStoreOwner = settingsOwner(navController, entry)),
                 onBackClick = { navController.popBackStack() },
             )
+        }
+        composable(Route.SettingsUpdates.route) {
+            PhoneUpdates.Settings(onBackClick = { navController.popBackStack() })
         }
         composable(Route.SettingsProfileSelection.route) {
             SettingsProfileSelectionScreen(onBackClick = { navController.popBackStack() })

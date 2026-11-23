@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.PlayArrow
@@ -58,6 +59,7 @@ import org.siloserver.silo.android.ui.theme.SettingsTextStyles
 import org.siloserver.silo.android.ui.theme.SiloOnSurface
 import org.siloserver.silo.android.ui.theme.SiloSecondaryText
 import org.siloserver.silo.android.ui.theme.SiloSettingsBackground
+import org.siloserver.silo.android.R
 import org.siloserver.silo.common.R as CommonR
 import org.siloserver.silo.common.diagnostics.DiagnosticsAvailabilityUi
 import org.siloserver.silo.common.admin.AdminMenuPreferences
@@ -103,6 +105,7 @@ fun SettingsScreen(
     onNavigateToHistory: () -> Unit = {},
     onNavigateToCollections: () -> Unit = {},
     onNavigateToDiagnostics: () -> Unit = {},
+    onOpenUpdates: (() -> Unit)? = null,
     viewModel: SettingsViewModel = koinViewModel(),
     diagnosticsViewModel: DiagnosticsViewModel = koinViewModel(),
     signInViewModel: SignInSettingsViewModel = koinViewModel(),
@@ -156,6 +159,8 @@ fun SettingsScreen(
         search.matches(*searchTerms(CommonR.string.settings_search_terms_signIn, "sign-in", "sign in", "account", "provider", "connect", "disconnect", "sso"))
     val matchesExperimental = search.matches(*searchTerms(CommonR.string.settings_search_terms_experimental, "experimental", "beta", "testing", "audiobooks", "navigation", "watch party", "party"))
     val matchesAbout = search.matches(*searchTerms(CommonR.string.settings_search_terms_about, "about", "version", "privacy", "policy", "information"), versionLabel)
+    val matchesUpdates = onOpenUpdates != null &&
+        search.matches(stringResource(R.string.updates_title), "app update", "check for updates", "shizuku", "apk")
     val matchesSignOut = search.matches(*searchTerms(CommonR.string.settings_search_terms_signOut, "sign out", "account"))
     val matchesAdministrator = state.user?.role.equals("admin", ignoreCase = true) &&
         state.activeProfile?.isPrimary == true &&
@@ -164,7 +169,7 @@ fun SettingsScreen(
     val hasResults = matchesInterface || matchesNotifications || matchesProfileSelection || matchesPlayback || matchesSubtitles ||
         matchesDownloads || matchesWatchlist || matchesFavorites || matchesHistory || matchesCollections ||
         showDiagnostics || matchesServer || matchesPairDevice || matchesExperimental ||
-        matchesAbout || matchesSignOut || matchesSignIn || matchesAdministrator
+        matchesAbout || matchesUpdates || matchesSignOut || matchesSignIn || matchesAdministrator
 
     Scaffold(
         topBar = {
@@ -401,23 +406,32 @@ fun SettingsScreen(
                 }
             }
 
-            if (matchesAbout) {
+            if (matchesAbout || matchesUpdates) {
                 item(key = "about") {
                     SettingsSection(title = stringResource(CommonR.string.settings_about_title)) {
-                        // Includes the build number so a support report and the
-                        // server's admin Activity page name the exact same build,
-                        // in the "1.0.0 (5)" form Play, TestFlight and the server's
-                        // diagnostics page all use.
-                        SettingsNavigationRow(
-                            label = stringResource(CommonR.string.settings_about_version),
-                            icon = Icons.Filled.Info,
-                            value = versionLabel,
-                        )
-                        SettingsNavigationRow(
-                            label = stringResource(CommonR.string.settings_about_privacyPolicy),
-                            icon = Icons.Filled.PanTool,
-                            onClick = { uriHandler.openUri(SILO_PRIVACY_POLICY_URL) },
-                        )
+                        if (matchesUpdates) {
+                            SettingsNavigationRow(
+                                label = stringResource(R.string.updates_title),
+                                icon = Icons.Filled.SystemUpdate,
+                                onClick = onOpenUpdates,
+                            )
+                        }
+                        if (matchesAbout) {
+                            // Includes the build number so a support report and the
+                            // server's admin Activity page name the exact same build,
+                            // in the "1.0.0 (5)" form Play, TestFlight and the server's
+                            // diagnostics page all use.
+                            SettingsNavigationRow(
+                                label = stringResource(CommonR.string.settings_about_version),
+                                icon = Icons.Filled.Info,
+                                value = versionLabel,
+                            )
+                            SettingsNavigationRow(
+                                label = stringResource(CommonR.string.settings_about_privacyPolicy),
+                                icon = Icons.Filled.PanTool,
+                                onClick = { uriHandler.openUri(SILO_PRIVACY_POLICY_URL) },
+                            )
+                        }
                     }
                 }
             }

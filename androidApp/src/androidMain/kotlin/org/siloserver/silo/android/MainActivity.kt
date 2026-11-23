@@ -43,6 +43,7 @@ import org.siloserver.silo.android.profiles.launchOnlyProfileId
 import org.siloserver.silo.android.profiles.profileLaunchAction
 import org.siloserver.silo.android.push.PushNotificationPresenter
 import org.siloserver.silo.android.ui.navigation.AppNavigation
+import org.siloserver.silo.android.ui.screens.settings.PhoneUpdates
 import org.siloserver.silo.android.ui.navigation.ExternalRouteRequest
 import org.siloserver.silo.android.ui.navigation.ExternalRouteRequestFactory
 import org.siloserver.silo.android.ui.navigation.Route
@@ -99,6 +100,7 @@ import kotlinx.coroutines.launch
 import org.koin.java.KoinJavaComponent.get
 
 class MainActivity : ComponentActivity() {
+    private var updateLaunch by mutableStateOf(0)
 
     companion object {
         // The startup splash plays once per process (a genuine cold launch). It
@@ -190,6 +192,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        if (savedInstanceState == null) PhoneUpdates.onLaunch(this)
         setContent {
             var startRoute by remember { mutableStateOf<String?>(null) }
             val pendingExternalRoute by pendingExternalRouteRequests.collectAsState()
@@ -277,6 +280,13 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                             )
+                            if (PhoneUpdates.available) {
+                                val pipCoordinator = remember {
+                                    get<SiloPictureInPictureCoordinator>(SiloPictureInPictureCoordinator::class.java)
+                                }
+                                val inPictureInPicture by pipCoordinator.isInPictureInPictureMode.collectAsState()
+                                PhoneUpdates.Dialogs(ready = !profileCoverVisible && !inPictureInPicture, launch = updateLaunch)
+                            }
                             if (profileCoverVisible) {
                                 // Swallows touches too, so nothing on the previous
                                 // profile's screens can be tapped meanwhile.
@@ -365,6 +375,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (PhoneUpdates.available && intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
+            PhoneUpdates.onLaunch(this)
+            updateLaunch++
+        }
         // A genuinely new Intent has not been consumed, whatever the old one
         // carried.
         intent.removeExtra(EXTRA_EXTERNAL_ROUTE_CONSUMED)

@@ -101,6 +101,15 @@ val isBuildingBundle = gradle.startParameter.taskNames.any {
     it.contains("bundle", ignoreCase = true)
 }
 
+// The Play bundle excludes the installer library and its manifest components.
+val includeSideloadUpdates = !isBuildingBundle && siloReleaseChannel.get() != "release"
+
+dependencyLocking {
+    // The updater library locks these artifacts and Gradle verifies their pinned checksums.
+    // They appear on the app's classpath only when building the sideload channel.
+    ignoredDependencies.add("dev.rikka.shizuku:*")
+}
+
 kotlin {
     androidTarget {
         compilations.all {
@@ -111,9 +120,13 @@ kotlin {
     }
 
     sourceSets {
+        named("androidMain") {
+            kotlin.srcDir(if (includeSideloadUpdates) "src/androidSideload/kotlin" else "src/androidPlay/kotlin")
+        }
         androidMain.dependencies {
             implementation(project(":shared"))
             implementation(project(":android-shared"))
+            if (includeSideloadUpdates) implementation(project(":silora-updates"))
             implementation(libs.kotlinx.serialization.json)
             implementation(compose.material3)
             implementation(compose.materialIconsExtended)
