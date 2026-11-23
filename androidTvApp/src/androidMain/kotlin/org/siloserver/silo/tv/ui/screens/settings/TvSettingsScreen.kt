@@ -93,6 +93,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -306,6 +311,7 @@ fun TvSettingsScreen(
         selectedCategory = selectedCategory,
         categoryFocusRequesters = categoryFocusRequesters,
         detailFocusRequester = detailFocusRequester,
+        playbackEntryRequest = detailFocusRequest,
         onDetailFocusChanged = { detailHasFocus = it },
         onRailCategoryFocusChanged = { categoryColumnHasFocus = it },
         onCategorySelected = { selectedCategory = it },
@@ -468,6 +474,7 @@ private fun SettingsSplitLayout(
     selectedCategory: TvSettingsCategory,
     categoryFocusRequesters: Map<TvSettingsCategory, FocusRequester>,
     detailFocusRequester: FocusRequester,
+    playbackEntryRequest: Int,
     onDetailFocusChanged: (Boolean) -> Unit,
     // Observed arrival of the entry claim, so the shell handover below only
     // fires when a category actually took focus.
@@ -569,6 +576,7 @@ private fun SettingsSplitLayout(
             homeSectionsViewModel = homeSectionsViewModel,
             selectedCategory = selectedCategory,
             detailFocusRequester = detailFocusRequester,
+            playbackEntryRequest = playbackEntryRequest,
             onDetailFocusChanged = onDetailFocusChanged,
             onShowAudiobooksTabChanged = onShowAudiobooksTabChanged,
             onProfileLaunchBehaviorChanged = onProfileLaunchBehaviorChanged,
@@ -762,6 +770,16 @@ private fun SettingsRailCategoryRow(
             .focusProperties {
                 right = rightFocusRequester ?: FocusRequester.Default
             }
+            .onPreviewKeyEvent { event ->
+                if (category == TvSettingsCategory.Playback && event.key == Key.DirectionRight) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                        onClick()
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
             .onFocusChanged { if (it.isFocused) onFocused() },
     ) {
         Row(
@@ -868,6 +886,7 @@ private fun SettingsDetailPane(
     homeSectionsViewModel: HomeViewModel,
     selectedCategory: TvSettingsCategory,
     detailFocusRequester: FocusRequester,
+    playbackEntryRequest: Int,
     onDetailFocusChanged: (Boolean) -> Unit,
     onShowAudiobooksTabChanged: (Boolean) -> Unit,
     onProfileLaunchBehaviorChanged: (ProfileLaunchBehavior) -> Unit,
@@ -941,6 +960,8 @@ private fun SettingsDetailPane(
             )
             TvSettingsCategory.Playback -> TvPlaybackSettingsPane(
                 state = state,
+                // Resolution is a lazy item. Re-enter at the top so it can take focus.
+                listState = remember(playbackEntryRequest) { LazyListState() },
                 firstFocusRequester = detailFocusRequester,
                 onResolutionSelected = onResolutionSelected,
                 onMaxBitrateSelected = onMaxBitrateSelected,
@@ -1265,6 +1286,7 @@ private const val NoBitrateLimitId = "no_limit"
 @Composable
 private fun TvPlaybackSettingsPane(
     state: TvSettingsViewModel.UiState,
+    listState: LazyListState,
     firstFocusRequester: FocusRequester,
     /** Receives a [QualityChoices.RESOLUTIONS] value. */
     onResolutionSelected: (String) -> Unit,
@@ -1329,6 +1351,7 @@ private fun TvPlaybackSettingsPane(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = Spacing.xxxl),
     ) {
