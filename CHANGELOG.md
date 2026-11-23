@@ -4,6 +4,41 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-22 20:21 PST — upstream bbbfdeeb5
+
+**Merge inputs** — `main` at `289f01260db28755aca4c66e20bf854a4368b624` and official upstream
+`bbbfdeeb57f982def14b65a1d69eb6f7b168f569`. Recovery ref `refs/codex/upstream-merge/20261123T041757Z`.
+
+**Upstream commits added**
+
+- `878c972c4` fix(playback): report a slow link on a stall only with slow-transfer evidence (#1011)
+- `e580e1811` fix(player): time Up Next from the end of the file, not the credits marker (#994)
+- `c89bdf34b` fix(player): play an ASS pick that the server burns in on an HLS transcode (#1010)
+- `cb2c32d8a` feat(detail): show the collections a movie or series is in on its page (#1007)
+- `03972d479` fix(tv): list each embedded subtitle track once in the player menu (#1013)
+- `e8071640a` test(browse): serialize main thread and wait for seeded page in CatalogLetterIndexViewModelTest (#1031)
+- `bbbfdeeb5` feat(playback): default cellular quality to Auto up to 10 Mbps and cap Data Saver at 2 Mbps (#1036)
+
+**Silora merge decisions**
+
+- Kept both Up Next modes, the saved device-local trigger, the profile timing
+  override, and the next-episode artwork. Fresh settings scopes use Time
+  remaining. Upgrades keep saved selections and preserve the inherited
+  Credits markers choice for existing scopes.
+- Adapted upstream #994's shared timing and TV fixes. The series page uses
+  closing credits or actual playback end to choose the return episode.
+  Crossing the prompt leaves a manually opened TV card countdown-free during
+  playback. Eligible credits still use Silora's final-quarter and runtime
+  checks. Keep Watching can still rearm one countdown at the end.
+- Kept the upstream catalog test's serialized main dispatcher and the fork
+  assertion for showing the cached index before the refresh completes.
+
+**Validation**
+
+The staged merge was reviewed against both parents and checked for whitespace
+errors. Signed phone and TV builds, full release lint and host test results
+are recorded with the exact archive in the local release review.
+
 ## 2026-11-21 — Release notifications
 
 Local APK releases now report the build, interactive approval wait, upload

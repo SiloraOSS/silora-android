@@ -5,6 +5,7 @@ import org.siloserver.silo.network.apiv2.ApiV2Gate
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -451,22 +452,60 @@ class AndroidPlayerSettingsStoreTest {
             } },
         )
         val store = newStore()
-        assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())
-        store.setNextUpPromptMode(NextUpPromptMode.TimeRemaining)
-        assertEquals(NextUpPromptMode.TimeRemaining, newStore().nextUpPromptModeFlow.first())
+        assertEquals(NextUpPromptMode.TimeRemaining, store.nextUpPromptModeFlow.first())
+        store.setNextUpPromptMode(NextUpPromptMode.CreditsMarkers)
+        assertEquals(NextUpPromptMode.CreditsMarkers, newStore().nextUpPromptModeFlow.first())
         profile = "profile-b"
-        assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())
+        assertEquals(NextUpPromptMode.TimeRemaining, store.nextUpPromptModeFlow.first())
         profile = "profile-a"
         server = "https://two.example"
-        assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())
+        assertEquals(NextUpPromptMode.TimeRemaining, store.nextUpPromptModeFlow.first())
         server = "https://one.example"
         device = "device-b"
-        assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())
-        device = "device-a"
         assertEquals(NextUpPromptMode.TimeRemaining, store.nextUpPromptModeFlow.first())
+        device = "device-a"
+        assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())
         assertTrue(fakeFlusher.calls.isEmpty(), "Silora's mode must not be sent to the server")
         store.resetAllDeviceSettings()
-        assertEquals(NextUpPromptMode.CreditsMarkers, store.nextUpPromptModeFlow.first())
+        assertEquals(NextUpPromptMode.TimeRemaining, store.nextUpPromptModeFlow.first())
+    }
+
+    @Test
+    fun `upgrading keeps inherited credits and explicit timing until the user resets settings`() = runTest {
+        val inherited = PreferenceDataStoreFactory.create(
+            produceFile = { File(tempFolder.root, "up_next_inherited.preferences_pb") },
+        )
+        val explicit = PreferenceDataStoreFactory.create(
+            produceFile = { File(tempFolder.root, "up_next_explicit.preferences_pb") },
+        )
+        val fresh = PreferenceDataStoreFactory.create(
+            produceFile = { File(tempFolder.root, "up_next_fresh.preferences_pb") },
+        )
+        val scopeHash = java.security.MessageDigest.getInstance("SHA-256")
+            .digest("$serverUrl|$activeProfileId|device-a".toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        val prefix = "scope_${scopeHash.take(24)}."
+        val oldSentinel = booleanPreferencesKey("migration_v2_$prefix")
+        inherited.edit { it[oldSentinel] = true }
+        explicit.edit {
+            it[oldSentinel] = true
+            it[stringPreferencesKey(prefix + "silora.next_up_prompt_mode")] = "time_remaining"
+        }
+
+        fun newStore(backing: DataStore<Preferences>) = AndroidPlayerSettingsStore(
+            context = mockContextStub(), legacyCache = fakeLegacyCache,
+            getActiveProfileId = { activeProfileId }, getServerUrl = { serverUrl },
+            getDeviceId = { "device-a" }, serverSettingsFlusher = fakeFlusher,
+            dataStoreFactory = { _, _ -> backing },
+        )
+        assertEquals(NextUpPromptMode.TimeRemaining, newStore(fresh).nextUpPromptModeFlow.first())
+        assertEquals(NextUpPromptMode.TimeRemaining, newStore(fresh).nextUpPromptModeFlow.first())
+        assertEquals(NextUpPromptMode.TimeRemaining, newStore(explicit).nextUpPromptModeFlow.first())
+        val upgraded = newStore(inherited)
+        assertEquals(NextUpPromptMode.CreditsMarkers, upgraded.nextUpPromptModeFlow.first())
+        assertEquals(NextUpPromptMode.CreditsMarkers, newStore(inherited).nextUpPromptModeFlow.first())
+        upgraded.resetAllDeviceSettings()
+        assertEquals(NextUpPromptMode.TimeRemaining, newStore(inherited).nextUpPromptModeFlow.first())
     }
 
     @Test
@@ -1628,11 +1667,11 @@ class AndroidPlayerSettingsStoreTest {
     }
 
     @Test
-    fun `cellular quality defaults to the 720p preset`() = runTest {
+    fun `cellular quality defaults to the Auto 10 Mbps preset`() = runTest {
         val store = newStore()
 
-        assertEquals("720p", store.cellularPreferredQualityFlow.first())
-        assertEquals(2_000, store.cellularMaxBitrateKbpsFlow.first())
+        assertEquals("auto", store.cellularPreferredQualityFlow.first())
+        assertEquals(10_000, store.cellularMaxBitrateKbpsFlow.first())
     }
 
     @Test
@@ -1692,8 +1731,8 @@ class AndroidPlayerSettingsStoreTest {
         // "Use profile setting" has no profile value to reach there, so the
         // contract default applies.
         store.resetDeviceSetting(PlaybackSettingsKeys.CellularPreferredQuality)
-        assertEquals("720p", store.cellularPreferredQualityFlow.first())
-        assertEquals(2_000, store.cellularMaxBitrateKbpsFlow.first())
+        assertEquals("auto", store.cellularPreferredQualityFlow.first())
+        assertEquals(10_000, store.cellularMaxBitrateKbpsFlow.first())
 
         revision = capabilitiesAt(20)
         store.refreshFromServer()
@@ -1724,16 +1763,16 @@ class AndroidPlayerSettingsStoreTest {
         older.setCellularQuality("1080p", 6_000)
         older.resetDeviceSetting(PlaybackSettingsKeys.CellularPreferredQuality)
         older.refreshFromServer()
-        assertEquals("720p", older.cellularPreferredQualityFlow.first())
-        assertEquals(2_000, older.cellularMaxBitrateKbpsFlow.first())
+        assertEquals("auto", older.cellularPreferredQualityFlow.first())
+        assertEquals(10_000, older.cellularMaxBitrateKbpsFlow.first())
 
         // Offline, the default applies until a server that stores the pair
         // answers with the profile's value.
         val offline = storeAt({ ApiResult.NetworkError(IllegalStateException("offline")) }, "offline")
         offline.setCellularQuality("1080p", 6_000)
         offline.resetDeviceSetting(PlaybackSettingsKeys.CellularPreferredQuality)
-        assertEquals("720p", offline.cellularPreferredQualityFlow.first())
-        assertEquals(2_000, offline.cellularMaxBitrateKbpsFlow.first())
+        assertEquals("auto", offline.cellularPreferredQualityFlow.first())
+        assertEquals(10_000, offline.cellularMaxBitrateKbpsFlow.first())
     }
 
     @Test

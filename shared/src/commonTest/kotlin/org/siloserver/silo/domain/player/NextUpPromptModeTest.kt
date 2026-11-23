@@ -5,9 +5,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class NextUpPromptModeTest {
-    @Test fun savedCreditsChoiceAndDefaultUseCreditsMarkers() {
+    @Test fun freshDefaultUsesTimeRemainingAndSavedCreditsStillResolve() {
         assertEquals(NextUpPromptMode.CreditsMarkers, NextUpPromptMode.fromWire("credits"))
-        assertEquals(NextUpPromptMode.CreditsMarkers, NextUpPromptMode.fromWire(null))
+        assertEquals(NextUpPromptMode.TimeRemaining, NextUpPromptMode.fromWire(null))
         assertEquals(NextUpPromptMode.CreditsMarkers, NextUpPromptMode.fromWire("unknown"))
     }
 

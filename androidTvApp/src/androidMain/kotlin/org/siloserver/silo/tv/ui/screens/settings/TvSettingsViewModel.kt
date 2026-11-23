@@ -173,6 +173,8 @@ class TvSettingsViewModel(
         val resumeRewindSeconds: Int = 7,
         val passOutThreshold: Int = 3,
         val nextUpPromptMode: NextUpPromptMode = NextUpPromptMode.Default,
+        // Seconds before the end of an episode to surface the timed Up Next prompt
+        // (0 = at the very end). Mirrors tvOS `nextUpPromptSeconds`.
         val nextUpPromptSeconds: Int = 30,
         /**
          * Keys this device holds its own value for. A profile-layered control

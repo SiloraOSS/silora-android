@@ -1,15 +1,15 @@
 # Up Next trigger
 
 On phone and TV, open **Settings → Playback → Episodes → Up Next Trigger**.
-The descriptions under the setting explain both choices:
+Choose when the card opens:
 
-- **Credits markers** (default): open Up Next when playback crosses the start
+- **Credits markers** opens Up Next when playback crosses the start
   of the last eligible credits range. A range is eligible when it starts in the
   final 25% of the known runtime and ends no more than one second after it.
   If no eligible range exists, use the
   **Time remaining** setting as a fallback.
-- **Time remaining**: ignore credits markers and open Up Next at the selected
-  time before the end. Use this when credits markers are unreliable.
+- **Time remaining** opens Up Next at the selected time before the end,
+  regardless of credits markers. Fresh settings scopes use this mode.
 
 To wait until playback finishes, select **Time remaining → At end**. The end
 screen keeps its normal autoplay countdown and Play Now controls.
@@ -36,8 +36,11 @@ Automatic pre-end prompts wait for saved settings and a finite, positive runtime
 Keep Watching cancels a pre-end countdown and suppresses the card through seeks
 for that episode. At actual playback end, a fresh countdown is offered once if
 autoplay and the existing safety gates allow it. Cancel autoplay at the end
-stops that countdown and keeps the end screen visible. Opening and dismissing
-a manual TV card does not erase a pending automatic end countdown. Raw markers and skip controls are unchanged.
+stops that countdown and keeps the end screen visible. A TV card opened by hand stays countdown-free when playback crosses the
+automatic trigger. When playback ends, the normal end rules take over. Opening
+and dismissing a manual TV card preserves any pending automatic end countdown.
+TV returns to the next episode on the series page after reaching eligible
+closing credits or the end. The card can open independently of that transition.
 
 ## Artwork after playback ends
 

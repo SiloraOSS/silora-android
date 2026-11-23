@@ -85,6 +85,7 @@ import org.siloserver.silo.common.settings.PlayerSettingsStore
 import org.siloserver.silo.domain.player.BufferingQualityMode
 import org.siloserver.silo.domain.player.IntroAutoSkipController
 import org.siloserver.silo.domain.player.IntroSkipMode
+import org.siloserver.silo.domain.player.NextUpPromptMode
 import org.siloserver.silo.libass.LibassBridge
 import org.siloserver.silo.model.catalog.FileVersion
 import org.siloserver.silo.model.catalog.AudioTrack
@@ -451,6 +452,36 @@ class PlayerViewModelLoadOwnershipIntegrationTest {
             assertFalse(viewModel.uiState.value.isNextUpTransitioning)
             assertFalse(viewModel.uiState.value.showUpNext)
             assertNull(viewModel.uiState.value.nextEpisode)
+        } finally {
+            store.clear()
+        }
+    }
+
+    @Test
+    fun nextUpOpensAtThePromptSecondsBeforeTheFileEndNotAtTheCreditsMarker() = runTest(dispatcher) {
+        val starter = DeferredNonCooperativeStarter()
+        val fixture = playerViewModel(starter, backgroundScope, nextUpMode = NextUpPromptMode.TimeRemaining)
+        val store = ViewModelStore().also { it.put("player", fixture.viewModel) }
+        try {
+            val viewModel = fixture.viewModel
+            viewModel.loadContent("episode-a", preferredFileId = 1)
+            starter.awaitRequestCount(1)
+            starter.complete(0, ready(starter.request(0), "session-a"))
+            viewModel.awaitState { it.sessionId == "session-a" && !it.isLoading }
+            viewModel.onMediaMountApplied(viewModel.uiState.value.mediaMountGeneration)
+            viewModel.offerNextEpisode()
+            viewModel.mutableUiState().update {
+                it.copy(credits = org.siloserver.silo.model.catalog.TimeRange(1000.0, 1200.0))
+            }
+
+            // The fake settings store chooses 30 seconds before the end.
+            viewModel.onPositionChanged(999_000L, 1_200_000L)
+            viewModel.onPositionChanged(1_001_000L, 1_200_000L)
+            assertFalse(viewModel.uiState.value.showUpNext)
+            viewModel.onPositionChanged(1_169_500L, 1_200_000L)
+            assertFalse(viewModel.uiState.value.showUpNext)
+            viewModel.onPositionChanged(1_170_500L, 1_200_000L)
+            assertTrue(viewModel.uiState.value.showUpNext)
         } finally {
             store.clear()
         }
@@ -881,6 +912,7 @@ class PlayerViewModelLoadOwnershipIntegrationTest {
         network: PlaybackNetworkEvidenceProvider = PlaybackNetworkEvidenceProvider.None,
         /** The reachability probe answers; otherwise it has no server to probe. */
         serverReachable: Boolean = false,
+        nextUpMode: NextUpPromptMode = NextUpPromptMode.Default,
     ): PlayerFixture {
         val client = noOpClient()
         val tokenManager = FakeTokenManager()
@@ -916,7 +948,7 @@ class PlayerViewModelLoadOwnershipIntegrationTest {
                 } else {
                     ServerReachabilityMonitor(org.siloserver.silo.network.apiv2.ApiV2Probe(client)::probeFresh, scope, { null })
                 },
-                playerSettingsStore = FakePlayerSettingsStore(),
+                playerSettingsStore = FakePlayerSettingsStore(nextUpMode = nextUpMode),
                 introAutoSkipController = IntroAutoSkipController(scope),
                 sessionLifecycle = lifecycle,
                 sleepTimer = SleepTimerController(scope),
@@ -1713,9 +1745,30 @@ class MobileVideoPlaybackStarterSubtitlePreferenceTest {
     }
 
     @Test
+    fun mobileDataWithDataSaverStartsAtTheLowDataCeiling() = runTest(dispatcher) {
+        var allocation: MobileVideoSessionAllocation? = null
+
+        start(
+            effective = "",
+            profile = Profile(id = PROFILE_ID, name = "Profile"),
+            network = PlaybackNetworkSnapshot(
+                connected = true,
+                metered = true,
+                transport = "cellular",
+                cellular = true,
+                dataSaver = true,
+            ),
+            onAllocation = { allocation = it },
+        )
+
+        assertEquals("auto", allocation?.qualityPreference)
+        assertEquals(2_000, allocation?.maxBitrateKbps)
+    }
+
+    @Test
     fun aRenewalCarriesNoQualityThatCameFromTheSettings() = runTest(dispatcher) {
-        // Settings for mobile data: 720p at 2 Mbps. A renewal reads them again
-        // for the connection it is on rather than pinning 720p.
+        // Settings for mobile data: Auto, up to 10 Mbps. A renewal reads them
+        // again for the connection it is on rather than pinning a setting.
         var adopted: StartParams? = null
 
         start(
@@ -1761,9 +1814,9 @@ class MobileVideoPlaybackStarterSubtitlePreferenceTest {
             onAllocation = { allocation = it },
         )
 
-        // The store's cellular defaults: the 720p preset.
-        assertEquals("720p", allocation?.qualityPreference)
-        assertEquals(2_000, allocation?.maxBitrateKbps)
+        // The store's cellular defaults: Auto, up to 10 Mbps.
+        assertEquals("auto", allocation?.qualityPreference)
+        assertEquals(10_000, allocation?.maxBitrateKbps)
     }
 
     @Test
@@ -2024,6 +2077,7 @@ private class FakeServerRegistry : ServerRegistry {
 
 private class FakePlayerSettingsStore(
     private val audioLanguage: String = "",
+    nextUpMode: NextUpPromptMode = NextUpPromptMode.Default,
 ) : PlayerSettingsStore {
     override val introSkipModeFlow: Flow<IntroSkipMode> = flowOf(IntroSkipMode.ASK)
     override val bufferingQualityModeFlow: Flow<BufferingQualityMode> = flowOf(BufferingQualityMode.Default)
@@ -2043,6 +2097,7 @@ private class FakePlayerSettingsStore(
     override val playbackSpeedFlow: Flow<Double> = flowOf(1.0)
     override val audioSyncMsFlow: Flow<Int> = flowOf(0)
     override val subtitleSyncMsFlow: Flow<Int> = flowOf(0)
+    override val nextUpPromptModeFlow = flowOf(nextUpMode)
     override val nextUpPromptSecondsFlow: Flow<Int> = flowOf(30)
     override val sleepTimerDefaultMinutesFlow: Flow<Int> = flowOf(30)
     override val resumeRewindSecondsFlow: Flow<Int> = flowOf(7)

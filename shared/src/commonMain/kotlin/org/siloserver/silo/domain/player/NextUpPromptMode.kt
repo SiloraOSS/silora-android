@@ -16,13 +16,11 @@ enum class NextUpPromptMode(val wireValue: String, val label: String, val descri
         if (!duration.isFinite() || duration <= 0) return null
         if (this == CreditsMarkers && creditsStart != null && creditsStart.isFinite() &&
             creditsStart >= duration * (1.0 - MarkerTimeline.UP_NEXT_END_WINDOW_FRACTION) && creditsStart < duration) return creditsStart
-        if (secondsBeforeEnd == null || secondsBeforeEnd <= 0 || !duration.isFinite() || duration <= 0) return null
-        // Do not open on startup when the configured lead time exceeds the runtime.
-        return (duration - secondsBeforeEnd).takeIf { it > 0 }
+        return NextUpPrompt.startPosition(duration, secondsBeforeEnd)
     }
 
     companion object {
-        val Default = CreditsMarkers
+        val Default = TimeRemaining
 
         val settingsDescription: String = entries.joinToString("\n") { "${it.label}: ${it.description}" }
 
@@ -35,7 +33,8 @@ enum class NextUpPromptMode(val wireValue: String, val label: String, val descri
 
         fun fromWire(value: String?): NextUpPromptMode = when (value) {
             "time_remaining" -> TimeRemaining
-            else -> Default
+            null -> Default
+            else -> CreditsMarkers
         }
     }
 }

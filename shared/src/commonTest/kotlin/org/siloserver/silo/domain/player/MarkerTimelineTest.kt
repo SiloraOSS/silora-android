@@ -89,29 +89,29 @@ class MarkerTimelineTest {
     }
 
     @Test fun upNextWaitsForTheLastCreditsRangeSoAMidCreditsScenePlays() {
-        assertEquals(3189.0, timeline.upNextCreditsStart(3300.0))
+        assertEquals(3189.0, timeline.finalCreditsStart(3300.0))
         val touching = MarkerTimeline.resolve(
             segments = listOf(MarkerSegment("credits", 1200.0, 1250.0), MarkerSegment("credits", 1250.5, 1300.0)),
             intro = null, credits = null, recap = null, preview = null,
         )
-        assertEquals(1200.0, touching.upNextCreditsStart(1300.0))
+        assertEquals(1200.0, touching.finalCreditsStart(1300.0))
         val single = MarkerTimeline.resolve(null, intro = null, credits = TimeRange(1200.0, 1260.0), recap = null, preview = null)
-        assertEquals(1200.0, single.upNextCreditsStart(1300.0))
-        assertNull(MarkerTimeline.EMPTY.upNextCreditsStart(1800.0))
+        assertEquals(1200.0, single.finalCreditsStart(1300.0))
+        assertNull(MarkerTimeline.EMPTY.finalCreditsStart(1800.0))
     }
     @Test fun earlyCreditsAreIgnoredWithoutChangingRawMarkers() {
         val early = MarkerSegment("credits", 88.0, 134.0)
         val late = MarkerSegment("credits", 1700.0, 1800.0)
         fun resolve(segments: List<MarkerSegment>) = MarkerTimeline.resolve(segments, null, null, null, null)
         val bad = resolve(listOf(MarkerSegment("intro", 88.0, 133.0), early))
-        assertNull(bad.upNextCreditsStart(1800.0))
+        assertNull(bad.finalCreditsStart(1800.0))
         assertEquals(TimeRange(88.0, 134.0), bad.active(MarkerKind.Credits, 90.0))
-        assertEquals(1700.0, resolve(listOf(early, late)).upNextCreditsStart(1800.0))
-        assertNull(resolve(listOf(late)).upNextCreditsStart(Double.NaN))
+        assertEquals(1700.0, resolve(listOf(early, late)).finalCreditsStart(1800.0))
+        assertNull(resolve(listOf(late)).finalCreditsStart(Double.NaN))
     }
     @Test fun endWindowAndRuntimeToleranceHaveExplicitBoundaries() {
         fun start(vararg ranges: MarkerSegment, duration: Double = 1800.0) =
-            MarkerTimeline.resolve(ranges.toList(), null, null, null, null).upNextCreditsStart(duration)
+            MarkerTimeline.resolve(ranges.toList(), null, null, null, null).finalCreditsStart(duration)
         assertEquals(1350.0, start(MarkerSegment("credits", 1350.0, 1801.0)))
         assertNull(start(MarkerSegment("credits", 1349.0, 1800.0)))
         assertNull(start(MarkerSegment("credits", 1700.0, 1801.01)))

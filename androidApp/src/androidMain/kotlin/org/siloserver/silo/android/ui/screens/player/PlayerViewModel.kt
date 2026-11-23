@@ -34,7 +34,7 @@ import org.siloserver.silo.common.player.NetworkQualityFollower
 import org.siloserver.silo.common.player.PlaybackNetworkEvidenceProvider
 import org.siloserver.silo.common.player.PlaybackQualityPair
 import org.siloserver.silo.common.player.inPlayerQualityPair
-import org.siloserver.silo.common.player.usesCellularQuality
+import org.siloserver.silo.common.player.networkTier
 import org.siloserver.silo.common.player.PlaybackTeardownGate
 import org.siloserver.silo.common.player.VideoSessionStartV3
 import org.siloserver.silo.common.player.subtitlesForVideoMediaMount
@@ -101,6 +101,7 @@ import org.siloserver.silo.model.catalog.FileVersion
 import org.siloserver.silo.model.catalog.VersionChapter
 import org.siloserver.silo.domain.player.MarkerKind
 import org.siloserver.silo.domain.player.MarkerTimeline
+import org.siloserver.silo.domain.player.NextUpPrompt
 import org.siloserver.silo.model.catalog.MarkerSegment
 import org.siloserver.silo.model.catalog.TimeRange
 import org.siloserver.silo.model.settings.SubtitleAppearance
@@ -125,6 +126,8 @@ import org.siloserver.silo.model.playback.mergeDownloadedSubtitles
 import org.siloserver.silo.model.playback.rebaseDownloadedSubtitleUrl
 import org.siloserver.silo.model.playback.resolvedSelectedSubtitleIndex
 import org.siloserver.silo.model.playback.resolvePlaybackStartPosition
+import org.siloserver.silo.model.playback.deliveredAs
+import org.siloserver.silo.model.playback.playsAs
 import org.siloserver.silo.playback.ADMIN_ENDED_PLAYBACK_NOTICE
 import org.siloserver.silo.playback.PlaybackMarkersUpdate
 import org.siloserver.silo.playback.PlaybackSubtitleReady
@@ -713,7 +716,7 @@ class PlayerViewModel(
         val awaitingFirstFrame: Boolean
             get() = startedContentId != contentId
 
-        /** The marker occurrences the skip controls and Up Next read. */
+        /** The marker occurrences the skip controls and Credits markers trigger read. */
         val markerTimeline: MarkerTimeline by lazy {
             MarkerTimeline.resolve(markerSegments, intro = intro, credits = credits, recap = recap, preview = preview)
         }
@@ -753,7 +756,7 @@ class PlayerViewModel(
         stagedPort = PlaybackSessionManagerMobileSubtitleStagedReplanPort(playbackSessionManager) { preference ->
             playerSettingsStore.inPlayerQualityPair(
                 preference,
-                cellular = networkEvidenceProvider.snapshot().usesCellularQuality,
+                tier = networkEvidenceProvider.snapshot().networkTier,
             )
         },
         persistencePort = object : MobileSubtitlePersistencePort {
@@ -1087,7 +1090,7 @@ class PlayerViewModel(
     // same VM persists across episodes and the guard accumulates the streak.
     // The guard reads the threshold lazily so a settings change applies live.
     private val autoPlayGuard = AutoPlayGuard(threshold = { passOutThreshold.value })
-    // Once-per-episode guard for the credits/ended trigger; reset on each load.
+    // Once-per-episode guard for the pre-end and end prompts; reset on each load.
     private val preEndDismissal = NextUpDismissal()
     private var autoAdvanceHandled = false
     // End point fired before the next episode resolved — remember it (and the
@@ -2276,9 +2279,22 @@ class PlayerViewModel(
             }
 
             val mountedState = _uiState.value
-            val committedIdentity = mountedState.subtitleTracks
-                .getOrNull(mountedState.selectedSubtitleIndex)
+            // The row says how the track can be fetched; the plan says how it
+            // plays. An ASS row on an HLS transcode stays a sidecar row while
+            // the plan burns it in. The mode belongs to the plan's own track
+            // only: an explicit pick resolved to another row keeps its row's
+            // identity.
+            val planSubtitleMode = playbackState.playbackPlanV3?.subtitle?.mode
+            val planSubtitleIndex = playbackState.playbackPlan?.selectedTracks?.subtitleIndex
+            val committedRow = mountedState.subtitleTracks.getOrNull(mountedState.selectedSubtitleIndex)
+            val committedIdentity = committedRow
                 ?.let(::mobileSubtitleIdentity)
+                ?.let { identity ->
+                    planSubtitleMode
+                        ?.takeIf { committedRow.index == planSubtitleIndex }
+                        ?.let(identity::deliveredAs)
+                        ?: identity
+                }
                 ?: SubtitleIdentity.Off
             mobileSubtitleTransactions.resetContent(
                 context = mobileSubtitleContext(mountedState),
@@ -2292,7 +2308,7 @@ class PlayerViewModel(
                 mobileSubtitleTransactions.persistCommittedSelection()
             }
             deferredSubtitleIdentity
-                ?.takeIf { it != committedIdentity }
+                ?.takeIf { !it.playsAs(committedIdentity) }
                 ?.let(mobileSubtitleTransactions::select)
 
             // Seeded whether or not it differs from what the server reported.
@@ -2887,6 +2903,7 @@ class PlayerViewModel(
                         val returnedSubtitleIdentity = recoveredSubtitles
                             .getOrNull(returnedSubtitleOrdinal)
                             ?.let(::mobileSubtitleIdentity)
+                            ?.deliveredAs(decision.plan.subtitle.mode)
                             ?: SubtitleIdentity.Off
                         val returnedAudioIndex = decision.plan.selectedTracks.audio?.index
                             ?: decision.session.audioTrackIndex
@@ -3364,17 +3381,16 @@ class PlayerViewModel(
             )
         }
 
-        // Cross the selected trigger during normal playback. Seeking or resuming
-        // beyond it must not immediately open Up Next. Wait for the saved mode
-        // before choosing a trigger; Disabled still allows the normal end screen.
+        // Wait for the saved mode and require a natural crossing of its trigger.
+        // Seeking or resuming past the trigger still leaves the normal end screen.
         if (!seekWasActive) {
             val state = _uiState.value
             val promptStart = nextUpPromptMode.value?.promptStartPosition(
-                creditsStart = state.markerTimeline.upNextCreditsStart(state.duration),
+                creditsStart = state.markerTimeline.finalCreditsStart(state.duration),
                 duration = state.duration,
                 secondsBeforeEnd = nextUpPromptSeconds.value,
             )
-            if (promptStart != null && previousPosition < promptStart && positionSec >= promptStart) {
+            if (NextUpPrompt.crossesPromptPoint(previousPosition, positionSec, promptStart)) {
                 onApproachingEnd()
             }
         }
@@ -4065,6 +4081,7 @@ class PlayerViewModel(
         val returnedSubtitleIdentity = authoritativeSubtitles
             .getOrNull(returnedSubtitleOrdinal)
             ?.let(::mobileSubtitleIdentity)
+            ?.deliveredAs(decision.plan.subtitle.mode)
             ?: SubtitleIdentity.Off
         val returnedAudioIndex = decision.plan.selectedTracks.audio?.index
             ?: decision.session.audioTrackIndex
@@ -4885,8 +4902,8 @@ class PlayerViewModel(
 
     /**
      * Adopt the playing file's marker ranges (a `markers_updated` event or a
-     * reconcile read). The intro auto-skip observer and the credits-based F2
-     * trigger read these from UiState, so updating them takes effect
+     * reconcile read). The skip controls and the Credits markers trigger
+     * read these from UiState, so updating them takes effect
      * immediately. Passing `null` clears a marker the server says no longer
      * applies.
      */
@@ -5235,7 +5252,7 @@ class PlayerViewModel(
             identity = identity,
             save = !state.isLocalFilePlayback(),
         )
-        if (state.pendingSubtitleIdentity == null && state.committedSubtitleIdentity == identity) {
+        if (state.pendingSubtitleIdentity == null && identity.playsAs(state.committedSubtitleIdentity)) {
             stagedSubtitleWrite.set(null)
             saveSeriesSubtitle(write)
         } else {
@@ -5341,7 +5358,7 @@ class PlayerViewModel(
         identity: SubtitleIdentity,
         rows: List<org.siloserver.silo.model.playback.PlayerSubtitleInfo>,
     ): Boolean {
-        if (identity == write.identity) return true
+        if (write.identity.playsAs(identity)) return true
         val described = org.siloserver.silo.model.playback.SeriesSubtitleChoice.of(identity, rows) ?: return false
         return described.subtitleMode == write.choice.subtitleMode &&
             described.trackSignature == write.choice.trackSignature
@@ -5361,7 +5378,7 @@ class PlayerViewModel(
     /** Sends the staged picks [committed] made final; each goes out once. */
     private fun sendCommittedSeriesWrites(committed: CommittedSubtitle) {
         stagedSubtitleWrite.get()
-            ?.takeIf { it.identity == committed.identity && stagedSubtitleWrite.compareAndSet(it, null) }
+            ?.takeIf { it.identity.playsAs(committed.identity) && stagedSubtitleWrite.compareAndSet(it, null) }
             ?.let(::saveSeriesSubtitle)
         if (committed.audioPreferenceSpecified) {
             val state = _uiState.value
@@ -6242,7 +6259,7 @@ class PlayerViewModel(
                 it.copy(nextEpisode = info)
             }
             if (_uiState.value.contentId != forContentId) return@launch
-            // If the credits/end point already fired while we were still
+            // If the before-end/end point already fired while we were still
             // resolving, the card couldn't arm — commit it now with the
             // strongest video-ended flag observed.
             if (!autoAdvanceHandled) {
@@ -6280,7 +6297,7 @@ class PlayerViewModel(
      * below the pass-out threshold, the card runs a countdown that plays the
      * next episode at zero. Once the streak hits the threshold (or auto-play is
      * off), the card shows WITHOUT a countdown so the user must explicitly
-     * choose (the pass-out gate). The credits prompt is once per episode;
+     * choose (the pass-out gate). The before-end prompt is once per episode;
      * a dismissed card reopens when playback ends.
      *
      * [videoEnded] is true on STATE_ENDED — the card reads "Playing Next"; a
@@ -6365,7 +6382,7 @@ class PlayerViewModel(
             // Two anchors (iOS parity — silo-apple's PlayerViewModel derives the
             // countdown from movieTime and only auto-plays once playback truly
             // ends):
-            //  - Card committed BEFORE the end (credits / prompt crossing): the
+            //  - Card committed BEFORE the end (before-end crossing): the
             //    countdown mirrors the remaining playback time, so it freezes on
             //    pause, grows on a backward seek, and the advance fires only when
             //    the player reports STATE_ENDED — never truncating the tail of an
@@ -6411,7 +6428,7 @@ class PlayerViewModel(
 
     /**
      * Up Next dismiss — cancel the countdown and stay on the current playback.
-     * Suppress further credits prompts; playback end still reopens the card.
+     * Suppress further before-end prompts; playback end still reopens the card.
      */
     fun dismissUpNext() {
         if (nextUpTransitionGate.isActive) return

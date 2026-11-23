@@ -2626,7 +2626,7 @@ fun TvPlayerScreen(
                             } else {
                                 // seekImmediate pre-writes position so a scrub
                                 // committed into the credits region isn't mistaken
-                                // for natural playback crossing the credits point.
+                                // for natural playback crossing the Up Next point.
                                 viewModel.seekImmediate(targetSec)
                             }
                             viewModel.setControlsVisible(true)
@@ -2772,7 +2772,7 @@ fun TvPlayerScreen(
                                     } else {
                                         // Solo: seekImmediate pre-writes position so a
                                         // chapter jump into credits isn't mistaken for
-                                        // natural playback crossing the credits point.
+                                        // natural playback crossing the Up Next point.
                                         viewModel.seekImmediate(sec)
                                     }
                                 }

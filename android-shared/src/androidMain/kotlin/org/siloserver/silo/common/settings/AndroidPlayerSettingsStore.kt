@@ -146,20 +146,31 @@ class AndroidPlayerSettingsStore(
         val token = scope.storeName + "/" + scope.migrationSentinel
         if (synchronized(migrationDone) { token in migrationDone }) return
         val sentinelKey = booleanPreferencesKey(scope.migrationSentinel)
+        val nextUpDefaultSentinel = booleanPreferencesKey("migration_next_up_default_${scope.keyPrefix}")
         val current = store.data.first()
         if (!isCurrent()) return
-        if (current[sentinelKey] == true) {
-            if (isCurrent()) synchronized(migrationDone) { migrationDone.add(token) }
-            return
-        }
-        store.edit { prefs ->
-            if (!isCurrent()) return@edit
-            for (key in PlaybackSettingsKeys.DeviceSettings) {
-                val legacy = legacyCache.getString(scope.serverUrl, key, MISSING_SENTINEL)
-                if (legacy == MISSING_SENTINEL) continue
-                writeRawString(prefs, scope, key, legacy)
+        if (current[sentinelKey] != true || current[nextUpDefaultSentinel] != true) {
+            store.edit { prefs ->
+                if (!isCurrent()) return@edit
+                if (prefs[nextUpDefaultSentinel] != true) {
+                    // Check the old sentinel before writing it for a fresh scope.
+                    val existingScope = prefs[sentinelKey] == true ||
+                        prefs[booleanPreferencesKey(MIGRATION_SENTINEL_LEGACY)] == true
+                    if (existingScope && prefs.stringFor(scope, NEXT_UP_PROMPT_MODE, "").isEmpty()) {
+                        prefs[stringPreferencesKey(scope.keyPrefix + NEXT_UP_PROMPT_MODE)] =
+                            NextUpPromptMode.CreditsMarkers.wireValue
+                    }
+                    prefs[nextUpDefaultSentinel] = true
+                }
+                if (prefs[sentinelKey] != true) {
+                    for (key in PlaybackSettingsKeys.DeviceSettings) {
+                        val legacy = legacyCache.getString(scope.serverUrl, key, MISSING_SENTINEL)
+                        if (legacy == MISSING_SENTINEL) continue
+                        writeRawString(prefs, scope, key, legacy)
+                    }
+                    prefs[sentinelKey] = true
+                }
             }
-            prefs[sentinelKey] = true
         }
         if (isCurrent()) synchronized(migrationDone) { migrationDone.add(token) }
     }
@@ -429,7 +440,7 @@ class AndroidPlayerSettingsStore(
 
     override val nextUpPromptModeFlow: Flow<NextUpPromptMode> =
         profileScopedFlow(NextUpPromptMode.Default) { p, s ->
-            NextUpPromptMode.fromWire(p.stringFor(s, NEXT_UP_PROMPT_MODE, ""))
+            NextUpPromptMode.fromWire(p.stringFor(s, NEXT_UP_PROMPT_MODE, "").ifEmpty { null })
         }
 
     override val nextUpPromptSecondsFlow: Flow<Int> =
@@ -456,7 +467,7 @@ class AndroidPlayerSettingsStore(
             p.intFor(s, PlaybackSettingsKeys.MaxBitrateKbps, 0).takeIf { it > 0 }
         }
 
-    // Unlike the main cap, the cellular one defaults to a value (2000), so an
+    // Unlike the main cap, the cellular one defaults to a value (10000), so an
     // absent slot reads as that and only an explicit 0 is uncapped.
     override val cellularMaxBitrateKbpsFlow: Flow<Int?> =
         profileScopedFlow(CellularQuality.DEFAULT_MAX_BITRATE_KBPS) { p, s ->
@@ -1122,7 +1133,7 @@ class AndroidPlayerSettingsStore(
         withScope { scope, store ->
             val unstored = keysUnstoredBy(scope.serverUrl)
             store.edit {
-                if (key == PlaybackSettingsKeys.AutoSkipCredits) resetCreditsSkipMode(it, scope)
+                if (key == PlaybackSettingsKeys.AutoSkipCredits) resetScopedChoice(it, scope, CREDITS_SKIP_MODE)
                 clearDeviceOverride(it, scope, *keys.toTypedArray())
                 it[unconfirmedKeysKey(scope)] = it[unconfirmedKeysKey(scope)].orEmpty() - keys.toSet()
                 for (cleared in keys) {
@@ -1156,8 +1167,8 @@ class AndroidPlayerSettingsStore(
                 // settings the user most associates with this device untouched.
                 it.remove(booleanPreferencesKey(scope.keyPrefix + AUDIO_NORMALIZATION_ENABLED))
                 it.remove(stringPreferencesKey(scope.keyPrefix + NIGHT_MODE_PARAMETERS))
-                it.remove(stringPreferencesKey(scope.keyPrefix + NEXT_UP_PROMPT_MODE))
-                resetCreditsSkipMode(it, scope)
+                resetScopedChoice(it, scope, NEXT_UP_PROMPT_MODE)
+                resetScopedChoice(it, scope, CREDITS_SKIP_MODE)
                 it.remove(booleanPreferencesKey(scope.keyPrefix + MATCH_CONTENT_RESOLUTION))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.PictureInPictureEnabled))
                 it.remove(booleanPreferencesKey(scope.keyPrefix + PlaybackSettingsKeys.ForceHdrPassthrough))
@@ -1374,11 +1385,15 @@ class AndroidPlayerSettingsStore(
         }
     }
 
-    private fun resetCreditsSkipMode(prefs: androidx.datastore.preferences.core.MutablePreferences, scope: Scope) {
-        val key = stringPreferencesKey(scope.keyPrefix + CREDITS_SKIP_MODE)
+    private fun resetScopedChoice(
+        prefs: androidx.datastore.preferences.core.MutablePreferences,
+        scope: Scope,
+        baseKey: String,
+    ) {
+        val key = stringPreferencesKey(scope.keyPrefix + baseKey)
         // An empty scoped slot masks an unscoped legacy choice without
         // deleting that choice for another server or device.
-        if (scope.keyPrefix.isNotEmpty() && prefs[stringPreferencesKey(CREDITS_SKIP_MODE)] != null) {
+        if (scope.keyPrefix.isNotEmpty() && prefs[stringPreferencesKey(baseKey)] != null) {
             prefs[key] = ""
         } else {
             prefs.remove(key)
