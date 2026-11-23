@@ -80,6 +80,8 @@ import org.siloserver.silo.tv.ui.theme.SiloTvTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import org.siloserver.silo.tv.ui.screens.settings.TvUpdateDialogs
+import org.siloserver.silo.updates.SiloraUpdates
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -96,6 +98,9 @@ import org.koin.core.qualifier.named
 import org.koin.java.KoinJavaComponent.get
 
 class MainTvActivity : ComponentActivity() {
+    private val updates by lazy { SiloraUpdates.get(this) }
+    private var updateLaunch by mutableStateOf(0)
+
 
     // Shared flow with [TvAppNavigation]. We publish the launching Uri here so
     // the navigation Composable can consume it once the auth chain has landed
@@ -180,6 +185,7 @@ class MainTvActivity : ComponentActivity() {
             }
         }
 
+        if (savedInstanceState == null) updates.launch()
         setContent {
             var startRoute by remember { mutableStateOf<String?>(null) }
             var splashPlaybackComplete by remember { mutableStateOf(hasShownColdSplash) }
@@ -226,6 +232,7 @@ class MainTvActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
+                    TvUpdateDialogs(updates, ready = !splashVisible && !profileCoverVisible, launch = updateLaunch)
                     if (profileCoverVisible && !splashVisible) {
                         Box(modifier = Modifier.fillMaxSize().background(Color.Black))
                     }
@@ -334,6 +341,10 @@ class MainTvActivity : ComponentActivity() {
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)) {
+            updates.launch()
+            updateLaunch++
+        }
         handleIntent(intent)
         setIntent(intent)
     }

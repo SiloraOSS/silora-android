@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="updates_title">Updates</string>
+    <string name="updates_rail">Check for new Silora builds</string>
+    <string name="updates_blurb">Manage app updates on this device.</string>
+    <string name="updates_installed_version">Installed version</string>
+    <string name="updates_last_check">Last check</string>
+    <string name="updates_check_now">Check for updates</string>
+    <string name="updates_status">Status</string>
+    <string name="updates_install_update">Install update</string>
+    <string name="updates_interval">Background check interval</string>
+    <string name="updates_interval_off">Off</string>
+    <string name="updates_interval_hours">Every %1$d hours</string>
+    <string name="updates_automatic">Install updates automatically</string>
+    <string name="updates_install_method">Installation method</string>
+    <string name="updates_standard">Standard Android installer</string>
+    <string name="updates_authorize_shizuku">Authorize Shizuku</string>
+    <string name="updates_offer_title">Silora update available</string>
+    <string name="updates_offer_message">Silora %1$s is available. Install it now?</string>
+    <string name="updates_later">Later</string>
+    <string name="updates_install_now">Install now</string>
+    <string name="updates_idle">Ready to check for updates</string>
+    <string name="updates_checking">Checking for updates…</string>
+    <string name="updates_up_to_date">Silora is up to date</string>
+    <string name="updates_available">Silora %1$s is available</string>
+    <string name="updates_downloading">Downloading and verifying update…</string>
+    <string name="updates_installing">Installing update…</string>
+    <string name="updates_waiting">Waiting for playback to stop</string>
+    <string name="updates_confirmation">Android requires confirmation. Choose Install update to continue.</string>
+    <string name="updates_permission">Allow Silora to install unknown apps, then choose Install update again.</string>
+    <string name="updates_installed">Update installed</string>
+    <string name="updates_error">The update could not be completed. Try again.</string>
+</resources>

@@ -25,6 +25,7 @@ rootProject.name = "SiloAndroid"
 include(":shared")
 include(":libass-bridge")
 include(":android-shared")
+include(":silora-updates")
 include(":androidApp")
 include(":androidTvApp")
 include(":baselineprofile")

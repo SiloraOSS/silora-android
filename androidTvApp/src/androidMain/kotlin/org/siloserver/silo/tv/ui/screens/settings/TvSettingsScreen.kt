@@ -420,6 +420,12 @@ internal enum class TvSettingsCategory(
         blurb = CommonR.string.silora_remote_shortcuts_blurb,
         icon = Icons.Outlined.SettingsRemote,
     ),
+    Updates(
+        title = R.string.updates_title,
+        railDescription = R.string.updates_rail,
+        blurb = R.string.updates_blurb,
+        icon = Icons.Outlined.Settings,
+    ),
     Diagnostics(
         title = CommonR.string.settings_diagnostics,
         railDescription = CommonR.string.settings_rail_diagnostics,
@@ -1013,6 +1019,7 @@ private fun SettingsDetailPane(
             onSubtitleMatchesDeviceChanged = onSubtitleMatchesDeviceChanged,
             )
             TvSettingsCategory.RemoteShortcuts -> TvRemoteShortcutsSettingsPane(detailFocusRequester)
+            TvSettingsCategory.Updates -> TvUpdatesSettingsPane(detailFocusRequester)
             TvSettingsCategory.Diagnostics -> TvDiagnosticsSettingsPane(
                 state = diagnosticsState,
                 serverName = state.serverName,

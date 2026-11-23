@@ -1,0 +1,115 @@
+package org.siloserver.silo.updates
+
+import android.content.Context
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+
+enum class InstallMethod { STANDARD, SHIZUKU }
+
+data class UpdateSettings(
+    val intervalHours: Int = 24,
+    val automatic: Boolean = false,
+    val method: InstallMethod = InstallMethod.STANDARD,
+)
+
+enum class UpdateStatus {
+    IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, INSTALLING,
+    WAITING_FOR_PLAYBACK, NEEDS_CONFIRMATION, NEEDS_INSTALL_PERMISSION, INSTALLED, ERROR,
+}
+
+data class UpdateState(
+    val settings: UpdateSettings,
+    val currentVersion: String,
+    val release: SiloraRelease? = null,
+    val checkedAt: Long = 0,
+    val status: UpdateStatus = UpdateStatus.IDLE,
+    val detail: String? = null,
+) {
+    val busy: Boolean
+        get() = status in listOf(UpdateStatus.CHECKING, UpdateStatus.DOWNLOADING, UpdateStatus.INSTALLING)
+}
+
+internal data class InstallAttempt(
+    val id: String,
+    val version: Long,
+    val background: Boolean,
+    val startedAt: Long,
+) {
+    fun toJson(): String = JSONObject().apply {
+        put("id", id)
+        put("code", version)
+        put("background", background)
+        put("time", startedAt)
+    }.toString()
+
+    companion object {
+        fun fromJson(text: String): InstallAttempt = JSONObject(text).let {
+            InstallAttempt(it.getString("id"), it.getLong("code"), it.getBoolean("background"), it.getLong("time"))
+        }
+    }
+}
+
+internal class UpdateStore(context: Context) {
+    private val prefs = context.getSharedPreferences("silora-updates", Context.MODE_PRIVATE)
+
+    fun settings() = UpdateSettings(
+        prefs.getInt("interval", 24),
+        prefs.getBoolean("automatic", false),
+        if (prefs.getBoolean("shizuku", false)) InstallMethod.SHIZUKU else InstallMethod.STANDARD,
+    )
+
+    fun save(settings: UpdateSettings) {
+        prefs.edit().putInt("interval", settings.intervalHours).putBoolean("automatic", settings.automatic)
+            .putBoolean("shizuku", settings.method == InstallMethod.SHIZUKU).apply()
+    }
+
+    fun release(): SiloraRelease? = prefs.getString("release", null)?.let {
+        runCatching { SiloraRelease.fromJson(it) }.getOrNull()
+    }
+
+    fun checkedAt(): Long = prefs.getLong("checked", 0)
+
+    fun recordCheck(release: SiloraRelease?, time: Long) {
+        prefs.edit().putString("release", release?.toJson()).putLong("checked", time).apply()
+    }
+
+    fun attempt(): InstallAttempt? = prefs.getString("attempt", null)?.let {
+        runCatching { InstallAttempt.fromJson(it) }.getOrNull()
+    }
+
+    fun begin(attempt: InstallAttempt) {
+        check(prefs.edit().putString("attempt", attempt.toJson()).commit()) { "Could not save the installation attempt." }
+    }
+
+    fun finish(confirmationVersion: Long = 0, installedVersion: Long = 0) {
+        prefs.edit().remove("attempt").putLong("confirmation", confirmationVersion)
+            .putLong("installed", installedVersion).commit()
+    }
+
+    fun confirmationVersion(): Long = prefs.getLong("confirmation", 0)
+    fun recordedInstall(): Long = prefs.getLong("installed", 0)
+    fun laterVersion(): Long = prefs.getLong("later-version", 0)
+    fun laterUntil(): Long = prefs.getLong("later-until", 0)
+
+    fun later(version: Long, until: Long) {
+        prefs.edit().putLong("later-version", version).putLong("later-until", until).apply()
+    }
+}
+
+/** A launcher return clears launch suppression; a refresh interval can clear it in place. */
+internal class UpdateOfferPolicy {
+    private var dismissedVersion: Long? = null
+    private var dismissedAt = 0L
+
+    fun launch() {
+        dismissedVersion = null
+    }
+
+    fun later(version: Long, now: Long) {
+        dismissedVersion = version
+        dismissedAt = now
+    }
+
+    fun visible(version: Long, interval: Int, now: Long): Boolean =
+        version != dismissedVersion || interval > 0 && now - dismissedAt >= TimeUnit.HOURS.toMillis(interval.toLong())
+}

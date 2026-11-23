@@ -99,6 +99,7 @@ kotlin {
         androidMain.dependencies {
             implementation(project(":shared"))
             implementation(project(":android-shared"))
+            implementation(project(":silora-updates"))
             implementation(compose.material3)
             implementation(compose.materialIconsExtended)
             implementation(compose.ui)
