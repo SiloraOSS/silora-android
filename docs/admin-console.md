@@ -21,8 +21,9 @@ command identities when retrying a lost reply. Dedicated screens keep their
 action-specific confirmations. These controls depend on the connected server’s
 API and permissions.
 
-The asset lists 475 operations, including plugin capabilities and provisioning
-status. The generic console filters out file uploads, binary downloads and
+The asset lists 477 operations, including plugin capabilities, provisioning
+status, and direct-connection capabilities and readiness under Server setup.
+The generic console filters out file uploads, binary downloads and
 raw-protocol operations such as the log WebSocket and request artwork.
 It binds item actions using path positions, supports editable
 key/value maps and explicit clearing of form values, and masks credential fields.
@@ -54,11 +55,12 @@ on November 8, 2026. This is the `admin-console` entry in
 
 ## Refreshing the API contract
 
-The current asset matches Edrock v51 at `904a1d13b4f9cf448ec372289d8a3961f8c17142`.
+The current asset matches Edrock v57 at `07f394248d89dfaae4d2b73ed8481fccb4ac8e4b`.
 It regenerates from the official silo-server OpenAPI contract at
-`ae610da189a658b79b78b33e21574e9c355baab3` and contains 475 admin operations.
-The `info.source` stamp, `1a933718 2026-11-21`, identifies the last commit that
-changed the contract file in that server checkout.
+`bfc21bb47b3403db9b266c8f73df6bd156e87517`. The `info.source` stamp,
+`8dcc8ddb 2026-11-23`, identifies the last commit that changed the contract
+file in that server checkout. See the
+[import record](maintenance/edrock-tracking.md#imported-v57-admin-api-spec-november-24-2026).
 The console shows that stamp and does not fetch a new spec at runtime.
 To update from a deliberately selected server checkout, run:
 
