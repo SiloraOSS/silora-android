@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="updates_install_permission_title">Allow Silora to install updates</string>
+    <string name="updates_install_permission_message">Android requires permission before Silora can install updates automatically. In Install unknown apps, allow installs from Silora.</string>
+    <string name="updates_install_permission_help">Open Android Settings, find Install unknown apps, and allow Silora.</string>
+    <string name="updates_open_settings">Open settings</string>
+</resources>

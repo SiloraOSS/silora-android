@@ -1,9 +1,6 @@
 package org.siloserver.silo.tv.ui.screens.settings
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +13,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -34,6 +32,8 @@ import org.siloserver.silo.updates.InstallMethod
 import org.siloserver.silo.updates.SiloraUpdates
 import org.siloserver.silo.updates.UpdateState
 import org.siloserver.silo.updates.UpdateStatus
+import org.siloserver.silo.updates.openInstallPermissionSettings
+import org.siloserver.silo.updates.R as UpdatesR
 
 @Composable
 internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
@@ -42,6 +42,7 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
     val state by updates.state.collectAsState()
     val shizuku by updates.shizukuState.collectAsState()
     var picker by remember { mutableStateOf<UpdatePicker?>(null) }
+    var showInstallPermission by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -85,7 +86,12 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
                 label = stringResource(R.string.updates_automatic),
                 checked = state.settings.automatic,
                 enabled = state.settings.intervalHours > 0,
-                onCheckedChange = { updates.setSettings(state.settings.copy(automatic = it)) },
+                onCheckedChange = { automatic ->
+                    val settings = state.settings
+                    updates.setSettings(settings.copy(automatic = automatic))
+                    showInstallPermission = automatic && settings.method == InstallMethod.STANDARD &&
+                        !updates.canUseStandard()
+                },
             )
         }
         item {
@@ -129,6 +135,21 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
             onDismiss = { picker = null },
         )
         null -> Unit
+    }
+
+    if (showInstallPermission) {
+        TvDialog(
+            title = stringResource(UpdatesR.string.updates_install_permission_title),
+            message = stringResource(UpdatesR.string.updates_install_permission_message),
+            actions = listOf(
+                TvDialogAction(stringResource(R.string.updates_later), onClick = { showInstallPermission = false }),
+                TvDialogAction(stringResource(UpdatesR.string.updates_open_settings), onClick = {
+                    if (openInstallPermissionSettings(context)) showInstallPermission = false
+                    else Toast.makeText(context, UpdatesR.string.updates_install_permission_help, Toast.LENGTH_LONG).show()
+                }, style = TvDialogActionStyle.Primary),
+            ),
+            onDismissRequest = { showInstallPermission = false },
+        )
     }
 }
 
@@ -191,9 +212,7 @@ private fun requestInstall(context: Context, updates: SiloraUpdates) {
     when (updates.state.value.settings.method) {
         InstallMethod.STANDARD -> {
             if (updates.canUseStandard()) updates.installNow()
-            else if (runCatching {
-                context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
-            }.isFailure) {
+            else if (!openInstallPermissionSettings(context)) {
                 Toast.makeText(context, R.string.updates_permission, Toast.LENGTH_LONG).show()
             }
         }

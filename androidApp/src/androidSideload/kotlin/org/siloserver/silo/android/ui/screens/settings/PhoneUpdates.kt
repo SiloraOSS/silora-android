@@ -1,10 +1,6 @@
 package org.siloserver.silo.android.ui.screens.settings
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
 import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
@@ -44,6 +40,8 @@ import org.siloserver.silo.updates.InstallMethod
 import org.siloserver.silo.updates.SiloraUpdates
 import org.siloserver.silo.updates.UpdateState
 import org.siloserver.silo.updates.UpdateStatus
+import org.siloserver.silo.updates.openInstallPermissionSettings
+import org.siloserver.silo.updates.R as UpdatesR
 
 internal object PhoneUpdates {
     const val available = true
@@ -59,6 +57,7 @@ internal object PhoneUpdates {
         val state by updates.state.collectAsStateWithLifecycle()
         val shizuku by updates.shizukuState.collectAsStateWithLifecycle()
         var picker by rememberSaveable { mutableStateOf<UpdatePicker?>(null) }
+        var showInstallPermission by rememberSaveable { mutableStateOf(false) }
 
         SettingsPageScaffold(title = stringResource(R.string.updates_title), onBackClick = onBackClick) {
             item {
@@ -105,7 +104,12 @@ internal object PhoneUpdates {
                         description = stringResource(R.string.updates_automatic_description),
                         checked = state.settings.automatic && state.settings.intervalHours > 0,
                         enabled = state.settings.intervalHours > 0,
-                        onCheckedChange = { updates.setSettings(state.settings.copy(automatic = it)) },
+                        onCheckedChange = { automatic ->
+                            val settings = state.settings
+                            updates.setSettings(settings.copy(automatic = automatic))
+                            showInstallPermission = automatic && settings.method == InstallMethod.STANDARD &&
+                                !updates.canUseStandard()
+                        },
                     )
                     SettingsNavigationRow(
                         label = stringResource(R.string.updates_install_method),
@@ -153,6 +157,27 @@ internal object PhoneUpdates {
                 onDismiss = { picker = null },
             )
             null -> Unit
+        }
+
+        if (showInstallPermission) {
+            AlertDialog(
+                onDismissRequest = { showInstallPermission = false },
+                title = { Text(stringResource(UpdatesR.string.updates_install_permission_title)) },
+                text = { Text(stringResource(UpdatesR.string.updates_install_permission_message)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (openInstallPermissionSettings(context)) showInstallPermission = false
+                        else Toast.makeText(context, UpdatesR.string.updates_install_permission_help, Toast.LENGTH_LONG).show()
+                    }) {
+                        Text(stringResource(UpdatesR.string.updates_open_settings))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showInstallPermission = false }) {
+                        Text(stringResource(R.string.updates_later))
+                    }
+                },
+            )
         }
     }
 
@@ -252,10 +277,8 @@ private fun <T> UpdatePickerDialog(
 
 private fun requestInstall(context: Context, updates: SiloraUpdates): Boolean {
     when (updates.state.value.settings.method) {
-        InstallMethod.STANDARD -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !updates.canUseStandard()) {
-            val packageUri = Uri.parse("package:${context.packageName}")
-            val permission = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, packageUri)
-            if (runCatching { context.startActivity(permission) }.isFailure) {
+        InstallMethod.STANDARD -> if (!updates.canUseStandard()) {
+            if (!openInstallPermissionSettings(context)) {
                 Toast.makeText(context, R.string.updates_permission, Toast.LENGTH_LONG).show()
             }
             return false
