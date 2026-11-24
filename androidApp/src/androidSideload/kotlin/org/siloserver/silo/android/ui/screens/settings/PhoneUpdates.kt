@@ -39,6 +39,7 @@ import org.siloserver.silo.android.R
 import org.siloserver.silo.updates.InstallMethod
 import org.siloserver.silo.updates.SiloraUpdates
 import org.siloserver.silo.updates.UpdateCheckInterval
+import org.siloserver.silo.updates.UpdatePrompt
 import org.siloserver.silo.updates.UpdateState
 import org.siloserver.silo.updates.UpdateStatus
 import org.siloserver.silo.updates.formatUpdateCheckHour
@@ -208,7 +209,9 @@ internal object PhoneUpdates {
         val updates = remember(context) { SiloraUpdates.get(context) }
         val state by updates.state.collectAsStateWithLifecycle()
         val release = state.release
-        var showOffer by remember { mutableStateOf(false) }
+        val noticePending = state.standaloneUpdaterNoticePending
+        val hasPrompt = release != null || noticePending
+        var prompt by remember { mutableStateOf<UpdatePrompt?>(null) }
 
         LaunchedEffect(updates, lifecycle, ready) {
             if (!ready) return@LaunchedEffect
@@ -222,25 +225,24 @@ internal object PhoneUpdates {
                 }
             }
         }
-        LaunchedEffect(updates, lifecycle, ready, launch, release, state.busy, state.settings.interval.hours) {
-            showOffer = false
-            if (!ready || release == null || state.busy) return@LaunchedEffect
+        LaunchedEffect(updates, lifecycle, ready, launch, release, hasPrompt, state.busy, state.settings.interval.hours) {
+            prompt = null
+            if (!ready || state.busy || !hasPrompt) return@LaunchedEffect
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 try {
                     while (true) {
-                        val eligible = updates.shouldOffer(System.currentTimeMillis())
-                        showOffer = eligible && (showOffer || updates.idleForPrompt())
+                        prompt = updates.foregroundPrompt(prompt)
                         delay(5_000)
                     }
                 } finally {
-                    showOffer = false
+                    prompt = null
                 }
             }
         }
-        if (ready && showOffer && release != null && !state.busy) {
+        if (ready && prompt == UpdatePrompt.UPDATE_AVAILABLE && release != null && !state.busy) {
             val later = {
                 updates.later()
-                showOffer = false
+                prompt = null
             }
             AlertDialog(
                 onDismissRequest = later,
@@ -255,6 +257,21 @@ internal object PhoneUpdates {
                 },
                 dismissButton = {
                     TextButton(onClick = later) { Text(stringResource(R.string.updates_later)) }
+                },
+            )
+        } else if (ready && prompt == UpdatePrompt.STANDALONE_UPDATER && noticePending && !state.busy) {
+            val dismiss = {
+                updates.dismissStandaloneUpdaterNotice()
+                prompt = null
+            }
+            AlertDialog(
+                onDismissRequest = dismiss,
+                title = { Text(stringResource(UpdatesR.string.updates_standalone_notice_title)) },
+                text = { Text(stringResource(UpdatesR.string.updates_standalone_notice_message)) },
+                confirmButton = {
+                    TextButton(onClick = dismiss) {
+                        Text(stringResource(UpdatesR.string.updates_standalone_notice_dismiss))
+                    }
                 },
             )
         }

@@ -31,6 +31,7 @@ import org.siloserver.silo.tv.ui.components.TvDialogActionStyle
 import org.siloserver.silo.updates.InstallMethod
 import org.siloserver.silo.updates.SiloraUpdates
 import org.siloserver.silo.updates.UpdateCheckInterval
+import org.siloserver.silo.updates.UpdatePrompt
 import org.siloserver.silo.updates.UpdateState
 import org.siloserver.silo.updates.UpdateStatus
 import org.siloserver.silo.updates.formatUpdateCheckHour
@@ -181,7 +182,10 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val state by updates.state.collectAsState()
-    var offer by remember { mutableStateOf(false) }
+    val release = state.release
+    val noticePending = state.standaloneUpdaterNoticePending
+    val hasPrompt = release != null || noticePending
+    var prompt by remember { mutableStateOf<UpdatePrompt?>(null) }
 
     LaunchedEffect(updates, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -194,37 +198,48 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
             }
         }
     }
-    LaunchedEffect(updates, lifecycle, ready, launch, state.release, state.busy, state.settings.interval.hours) {
-        offer = false
-        if (!ready || state.release == null || state.busy) return@LaunchedEffect
+    LaunchedEffect(updates, lifecycle, ready, launch, release, hasPrompt, state.busy, state.settings.interval.hours) {
+        prompt = null
+        if (!ready || state.busy || !hasPrompt) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             try {
                 while (true) {
-                    val eligible = updates.shouldOffer(System.currentTimeMillis())
-                    offer = eligible && (offer || updates.idleForPrompt())
-                    delay(if (offer) 1_000L else 5_000L)
+                    prompt = updates.foregroundPrompt(prompt)
+                    delay(if (prompt == UpdatePrompt.UPDATE_AVAILABLE) 1_000L else 5_000L)
                 }
             } finally {
-                offer = false
+                prompt = null
             }
         }
     }
 
-    val release = state.release
-    if (offer && release != null && !state.busy) {
-        val later = { updates.later(); offer = false }
+    if (ready && prompt == UpdatePrompt.UPDATE_AVAILABLE && release != null && !state.busy) {
+        val later = {
+            updates.later()
+            prompt = null
+        }
         TvDialog(
             title = stringResource(R.string.updates_offer_title),
             message = stringResource(R.string.updates_offer_message, release.versionName),
             actions = listOf(
                 TvDialogAction(stringResource(R.string.updates_later), later),
                 TvDialogAction(stringResource(R.string.updates_install_now), onClick = {
-                    offer = false
-                    updates.later()
+                    later()
                     requestInstall(context, updates)
                 }, style = TvDialogActionStyle.Primary),
             ),
             onDismissRequest = later,
+        )
+    } else if (ready && prompt == UpdatePrompt.STANDALONE_UPDATER && noticePending && !state.busy) {
+        val dismiss = {
+            updates.dismissStandaloneUpdaterNotice()
+            prompt = null
+        }
+        TvDialog(
+            title = stringResource(UpdatesR.string.updates_standalone_notice_title),
+            message = stringResource(UpdatesR.string.updates_standalone_notice_message),
+            actions = listOf(TvDialogAction(stringResource(UpdatesR.string.updates_standalone_notice_dismiss), dismiss)),
+            onDismissRequest = dismiss,
         )
     }
 }

@@ -38,6 +38,8 @@ enum class UpdateStatus {
     WAITING_FOR_PLAYBACK, NEEDS_CONFIRMATION, NEEDS_INSTALL_PERMISSION, INSTALLED, ERROR,
 }
 
+enum class UpdatePrompt { UPDATE_AVAILABLE, STANDALONE_UPDATER }
+
 data class UpdateState(
     val settings: UpdateSettings,
     val currentVersion: String,
@@ -45,6 +47,7 @@ data class UpdateState(
     val checkedAt: Long = 0,
     val status: UpdateStatus = UpdateStatus.IDLE,
     val detail: String? = null,
+    val standaloneUpdaterNoticePending: Boolean = false,
 ) {
     val busy: Boolean
         get() = status in listOf(UpdateStatus.CHECKING, UpdateStatus.DOWNLOADING, UpdateStatus.INSTALLING)
@@ -96,6 +99,12 @@ internal class UpdateStore(context: Context) {
     }
 
     fun checkedAt(): Long = prefs.getLong("checked", 0)
+
+    fun standaloneUpdaterNoticeDismissed(): Boolean = prefs.getBoolean("standalone-updater-notice-dismissed", false)
+
+    fun dismissStandaloneUpdaterNotice() {
+        prefs.edit().putBoolean("standalone-updater-notice-dismissed", true).apply()
+    }
 
     fun recordCheck(release: SiloraRelease?, time: Long) {
         prefs.edit().putString("release", release?.toJson()).putLong("checked", time).apply()

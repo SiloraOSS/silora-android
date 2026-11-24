@@ -3,6 +3,7 @@ package org.siloserver.silo.updates
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.work.Operation
@@ -70,6 +71,7 @@ class SiloraUpdates private constructor(private val context: Context) {
                     checkRelease(reportError = false)
                 }
             }
+            refreshStandaloneUpdaterNotice()
         }
     }
 
@@ -112,13 +114,43 @@ class SiloraUpdates private constructor(private val context: Context) {
         store.later(release.versionCode, now + TimeUnit.HOURS.toMillis(current.settings.interval.hours.toLong()))
     }
 
-    fun shouldOffer(now: Long): Boolean {
+    suspend fun foregroundPrompt(showing: UpdatePrompt?): UpdatePrompt? {
         val current = state.value
-        val release = current.release ?: return false
-        return !current.busy && offerPolicy.visible(release.versionCode, current.settings.interval.hours, now)
+        if (current.busy) return null
+
+        val release = current.release
+        val prompt = when {
+            release != null && offerPolicy.visible(
+                release.versionCode, current.settings.interval.hours, System.currentTimeMillis(),
+            ) -> UpdatePrompt.UPDATE_AVAILABLE
+            current.standaloneUpdaterNoticePending -> UpdatePrompt.STANDALONE_UPDATER
+            else -> return null
+        }
+        return prompt.takeIf { prompt == showing || idleForPrompt() }
     }
 
-    suspend fun idleForPrompt(): Boolean = playback.read() == SiloraPlaybackStatus.IDLE
+    @Synchronized
+    fun dismissStandaloneUpdaterNotice() {
+        store.dismissStandaloneUpdaterNotice()
+        _state.update { it.copy(standaloneUpdaterNoticePending = false) }
+    }
+
+    private fun refreshStandaloneUpdaterNotice() {
+        if (store.standaloneUpdaterNoticeDismissed()) return
+        val installed = try {
+            context.packageManager.getPackageInfo(STANDALONE_UPDATER_PACKAGE, 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
+        synchronized(this) {
+            if (!store.standaloneUpdaterNoticeDismissed()) {
+                _state.update { it.copy(standaloneUpdaterNoticePending = installed) }
+            }
+        }
+    }
+
+    private suspend fun idleForPrompt(): Boolean = playback.read() == SiloraPlaybackStatus.IDLE
 
     fun installNow() {
         scope.launch {
@@ -324,6 +356,7 @@ class SiloraUpdates private constructor(private val context: Context) {
     }
 
     companion object {
+        private const val STANDALONE_UPDATER_PACKAGE = "org.silora.updater"
         private var instance: SiloraUpdates? = null
 
         @Synchronized
