@@ -1,8 +1,13 @@
 package org.siloserver.silo.tv.ui.screens.settings
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.text.format.DateUtils
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +51,10 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
     val shizuku by updates.shizukuState.collectAsState()
     var picker by remember { mutableStateOf<UpdatePicker?>(null) }
     var showInstallPermission by rememberSaveable { mutableStateOf(false) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) updates.setNotifyOnAutomaticInstall(true)
+        else Toast.makeText(context, UpdatesR.string.updates_notification_permission_help, Toast.LENGTH_LONG).show()
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -103,6 +112,21 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
                     updates.setSettings(settings.copy(automatic = automatic))
                     showInstallPermission = automatic && settings.method == InstallMethod.STANDARD &&
                         !updates.canUseStandard()
+                },
+            )
+        }
+        item {
+            SettingsToggleRow(
+                label = stringResource(UpdatesR.string.updates_notify_on_automatic_install),
+                checked = state.settings.notifyOnAutomaticInstall,
+                onCheckedChange = { enabled ->
+                    if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        updates.setNotifyOnAutomaticInstall(enabled)
+                    }
                 },
             )
         }

@@ -20,6 +20,17 @@ class UpdatePolicyTest {
     }
 
     @Test
+    fun automaticInstallNotificationsDefaultOffAndKeepTheirOptInWhenTheScheduleIsDisabled() {
+        assertFalse(UpdateSettings().notifyOnAutomaticInstall)
+        val settings = UpdateSettings(
+            interval = UpdateCheckInterval.OFF,
+            automatic = true,
+            notifyOnAutomaticInstall = true,
+        )
+        assertTrue(settings.normalized().notifyOnAutomaticInstall)
+    }
+
+    @Test
     fun turningOffBackgroundChecksClearsAutomaticInstallation() {
         val enabled = UpdateSettings(
             interval = UpdateCheckInterval.CUSTOM,

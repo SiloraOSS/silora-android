@@ -20,12 +20,14 @@ enum class UpdateCheckInterval(val hours: Int) {
 }
 
 private const val DEFAULT_CHECK_HOUR = 3
+private const val PENDING_INSTALL_NOTIFICATION = "pending-install-notification"
 
 data class UpdateSettings(
     val interval: UpdateCheckInterval = UpdateCheckInterval.DEFAULT,
     val automatic: Boolean = false,
     val method: InstallMethod = InstallMethod.STANDARD,
     val checkHour: Int = DEFAULT_CHECK_HOUR,
+    val notifyOnAutomaticInstall: Boolean = false,
 ) {
     internal val dailyCheckHour: Int? get() = checkHour.takeIf { interval == UpdateCheckInterval.CUSTOM }
 
@@ -82,6 +84,7 @@ internal class UpdateStore(context: Context) {
         automatic = prefs.getBoolean("automatic", false),
         method = if (prefs.getBoolean("shizuku", false)) InstallMethod.SHIZUKU else InstallMethod.STANDARD,
         checkHour = prefs.getInt("check-hour", DEFAULT_CHECK_HOUR).coerceIn(0, 23),
+        notifyOnAutomaticInstall = prefs.getBoolean("notify-on-automatic-install", false),
     ).normalized()
 
     fun save(settings: UpdateSettings) {
@@ -91,6 +94,8 @@ internal class UpdateStore(context: Context) {
             .putInt("check-hour", settings.checkHour)
             .putBoolean("automatic", settings.automatic)
             .putBoolean("shizuku", settings.method == InstallMethod.SHIZUKU)
+            .putBoolean("notify-on-automatic-install", settings.notifyOnAutomaticInstall)
+            .also { if (!settings.notifyOnAutomaticInstall) it.remove(PENDING_INSTALL_NOTIFICATION) }
             .apply()
     }
 
@@ -118,9 +123,18 @@ internal class UpdateStore(context: Context) {
         check(prefs.edit().putString("attempt", attempt.toJson()).commit()) { "Could not save the installation attempt." }
     }
 
-    fun finish(confirmationVersion: Long = 0, installedVersion: Long = 0) {
+    fun finish(confirmationVersion: Long = 0, installedVersion: Long = 0, notify: Boolean = false) {
         prefs.edit().remove("attempt").putLong("confirmation", confirmationVersion)
-            .putLong("installed", installedVersion).commit()
+            .putLong("installed", installedVersion)
+            .also { if (notify) it.putLong(PENDING_INSTALL_NOTIFICATION, installedVersion) }
+            .commit()
+    }
+
+    fun pendingInstallNotification(): Long? =
+        prefs.getLong(PENDING_INSTALL_NOTIFICATION, 0).takeIf { it > 0 }
+
+    fun clearPendingInstallNotification() {
+        prefs.edit().remove(PENDING_INSTALL_NOTIFICATION).commit()
     }
 
     fun confirmationVersion(): Long = prefs.getLong("confirmation", 0)

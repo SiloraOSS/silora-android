@@ -1,8 +1,13 @@
 package org.siloserver.silo.android.ui.screens.settings
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.text.format.DateUtils
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -61,6 +66,10 @@ internal object PhoneUpdates {
         val shizuku by updates.shizukuState.collectAsStateWithLifecycle()
         var picker by rememberSaveable { mutableStateOf<UpdatePicker?>(null) }
         var showInstallPermission by rememberSaveable { mutableStateOf(false) }
+        val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) updates.setNotifyOnAutomaticInstall(true)
+            else Toast.makeText(context, UpdatesR.string.updates_notification_permission_help, Toast.LENGTH_LONG).show()
+        }
 
         SettingsPageScaffold(title = stringResource(R.string.updates_title), onBackClick = onBackClick) {
             item {
@@ -119,6 +128,19 @@ internal object PhoneUpdates {
                             updates.setSettings(settings.copy(automatic = automatic))
                             showInstallPermission = automatic && settings.method == InstallMethod.STANDARD &&
                                 !updates.canUseStandard()
+                        },
+                    )
+                    SettingsSwitchRow(
+                        label = stringResource(UpdatesR.string.updates_notify_on_automatic_install),
+                        checked = state.settings.notifyOnAutomaticInstall,
+                        onCheckedChange = { enabled ->
+                            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                updates.setNotifyOnAutomaticInstall(enabled)
+                            }
                         },
                     )
                     SettingsNavigationRow(

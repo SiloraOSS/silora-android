@@ -101,6 +101,11 @@ class SiloraUpdates private constructor(private val context: Context) {
         if (old.method != next.method) shizuku.refresh()
     }
 
+    @Synchronized
+    fun setNotifyOnAutomaticInstall(enabled: Boolean) {
+        setSettings(state.value.settings.copy(notifyOnAutomaticInstall = enabled))
+    }
+
     fun canUseStandard(): Boolean =
         Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
 
@@ -298,11 +303,14 @@ class SiloraUpdates private constructor(private val context: Context) {
 
     /** Handles a process killed between committing a self-update and receiving its result. */
     private fun reconcile(): Boolean {
-        val attempt = store.attempt() ?: return false
-        if (installedCode(context) >= attempt.version) {
-            store.finish(installedVersion = installedCode(context))
-            apk.delete()
-            _state.update { it.copy(release = null, status = UpdateStatus.INSTALLED, detail = null) }
+        val attempt = store.attempt()
+        if (attempt == null) {
+            postPendingInstallNotification()
+            return false
+        }
+        val installedVersion = installedCode(context)
+        if (installedVersion >= attempt.version) {
+            completeInstall(attempt, installedVersion)
             Log.i("SiloraUpdates", "Recovered installed version ${attempt.version}")
             return true
         }
@@ -315,6 +323,28 @@ class SiloraUpdates private constructor(private val context: Context) {
             status(UpdateStatus.INSTALLING)
         }
         return false
+    }
+
+    @Synchronized
+    private fun completeInstall(attempt: InstallAttempt, installedVersion: Long) {
+        val notify = attempt.background && installedVersion == attempt.version &&
+            state.value.settings.notifyOnAutomaticInstall
+        store.finish(installedVersion = installedVersion, notify = notify)
+        apk.delete()
+        _state.update { it.copy(release = null, status = UpdateStatus.INSTALLED, detail = null) }
+        postPendingInstallNotification()
+    }
+
+    @Synchronized
+    private fun postPendingInstallNotification() {
+        val pendingVersion = store.pendingInstallNotification() ?: return
+        // A success callback can arrive before the package replacement is visible.
+        val installedVersion = installedCode(context)
+        if (installedVersion < pendingVersion) return
+        if (installedVersion == pendingVersion && state.value.settings.notifyOnAutomaticInstall) {
+            postAutomaticInstallNotification(context, installedVersion)
+        }
+        store.clearPendingInstallNotification()
     }
 
     internal suspend fun onInstallResult(intent: Intent, broadcastCode: Int) = gate.withLock {
@@ -337,12 +367,7 @@ class SiloraUpdates private constructor(private val context: Context) {
                     status(UpdateStatus.NEEDS_CONFIRMATION)
                 }
             }
-            PackageInstaller.STATUS_SUCCESS -> {
-                // Android normally publishes the installed version before delivering success.
-                store.finish(installedVersion = attempt.version)
-                apk.delete()
-                _state.update { it.copy(release = null, status = UpdateStatus.INSTALLED, detail = null) }
-            }
+            PackageInstaller.STATUS_SUCCESS -> completeInstall(attempt, attempt.version)
             else -> {
                 store.finish()
                 status(UpdateStatus.ERROR, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)

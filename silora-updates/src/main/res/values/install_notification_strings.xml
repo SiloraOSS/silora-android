@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="updates_notify_on_automatic_install">Notify after automatic installs</string>
+    <string name="updates_notification_permission_help">Allow Silora notifications in Android Settings, then turn this on again.</string>
+    <string name="updates_install_notification_channel">Silora updates</string>
+    <string name="updates_install_notification_title">Silora updated automatically</string>
+    <string name="updates_install_notification_body">Silora %1$s is installed.</string>
+</resources>
