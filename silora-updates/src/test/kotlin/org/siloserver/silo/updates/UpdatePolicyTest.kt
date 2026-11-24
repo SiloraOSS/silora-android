@@ -20,6 +20,21 @@ class UpdatePolicyTest {
     }
 
     @Test
+    fun turningOffBackgroundChecksClearsAutomaticInstallation() {
+        val enabled = UpdateSettings(
+            interval = UpdateCheckInterval.CUSTOM,
+            automatic = true,
+            method = InstallMethod.SHIZUKU,
+            checkHour = 7,
+        )
+        assertEquals(enabled, enabled.normalized())
+
+        val disabled = enabled.copy(interval = UpdateCheckInterval.OFF).normalized()
+        assertEquals(enabled.copy(interval = UpdateCheckInterval.OFF, automatic = false), disabled)
+        assertEquals(enabled.copy(automatic = false), disabled.copy(interval = enabled.interval).normalized())
+    }
+
+    @Test
     fun dailyCheckReturnsToTheChosenLocalHourAfterALateRun() {
         val beforeCheck = Instant.parse("2026-01-10T10:30:00Z").toEpochMilli()
         val lateCheck = Instant.parse("2026-01-10T13:45:00Z").toEpochMilli()

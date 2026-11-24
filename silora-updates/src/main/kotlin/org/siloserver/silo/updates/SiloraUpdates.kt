@@ -89,13 +89,14 @@ class SiloraUpdates private constructor(private val context: Context) {
     fun setSettings(settings: UpdateSettings) {
         require(settings.checkHour in 0..23)
         val old = state.value.settings
-        if (old == settings) return
-        store.save(settings)
-        _state.update { it.copy(settings = settings) }
-        if (old.interval != settings.interval || old.dailyCheckHour != settings.dailyCheckHour) {
-            UpdateSchedule.configure(context, settings, restart = true)
+        val next = settings.normalized()
+        if (old == next) return
+        store.save(next)
+        _state.update { it.copy(settings = next) }
+        if (old.interval != next.interval || old.dailyCheckHour != next.dailyCheckHour) {
+            UpdateSchedule.configure(context, next, restart = true)
         }
-        if (old.method != settings.method) shizuku.refresh()
+        if (old.method != next.method) shizuku.refresh()
     }
 
     fun canUseStandard(): Boolean =

@@ -28,6 +28,9 @@ data class UpdateSettings(
     val checkHour: Int = DEFAULT_CHECK_HOUR,
 ) {
     internal val dailyCheckHour: Int? get() = checkHour.takeIf { interval == UpdateCheckInterval.CUSTOM }
+
+    internal fun normalized(): UpdateSettings =
+        if (!interval.enabled && automatic) copy(automatic = false) else this
 }
 
 enum class UpdateStatus {
@@ -76,7 +79,7 @@ internal class UpdateStore(context: Context) {
         automatic = prefs.getBoolean("automatic", false),
         method = if (prefs.getBoolean("shizuku", false)) InstallMethod.SHIZUKU else InstallMethod.STANDARD,
         checkHour = prefs.getInt("check-hour", DEFAULT_CHECK_HOUR).coerceIn(0, 23),
-    )
+    ).normalized()
 
     fun save(settings: UpdateSettings) {
         prefs.edit()
