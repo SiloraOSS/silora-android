@@ -4,6 +4,37 @@ Silora tracks [Silo Android](https://github.com/Silo-Server/silo-android).
 This log records upstream merges, the commits they introduce, Silora merge
 decisions, and validation results. Entries appear newest first.
 
+## 2026-11-24 06:41 PST — upstream b7c0412af
+
+**Merge inputs** — `main` at `3f1866db950b315564d3ed876d81e6f3eedab949` and official upstream
+`b7c0412af6b4c60e2a8cb0a4888f8b013cba75e0`. Phone and TV explain when the server ends a session paused
+too long and show air dates for sports episodes on supported servers. Phone
+downloads stopped during end credits now sync as watched while retaining
+their actual local resume position.
+
+**Upstream commits added**
+
+- `56e23561a` feat(player): say when playback stopped because it was paused too long (#1043)
+- `137fca310` fix(downloads): count an offline stop in the end credits as watched (#1038)
+- `b7c0412af` feat(catalog): label sports episodes by air date (#1035)
+
+**Silora merge decisions**
+
+- `up-next-setting` and `up-next-fixes` keep Silora's trigger modes,
+  manual TV card and post-playback artwork alongside upstream's air-date
+  labels. The offline watched rule uses its own credits window.
+- `credits-auto-skip`, `night-mode`, `tv-remote` and `tv-subtitle-size`
+  retain their player controls and settings. The pause-timeout exit keeps
+  upstream's session ownership guard for late replan responses.
+- `trailers` keeps the Trailer action on phone and TV detail screens
+  alongside the upstream episode labels. The bundled Admin API v57 refresh
+  and the Android TV Watch History pagination fix remain in the source.
+
+**Validation** — The merge applied without conflicts. Staged whitespace and
+translation catalog checks passed. The release review and build metadata
+record signed phone and TV builds, full release lint and unit test results
+after this commit is built. Device testing was outside this run.
+
 ## 2026-11-24 — Edrock v57 Admin API spec
 
 Refreshed the bundled Admin API contract for phone and TV through edrock

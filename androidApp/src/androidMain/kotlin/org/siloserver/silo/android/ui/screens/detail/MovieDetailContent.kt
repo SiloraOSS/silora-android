@@ -331,6 +331,7 @@ fun MovieDetailContent(
                         highlightContentId = detail.contentId,
                         showsSeasonSelector = false,
                         allowsSeasonPaging = false,
+                        episodeLabels = detail.episodeLabels,
                     )
                 }
             }

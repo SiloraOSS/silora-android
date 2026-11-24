@@ -206,6 +206,7 @@ val playerInfraModule = module {
                     snapshot.durationSeconds,
                     eventTimeMs = snapshot.eventTimeMs,
                     runStartedAtMs = snapshot.runStartedAtMs,
+                    reachedEndCredits = snapshot.reachedEndCredits,
                 )
             }
         }
