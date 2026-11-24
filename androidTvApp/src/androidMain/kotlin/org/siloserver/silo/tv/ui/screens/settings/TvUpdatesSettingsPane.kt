@@ -30,8 +30,10 @@ import org.siloserver.silo.tv.ui.components.TvDialogAction
 import org.siloserver.silo.tv.ui.components.TvDialogActionStyle
 import org.siloserver.silo.updates.InstallMethod
 import org.siloserver.silo.updates.SiloraUpdates
+import org.siloserver.silo.updates.UpdateCheckInterval
 import org.siloserver.silo.updates.UpdateState
 import org.siloserver.silo.updates.UpdateStatus
+import org.siloserver.silo.updates.formatUpdateCheckHour
 import org.siloserver.silo.updates.openInstallPermissionSettings
 import org.siloserver.silo.updates.R as UpdatesR
 
@@ -77,15 +79,24 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
         item {
             SettingsValueRow(
                 label = stringResource(R.string.updates_interval),
-                value = intervalLabel(state.settings.intervalHours),
+                value = intervalLabel(state.settings.interval),
                 onClick = { picker = UpdatePicker.Interval },
             )
+        }
+        if (state.settings.interval == UpdateCheckInterval.CUSTOM) {
+            item {
+                SettingsValueRow(
+                    label = stringResource(UpdatesR.string.updates_daily_check_time),
+                    value = formatUpdateCheckHour(context, state.settings.checkHour),
+                    onClick = { picker = UpdatePicker.Hour },
+                )
+            }
         }
         item {
             SettingsToggleRow(
                 label = stringResource(R.string.updates_automatic),
                 checked = state.settings.automatic,
-                enabled = state.settings.intervalHours > 0,
+                enabled = state.settings.interval.enabled,
                 onCheckedChange = { automatic ->
                     val settings = state.settings
                     updates.setSettings(settings.copy(automatic = automatic))
@@ -116,10 +127,20 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
     when (picker) {
         UpdatePicker.Interval -> TvSettingsPickerSheet(
             title = stringResource(R.string.updates_interval),
-            options = SiloraUpdates.INTERVALS.map { PickerOption(it.toString(), intervalLabel(it)) },
-            selectedId = state.settings.intervalHours.toString(),
+            options = UpdateCheckInterval.entries.map { PickerOption(it.name, intervalLabel(it)) },
+            selectedId = state.settings.interval.name,
             onSelect = { id ->
-                updates.setSettings(state.settings.copy(intervalHours = id.toInt()))
+                updates.setSettings(state.settings.copy(interval = UpdateCheckInterval.valueOf(id)))
+                picker = null
+            },
+            onDismiss = { picker = null },
+        )
+        UpdatePicker.Hour -> TvSettingsPickerSheet(
+            title = stringResource(UpdatesR.string.updates_daily_check_time),
+            options = (0..23).map { PickerOption(it.toString(), formatUpdateCheckHour(context, it)) },
+            selectedId = state.settings.checkHour.toString(),
+            onSelect = { id ->
+                updates.setSettings(state.settings.copy(checkHour = id.toInt()))
                 picker = null
             },
             onDismiss = { picker = null },
@@ -153,7 +174,7 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
     }
 }
 
-private enum class UpdatePicker { Interval, Method }
+private enum class UpdatePicker { Interval, Hour, Method }
 
 @Composable
 internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int) {
@@ -173,7 +194,7 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
             }
         }
     }
-    LaunchedEffect(updates, lifecycle, ready, launch, state.release, state.busy, state.settings.intervalHours) {
+    LaunchedEffect(updates, lifecycle, ready, launch, state.release, state.busy, state.settings.interval.hours) {
         offer = false
         if (!ready || state.release == null || state.busy) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -224,8 +245,11 @@ private fun requestInstall(context: Context, updates: SiloraUpdates) {
 }
 
 @Composable
-private fun intervalLabel(hours: Int): String =
-    if (hours == 0) stringResource(R.string.updates_interval_off) else stringResource(R.string.updates_interval_hours, hours)
+private fun intervalLabel(interval: UpdateCheckInterval): String = when (interval) {
+    UpdateCheckInterval.OFF -> stringResource(R.string.updates_interval_off)
+    UpdateCheckInterval.CUSTOM -> stringResource(UpdatesR.string.updates_interval_custom)
+    else -> stringResource(R.string.updates_interval_hours, interval.hours)
+}
 
 @Composable
 private fun methodLabel(method: InstallMethod): String =

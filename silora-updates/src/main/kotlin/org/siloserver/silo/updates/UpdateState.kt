@@ -6,11 +6,29 @@ import java.util.concurrent.TimeUnit
 
 enum class InstallMethod { STANDARD, SHIZUKU }
 
+enum class UpdateCheckInterval(val hours: Int) {
+    OFF(0), EVERY_3_HOURS(3), EVERY_6_HOURS(6), EVERY_12_HOURS(12), EVERY_24_HOURS(24), CUSTOM(24);
+
+    val enabled: Boolean get() = this != OFF
+
+    companion object {
+        internal val DEFAULT = EVERY_12_HOURS
+
+        internal fun fromSavedHours(hours: Int): UpdateCheckInterval =
+            entries.firstOrNull { it != CUSTOM && it.hours == hours } ?: DEFAULT
+    }
+}
+
+private const val DEFAULT_CHECK_HOUR = 3
+
 data class UpdateSettings(
-    val intervalHours: Int = 24,
+    val interval: UpdateCheckInterval = UpdateCheckInterval.DEFAULT,
     val automatic: Boolean = false,
     val method: InstallMethod = InstallMethod.STANDARD,
-)
+    val checkHour: Int = DEFAULT_CHECK_HOUR,
+) {
+    internal val dailyCheckHour: Int? get() = checkHour.takeIf { interval == UpdateCheckInterval.CUSTOM }
+}
 
 enum class UpdateStatus {
     IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, INSTALLING,
@@ -53,14 +71,21 @@ internal class UpdateStore(context: Context) {
     private val prefs = context.getSharedPreferences("silora-updates", Context.MODE_PRIVATE)
 
     fun settings() = UpdateSettings(
-        prefs.getInt("interval", 24),
-        prefs.getBoolean("automatic", false),
-        if (prefs.getBoolean("shizuku", false)) InstallMethod.SHIZUKU else InstallMethod.STANDARD,
+        interval = if (prefs.getBoolean("custom-interval", false)) UpdateCheckInterval.CUSTOM
+            else UpdateCheckInterval.fromSavedHours(prefs.getInt("interval", UpdateCheckInterval.DEFAULT.hours)),
+        automatic = prefs.getBoolean("automatic", false),
+        method = if (prefs.getBoolean("shizuku", false)) InstallMethod.SHIZUKU else InstallMethod.STANDARD,
+        checkHour = prefs.getInt("check-hour", DEFAULT_CHECK_HOUR).coerceIn(0, 23),
     )
 
     fun save(settings: UpdateSettings) {
-        prefs.edit().putInt("interval", settings.intervalHours).putBoolean("automatic", settings.automatic)
-            .putBoolean("shizuku", settings.method == InstallMethod.SHIZUKU).apply()
+        prefs.edit()
+            .putInt("interval", settings.interval.hours)
+            .putBoolean("custom-interval", settings.interval == UpdateCheckInterval.CUSTOM)
+            .putInt("check-hour", settings.checkHour)
+            .putBoolean("automatic", settings.automatic)
+            .putBoolean("shizuku", settings.method == InstallMethod.SHIZUKU)
+            .apply()
     }
 
     fun release(): SiloraRelease? = prefs.getString("release", null)?.let {

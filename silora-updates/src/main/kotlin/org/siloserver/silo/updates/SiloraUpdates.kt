@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
 import android.util.Log
+import androidx.work.Operation
+import androidx.work.await
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,8 +58,14 @@ class SiloraUpdates private constructor(private val context: Context) {
         scope.launch {
             gate.withLock {
                 reconcile()
-                UpdateSchedule.configure(context, state.value.settings.intervalHours)
-                val hours = state.value.settings.intervalHours.takeIf { it > 0 } ?: 1
+                try {
+                    restoreSchedule()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w("SiloraUpdates", "Could not restore update scheduling.", error)
+                }
+                val hours = state.value.settings.interval.hours.coerceAtLeast(1)
                 if (System.currentTimeMillis() - state.value.checkedAt >= TimeUnit.HOURS.toMillis(hours.toLong())) {
                     checkRelease(reportError = false)
                 }
@@ -77,14 +85,15 @@ class SiloraUpdates private constructor(private val context: Context) {
         }
     }
 
+    @Synchronized
     fun setSettings(settings: UpdateSettings) {
-        require(settings.intervalHours in INTERVALS)
+        require(settings.checkHour in 0..23)
         val old = state.value.settings
         if (old == settings) return
         store.save(settings)
         _state.update { it.copy(settings = settings) }
-        if (old.intervalHours != settings.intervalHours) {
-            UpdateSchedule.configure(context, settings.intervalHours, changed = true)
+        if (old.interval != settings.interval || old.dailyCheckHour != settings.dailyCheckHour) {
+            UpdateSchedule.configure(context, settings, restart = true)
         }
         if (old.method != settings.method) shizuku.refresh()
     }
@@ -99,13 +108,13 @@ class SiloraUpdates private constructor(private val context: Context) {
         val release = current.release ?: return
         val now = System.currentTimeMillis()
         offerPolicy.later(release.versionCode, now)
-        store.later(release.versionCode, now + TimeUnit.HOURS.toMillis(current.settings.intervalHours.toLong()))
+        store.later(release.versionCode, now + TimeUnit.HOURS.toMillis(current.settings.interval.hours.toLong()))
     }
 
     fun shouldOffer(now: Long): Boolean {
         val current = state.value
         val release = current.release ?: return false
-        return !current.busy && offerPolicy.visible(release.versionCode, current.settings.intervalHours, now)
+        return !current.busy && offerPolicy.visible(release.versionCode, current.settings.interval.hours, now)
     }
 
     suspend fun idleForPrompt(): Boolean = playback.read() == SiloraPlaybackStatus.IDLE
@@ -135,17 +144,47 @@ class SiloraUpdates private constructor(private val context: Context) {
         }
     }
 
-    internal suspend fun scheduledCheck(): Boolean = gate.withLock {
+    internal suspend fun scheduledCheck(canRetry: Boolean): Boolean = gate.withLock {
         reconcile()
-        if (state.value.settings.intervalHours == 0) return@withLock true
-        if (!checkRelease(reportError = true)) return@withLock false
-        if (state.value.settings.automatic) install(background = true)
-        true
+        if (!state.value.settings.interval.enabled) return@withLock true
+        val checked = checkRelease(reportError = true)
+        val retry = !checked && canRetry
+        // Persist the next daily run before a self-update can stop this process.
+        refreshDailySchedule(retry)?.await()
+        if (checked && state.value.settings.automatic && state.value.settings.interval.enabled) {
+            install(background = true)
+        }
+        !retry
     }
 
     internal suspend fun afterReplacement() = gate.withLock {
         reconcile()
-        UpdateSchedule.configure(context, state.value.settings.intervalHours)?.result?.get(8, TimeUnit.SECONDS)
+        restoreSchedule()
+    }
+
+    internal suspend fun afterClockChange() {
+        refreshDailySchedule()?.await()
+    }
+
+    private suspend fun restoreSchedule() {
+        val hour = state.value.settings.dailyCheckHour
+        val outdated = hour != null && UpdateSchedule.hasOutdatedDailyWork(context, hour)
+        synchronized(this) {
+            val settings = state.value.settings
+            // Recover if the process stopped after saving the hour and before enqueuing it.
+            UpdateSchedule.configure(context, settings, restart = outdated && hour == settings.dailyCheckHour)
+        }.await()
+    }
+
+    @Synchronized
+    private fun refreshDailySchedule(retry: Boolean = false): Operation? {
+        val settings = state.value.settings
+        val hour = settings.dailyCheckHour ?: return null
+        val now = System.currentTimeMillis()
+        val nextDay = nextDailyCheck(hour, now)
+        // A WorkManager schedule override takes precedence over its normal retry backoff.
+        val nextRun = if (retry) minOf(nextDay, now + TimeUnit.MINUTES.toMillis(15)) else nextDay
+        return UpdateSchedule.configure(context, settings, nextDailyRunAt = nextRun)
     }
 
     private fun checkRelease(reportError: Boolean): Boolean {
@@ -198,7 +237,7 @@ class SiloraUpdates private constructor(private val context: Context) {
             // Recheck after download. The viewer may have started playback or changed settings.
             if (background) {
                 val settings = state.value.settings
-                if (!settings.automatic || settings.intervalHours == 0 || settings.method != current.settings.method) {
+                if (!settings.automatic || !settings.interval.enabled || settings.method != current.settings.method) {
                     status(UpdateStatus.AVAILABLE)
                     return
                 }
@@ -284,7 +323,6 @@ class SiloraUpdates private constructor(private val context: Context) {
     }
 
     companion object {
-        val INTERVALS = listOf(0, 3, 6, 12, 24)
         private var instance: SiloraUpdates? = null
 
         @Synchronized

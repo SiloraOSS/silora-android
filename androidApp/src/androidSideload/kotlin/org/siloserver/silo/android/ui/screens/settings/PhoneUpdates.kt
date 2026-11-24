@@ -38,8 +38,10 @@ import kotlinx.coroutines.delay
 import org.siloserver.silo.android.R
 import org.siloserver.silo.updates.InstallMethod
 import org.siloserver.silo.updates.SiloraUpdates
+import org.siloserver.silo.updates.UpdateCheckInterval
 import org.siloserver.silo.updates.UpdateState
 import org.siloserver.silo.updates.UpdateStatus
+import org.siloserver.silo.updates.formatUpdateCheckHour
 import org.siloserver.silo.updates.openInstallPermissionSettings
 import org.siloserver.silo.updates.R as UpdatesR
 
@@ -96,14 +98,21 @@ internal object PhoneUpdates {
                 SettingsSectionCard {
                     SettingsNavigationRow(
                         label = stringResource(R.string.updates_interval),
-                        value = intervalLabel(state.settings.intervalHours),
+                        value = intervalLabel(state.settings.interval),
                         onClick = { picker = UpdatePicker.Interval },
                     )
+                    if (state.settings.interval == UpdateCheckInterval.CUSTOM) {
+                        SettingsNavigationRow(
+                            label = stringResource(UpdatesR.string.updates_daily_check_time),
+                            value = formatUpdateCheckHour(context, state.settings.checkHour),
+                            onClick = { picker = UpdatePicker.Hour },
+                        )
+                    }
                     SettingsSwitchRow(
                         label = stringResource(R.string.updates_automatic),
                         description = stringResource(R.string.updates_automatic_description),
-                        checked = state.settings.automatic && state.settings.intervalHours > 0,
-                        enabled = state.settings.intervalHours > 0,
+                        checked = state.settings.automatic && state.settings.interval.enabled,
+                        enabled = state.settings.interval.enabled,
                         onCheckedChange = { automatic ->
                             val settings = state.settings
                             updates.setSettings(settings.copy(automatic = automatic))
@@ -136,11 +145,22 @@ internal object PhoneUpdates {
         when (picker) {
             UpdatePicker.Interval -> UpdatePickerDialog(
                 title = stringResource(R.string.updates_interval),
-                options = SiloraUpdates.INTERVALS,
-                selection = state.settings.intervalHours,
+                options = UpdateCheckInterval.entries,
+                selection = state.settings.interval,
                 label = { intervalLabel(it) },
                 onSelect = {
-                    updates.setSettings(state.settings.copy(intervalHours = it))
+                    updates.setSettings(state.settings.copy(interval = it))
+                    picker = null
+                },
+                onDismiss = { picker = null },
+            )
+            UpdatePicker.Hour -> UpdatePickerDialog(
+                title = stringResource(UpdatesR.string.updates_daily_check_time),
+                options = (0..23).toList(),
+                selection = state.settings.checkHour,
+                label = { formatUpdateCheckHour(context, it) },
+                onSelect = {
+                    updates.setSettings(state.settings.copy(checkHour = it))
                     picker = null
                 },
                 onDismiss = { picker = null },
@@ -202,7 +222,7 @@ internal object PhoneUpdates {
                 }
             }
         }
-        LaunchedEffect(updates, lifecycle, ready, launch, release, state.busy, state.settings.intervalHours) {
+        LaunchedEffect(updates, lifecycle, ready, launch, release, state.busy, state.settings.interval.hours) {
             showOffer = false
             if (!ready || release == null || state.busy) return@LaunchedEffect
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -241,7 +261,7 @@ internal object PhoneUpdates {
     }
 }
 
-private enum class UpdatePicker { Interval, Method }
+private enum class UpdatePicker { Interval, Hour, Method }
 
 @Composable
 private fun <T> UpdatePickerDialog(
@@ -297,9 +317,11 @@ private fun authorizeShizuku(context: Context, updates: SiloraUpdates) {
 }
 
 @Composable
-private fun intervalLabel(hours: Int): String =
-    if (hours == 0) stringResource(R.string.updates_interval_off)
-    else pluralStringResource(R.plurals.updates_interval_hours, hours, hours)
+private fun intervalLabel(interval: UpdateCheckInterval): String = when (interval) {
+    UpdateCheckInterval.OFF -> stringResource(R.string.updates_interval_off)
+    UpdateCheckInterval.CUSTOM -> stringResource(UpdatesR.string.updates_interval_custom)
+    else -> pluralStringResource(R.plurals.updates_interval_hours, interval.hours, interval.hours)
+}
 
 @Composable
 private fun methodLabel(method: InstallMethod): String =

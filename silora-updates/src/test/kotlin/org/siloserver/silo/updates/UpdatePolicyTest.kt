@@ -5,9 +5,40 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 class UpdatePolicyTest {
+    private val pacific = TimeZone.getTimeZone("America/Los_Angeles")
+
+    @Test
+    fun newSettingsDefaultToTwelveHoursAndSavedIntervalsKeepTheirMeaning() {
+        assertEquals(UpdateCheckInterval.EVERY_12_HOURS, UpdateSettings().interval)
+        assertEquals(UpdateCheckInterval.EVERY_24_HOURS, UpdateCheckInterval.fromSavedHours(24))
+        assertEquals(UpdateCheckInterval.OFF, UpdateCheckInterval.fromSavedHours(0))
+    }
+
+    @Test
+    fun dailyCheckReturnsToTheChosenLocalHourAfterALateRun() {
+        val beforeCheck = Instant.parse("2026-01-10T10:30:00Z").toEpochMilli()
+        val lateCheck = Instant.parse("2026-01-10T13:45:00Z").toEpochMilli()
+
+        assertEquals(Instant.parse("2026-01-10T11:00:00Z").toEpochMilli(), nextDailyCheck(3, beforeCheck, pacific))
+        assertEquals(Instant.parse("2026-01-11T11:00:00Z").toEpochMilli(), nextDailyCheck(3, lateCheck, pacific))
+    }
+
+    @Test
+    fun dailyCheckKeepsTheChosenHourAcrossDaylightSavingChanges() {
+        val beforeMissingHour = Instant.parse("2026-03-08T09:00:00Z").toEpochMilli()
+        val afterMissingHour = Instant.parse("2026-03-08T10:30:00Z").toEpochMilli()
+        val afterFirstOccurrence = Instant.parse("2026-11-01T08:30:00Z").toEpochMilli()
+
+        assertEquals(Instant.parse("2026-03-08T10:00:00Z").toEpochMilli(), nextDailyCheck(2, beforeMissingHour, pacific))
+        assertEquals(Instant.parse("2026-03-09T09:00:00Z").toEpochMilli(), nextDailyCheck(2, afterMissingHour, pacific))
+        assertEquals(Instant.parse("2026-11-01T09:00:00Z").toEpochMilli(), nextDailyCheck(1, afterFirstOccurrence, pacific))
+    }
+
     @Test
     fun laterSuppressesOnlyTheOfferedBuildUntilIntervalOrLaunch() {
         val policy = UpdateOfferPolicy()
