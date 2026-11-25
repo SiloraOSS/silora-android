@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Release safety and interruption recovery tests; no real GitHub mutations."""
 import argparse
+import base64
 import hashlib
 import importlib.util
 import json
@@ -260,7 +261,8 @@ class DispatchTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.args = argparse.Namespace(source_sha=SOURCE, upstream_sha=UPSTREAM,
-                                       receipt_dir=Path(self.tmp.name), publish=True, retry_reviewed=None)
+                                       receipt_dir=Path(self.tmp.name), publish=True,
+                                       retry_reviewed=None, highlights_file=None)
         self.path = Path(self.tmp.name) / f"{SOURCE}-release.json"
         self.addCleanup(mock.patch.stopall)
         self.find = mock.patch.object(dispatch, "find_run", return_value=None).start()
@@ -323,6 +325,24 @@ class DispatchTest(unittest.TestCase):
         self.assertIn(f"upstream_sha={UPSTREAM}", self.run.call_args.args)
         self.assertIn("publish=true", self.run.call_args.args)
         self.assertEqual(json.loads(self.path.read_text())["run_id"], 42)
+
+    def test_dispatch_binds_the_exact_summary_to_the_receipt_and_run_lookup(self):
+        self.args.highlights_file = Path(self.tmp.name) / "release-highlights.md"
+        data = "- Café names display correctly. *(Silora)*\n".encode()
+        self.args.highlights_file.write_bytes(data)
+        digest = hashlib.sha256(data).hexdigest()
+        self.find.side_effect = [None, self.active]
+
+        dispatch.dispatch(self.args)
+
+        self.assertEqual(self.find.call_args.args, (SOURCE, UPSTREAM, True, digest))
+        self.assertIn(f"highlights_b64={base64.b64encode(data).decode()}", self.run.call_args.args)
+        self.assertIn(f"highlights_sha256={digest}", self.run.call_args.args)
+        self.assertEqual(json.loads(self.path.read_text())["release_highlights_sha256"], digest)
+        self.args.highlights_file.write_bytes(b"- Different highlight. *(Silora)*\n")
+        with self.assertRaisesRegex(ValueError, "Saved receipt differs"):
+            dispatch.dispatch(self.args)
+        self.run.assert_called_once()
 
 
 class RunMatchingTest(unittest.TestCase):

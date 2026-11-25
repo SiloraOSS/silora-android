@@ -33,10 +33,13 @@ operation, mode, approval rules and progress notifications.
    [preview checkout](dry-run.md#prepare-the-preview) starting at the pinned
    branch commit, and leave the original checkout alone. For live runs, send
    `release_building` per the [local APK milestones](local-release.md#staff-milestones).
-   Run the full release build once:
+   Prepare the [shared release highlights](release-announcement.md#write-the-shared-highlights-before-building)
+   against the pinned commit. Run the full release build once, omitting
+   `--highlights-file` only if there is no summary:
 
    ```sh
    ./build.sh --release=both --tests --lint --output-file "$build_receipt" \
+     --highlights-file "$execution_dir/release-highlights.md" \
      --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing
    ```
 
@@ -49,7 +52,10 @@ operation, mode, approval rules and progress notifications.
    `upstream_checked_sha` and verify it is included in that source.
 
 If Matt explicitly selects an existing archive, reuse it after the same
-source and archive checks and review its actual validation evidence. Skip
+source and archive checks and review its actual validation evidence. If the
+archive metadata records a highlights SHA-256, recover its exact
+`assets/silora-release-highlights.md` from the verified TV APK into the
+private execution directory and confirm the hash before review. Skip
 `release_building` when no build runs.
 
 ## Review and publish
@@ -57,7 +63,8 @@ source and archive checks and review its actual validation evidence. Skip
 1. Recheck the remote baseline and reconcile the exact planned tag and any
    active release attempts. Show the branch and full SHA, the commits and
    diff awaiting a push, the actual checks, and the planned tag, APK versions
-   and hashes. Name **Silora Publish Local Build**, which verifies and
+   and hashes. Include the shared highlights and checksum when present.
+   Name **Silora Publish Local Build**, which verifies and
    publishes these APKs. Include the push to main only when needed.
 2. For live releases, use [the shared approval rules](../SKILL.md#apply-live-approval).
    For a dry run, present **Release this result**, **Keep for later** and **Discard**

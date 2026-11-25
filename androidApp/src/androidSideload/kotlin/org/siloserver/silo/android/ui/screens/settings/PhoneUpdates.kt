@@ -8,6 +8,7 @@ import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +19,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -148,6 +150,11 @@ internal object PhoneUpdates {
                         value = methodLabel(state.settings.method),
                         onClick = { picker = UpdatePicker.Method },
                     )
+                    SettingsSwitchRow(
+                        label = stringResource(UpdatesR.string.updates_show_what_changed),
+                        checked = state.settings.showWhatChanged,
+                        onCheckedChange = updates::setShowWhatChanged,
+                    )
                     if (state.settings.method == InstallMethod.SHIZUKU) {
                         SettingsNavigationRow(
                             label = stringResource(R.string.updates_shizuku),
@@ -232,7 +239,7 @@ internal object PhoneUpdates {
         val state by updates.state.collectAsStateWithLifecycle()
         val release = state.release
         val noticePending = state.standaloneUpdaterNoticePending
-        val hasPrompt = release != null || noticePending
+        val whatChanged = state.whatChanged
         var prompt by remember { mutableStateOf<UpdatePrompt?>(null) }
 
         LaunchedEffect(updates, lifecycle, ready) {
@@ -247,9 +254,12 @@ internal object PhoneUpdates {
                 }
             }
         }
-        LaunchedEffect(updates, lifecycle, ready, launch, release, hasPrompt, state.busy, state.settings.interval.hours) {
+        LaunchedEffect(updates, lifecycle, ready, launch, release, noticePending, whatChanged,
+            state.canShowForegroundPrompt, state.settings.interval.hours) {
             prompt = null
-            if (!ready || state.busy || !hasPrompt) return@LaunchedEffect
+            if (!ready || !state.canShowForegroundPrompt ||
+                (release == null && !noticePending && whatChanged == null)
+            ) return@LaunchedEffect
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 try {
                     while (true) {
@@ -292,8 +302,32 @@ internal object PhoneUpdates {
                 text = { Text(stringResource(UpdatesR.string.updates_standalone_notice_message)) },
                 confirmButton = {
                     TextButton(onClick = dismiss) {
-                        Text(stringResource(UpdatesR.string.updates_standalone_notice_dismiss))
+                        Text(stringResource(UpdatesR.string.updates_got_it))
                     }
+                },
+            )
+        } else if (ready && prompt == UpdatePrompt.WHAT_CHANGED && whatChanged != null && state.canShowForegroundPrompt) {
+            val dismiss = {
+                updates.dismissWhatChanged()
+                prompt = null
+            }
+            AlertDialog(
+                onDismissRequest = dismiss,
+                title = {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(stringResource(UpdatesR.string.updates_what_changed_title))
+                        if (state.currentVersion.isNotBlank()) {
+                            Text(
+                                text = stringResource(UpdatesR.string.updates_what_changed_version, state.currentVersion),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
+                text = { Text(whatChanged, Modifier.verticalScroll(rememberScrollState())) },
+                confirmButton = {
+                    TextButton(onClick = dismiss) { Text(stringResource(UpdatesR.string.updates_got_it)) }
                 },
             )
         }

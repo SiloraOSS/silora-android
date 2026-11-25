@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,6 +19,7 @@ MODULES = {"phone": ("androidApp", 0), "tv": ("androidTvApp", 1)}
 spec = importlib.util.spec_from_file_location("fork_release", ROOT / "scripts/fork-release.py")
 fork_release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fork_release)
+highlights = fork_release.highlights
 
 
 def capture(command, *, env=None, binary=False):
@@ -66,7 +68,7 @@ def source_status():
         "tracked_tree_dirty": bool(capture(["git", "diff", "--name-only", "HEAD"]).strip()),
         "untracked_build_inputs": any(
             path.split("/", 1)[0] in {
-                "androidApp", "androidTvApp", "android-shared", "shared", "libass-bridge",
+                "androidApp", "androidTvApp", "android-shared", "shared", "libass-bridge", "silora-updates",
                 "gradle", "scripts", "baselineprofile", "baselineprofile-tv",
             } or path.endswith((".gradle", ".gradle.kts", ".properties"))
             for path in capture(["git", "ls-files", "--others", "--exclude-standard"]).splitlines()
@@ -119,6 +121,8 @@ def verify_apks(env, info, certificate_sha256, targets=("phone", "tv"), *, apk_d
             actual = capture([str(analyzer), "manifest", field, str(apk)], env=env).strip()
             if actual != expected:
                 raise ValueError(f"{module}: unexpected APK {field}: {actual!r}")
+        if "release_highlights_sha256" in info:
+            highlights.verify(apk, info["release_highlights_sha256"])
         print(f"Verified release signature, application ID, and version: {module}", flush=True)
 
 
@@ -158,13 +162,20 @@ def main():
                         help="run full release lint for the selected apps before building")
     parser.add_argument("--output-file", type=Path,
                         help="write the verified archive's absolute path here after a successful build")
+    parser.add_argument("--highlights-file", type=Path,
+                        help="bundle the reviewed release highlights in both signed APKs")
     args = parser.parse_args()
     if args.check and args.output_file:
         parser.error("--output-file requires a completed build; it cannot be used with --check")
     targets = ("phone", "tv") if args.release == "both" else (args.release,)
+    data = args.highlights_file.expanduser().read_bytes() if args.highlights_file else None
+    digest = highlights.validate(data) if data is not None else None
     env, fingerprint = signing_environment(args.signing_dir)
     info = build_metadata()
     info["targets"] = list(targets)
+    if digest is not None:
+        info["release_highlights_sha256"] = digest
+    env.pop("SILORA_RELEASE_HIGHLIGHTS_DIR", None)
     env.update({
         "SILO_VERSION_NAME": info["version_name"],
         "SILO_VERSION_CODE": str(info["version_code_base"]),
@@ -189,10 +200,14 @@ def main():
         tasks.extend(f":{MODULES[target][0]}:lintRelease" for target in targets)
     tasks.extend(f":{MODULES[target][0]}:assembleRelease" for target in targets)
     subprocess.run([str(ROOT / "scripts/check-build-supply-chain.sh")], cwd=ROOT, env=env, check=True)
-    subprocess.run([
-        str(ROOT / "gradlew"), *tasks,
-        "-PallowDebugReleaseSigning=false", "--parallel", "--console=plain",
-    ], cwd=ROOT, env=env, check=True)
+    with tempfile.TemporaryDirectory(prefix="silora-build-assets-") as assets:
+        if data is not None:
+            highlights.stage(data, Path(assets))
+            env["SILORA_RELEASE_HIGHLIGHTS_DIR"] = assets
+        subprocess.run([
+            str(ROOT / "gradlew"), *tasks,
+            "-PallowDebugReleaseSigning=false", "--parallel", "--console=plain",
+        ], cwd=ROOT, env=env, check=True)
     verify_apks(env, info, fingerprint, targets)
     # Preserve publication evidence with the exact archived binaries. Unrelated
     # untracked notes do not change compiled inputs; untracked source does.

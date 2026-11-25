@@ -37,12 +37,14 @@ earlier local fallbacks recorded as `release_only` with their original pins
 and receipts.
 
 - On the **GitHub route**, run the [same local signed validation](../SKILL.md#merge-validate-and-commit-locally)
-  from the pinned commit, including tests, lint and both signed APKs. Use the
+  from the pinned commit, including the [shared release highlights](release-announcement.md#write-the-shared-highlights-before-building),
+  tests, lint and both signed APKs. Use the
   existing commit for the review, approved push if needed, and
   [GitHub handoff](../SKILL.md#push-dispatch-and-verify-the-approved-release).
   Dispatch **Silora Automation Release** with the approved source SHA and the
-  official upstream SHA already included in it. GitHub builds the final APKs
-  from that source.
+  official upstream SHA already included in it. Supply the same reviewed
+  highlights file when one was included. GitHub builds the final APKs from
+  that source and summary.
 - On the **local route**, use the [current-branch build and publication steps](release-only.md#pin-and-build)
   for the pinned commit and exact signed archive.
 

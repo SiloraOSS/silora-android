@@ -28,11 +28,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 import org.siloserver.silo.tv.R
 import org.siloserver.silo.tv.ui.components.TvDialog
 import org.siloserver.silo.tv.ui.components.TvDialogAction
 import org.siloserver.silo.tv.ui.components.TvDialogActionStyle
+import org.siloserver.silo.tv.ui.screens.player.TvPlayerType
 import org.siloserver.silo.updates.InstallMethod
 import org.siloserver.silo.updates.SiloraUpdates
 import org.siloserver.silo.updates.UpdateCheckInterval
@@ -137,6 +139,13 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
                 onClick = { picker = UpdatePicker.Method },
             )
         }
+        item {
+            SettingsToggleRow(
+                label = stringResource(UpdatesR.string.updates_show_what_changed),
+                checked = state.settings.showWhatChanged,
+                onCheckedChange = updates::setShowWhatChanged,
+            )
+        }
         if (state.settings.method == InstallMethod.SHIZUKU) {
             item { SettingsInfoRow("Shizuku", shizuku.help, singleLine = false) }
             if (!shizuku.ready) {
@@ -208,7 +217,7 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
     val state by updates.state.collectAsState()
     val release = state.release
     val noticePending = state.standaloneUpdaterNoticePending
-    val hasPrompt = release != null || noticePending
+    val whatChanged = state.whatChanged
     var prompt by remember { mutableStateOf<UpdatePrompt?>(null) }
 
     LaunchedEffect(updates, lifecycle) {
@@ -222,9 +231,12 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
             }
         }
     }
-    LaunchedEffect(updates, lifecycle, ready, launch, release, hasPrompt, state.busy, state.settings.interval.hours) {
+    LaunchedEffect(updates, lifecycle, ready, launch, release, noticePending, whatChanged,
+        state.canShowForegroundPrompt, state.settings.interval.hours) {
         prompt = null
-        if (!ready || state.busy || !hasPrompt) return@LaunchedEffect
+        if (!ready || !state.canShowForegroundPrompt ||
+            (release == null && !noticePending && whatChanged == null)
+        ) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             try {
                 while (true) {
@@ -262,9 +274,28 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
         TvDialog(
             title = stringResource(UpdatesR.string.updates_standalone_notice_title),
             message = stringResource(UpdatesR.string.updates_standalone_notice_message),
-            actions = listOf(TvDialogAction(stringResource(UpdatesR.string.updates_standalone_notice_dismiss), dismiss)),
+            actions = listOf(TvDialogAction(stringResource(UpdatesR.string.updates_got_it), dismiss)),
             onDismissRequest = dismiss,
         )
+    } else if (ready && prompt == UpdatePrompt.WHAT_CHANGED && whatChanged != null && state.canShowForegroundPrompt) {
+        val dismiss = {
+            updates.dismissWhatChanged()
+            prompt = null
+        }
+        TvDialog(
+            title = stringResource(UpdatesR.string.updates_what_changed_title),
+            width = 640.dp,
+            actions = listOf(TvDialogAction(stringResource(UpdatesR.string.updates_got_it), dismiss)),
+            onDismissRequest = dismiss,
+        ) {
+            if (state.currentVersion.isNotBlank()) {
+                Text(
+                    text = stringResource(UpdatesR.string.updates_what_changed_version, state.currentVersion),
+                    style = TvPlayerType.RowDetail,
+                )
+            }
+            Text(text = whatChanged, style = TvPlayerType.Body)
+        }
     }
 }
 

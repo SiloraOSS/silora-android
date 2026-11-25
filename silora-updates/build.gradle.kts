@@ -13,6 +13,9 @@ android {
     buildFeatures {
         aidl = true
     }
+    providers.environmentVariable("SILORA_RELEASE_HIGHLIGHTS_DIR").orNull?.let {
+        sourceSets.named("release") { assets.srcDir(it) }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21

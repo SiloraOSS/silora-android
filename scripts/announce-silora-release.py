@@ -20,6 +20,7 @@ def load_script(name, filename):
 
 
 release = load_script("silora_release", "automation-release.py")
+highlights = release.highlights
 receipts = load_script("local_notifications", "notify-local-automation.py")
 TOOLS = receipts.PRIVATE.parents[1] / "Tools/discord-tools"
 STATE = receipts.PRIVATE / "release-announcements"
@@ -30,7 +31,6 @@ MESSAGE = re.compile(
     re.MULTILINE,
 )
 LIMIT = 4000
-HIGHLIGHT = re.compile(r"- .+ \*\((?:Silora|Silo upstream)\)\*")
 
 
 def verified_release(tag, source):
@@ -50,14 +50,25 @@ def length(text):
     return len(text.encode("utf-16-le")) // 2
 
 
-def embed_body(result, highlights):
+def verify_published_highlights(tag, source, data):
+    info = json.loads(release.run(
+        "gh", "release", "download", tag, "--repo", release.REPO,
+        "--pattern", "build-info.json", "--output", "-",
+    ))
+    if info["source_sha"] != source or info["tag"] != tag:
+        raise ValueError("Published build metadata does not match the verified release.")
+    if "release_highlights_sha256" in info and highlights.validate(data) != info["release_highlights_sha256"]:
+        raise ValueError("These highlights differ from the summary bundled in the published APKs.")
+
+
+def embed_body(result, summary):
     title = " ".join(result["name"].split())
     if not title or not (result.get("body") or "").strip():
         raise ValueError("The release needs a title and published notes.")
-    bullets = [line.strip() for line in highlights.splitlines() if line.strip()]
+    bullets = [line.strip() for line in summary.splitlines() if line.strip()]
     if not bullets:
         raise ValueError("Add at least one verified release highlight.")
-    if not all(HIGHLIGHT.fullmatch(bullet) for bullet in bullets):
+    if not all(highlights.BULLET.fullmatch(bullet) for bullet in bullets):
         raise ValueError("Use one bullet per line ending in *(Silora)* or *(Silo upstream)*.")
     notes = "\n".join(bullets)
     published = dt.datetime.fromisoformat(result["published_at"].replace("Z", "+00:00"))
@@ -153,7 +164,9 @@ def main():
     args = parser.parse_args()
     try:
         result = verified_release(args.tag, args.source_sha)
-        body = embed_body(result, args.highlights_file.read_text())
+        data = args.highlights_file.read_bytes()
+        verify_published_highlights(args.tag, args.source_sha, data)
+        body = embed_body(result, data.decode("utf-8"))
         nonce = hashlib.sha256(f"silora:{CHANNEL}:{result['id']}".encode()).hexdigest()[:24]
         if args.publish:
             print(publish(args.tag, args.source_sha, result, body, nonce))

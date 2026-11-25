@@ -128,6 +128,12 @@ def recovery(report):
 
 def workflow_for(report):
     source, upstream = sha(report, "merge_sha"), sha(report, "upstream_sha")
+    title = f"Silora release {source} upstream {upstream}"
+    digest = report.get("release_highlights_sha256")
+    if digest is not None:
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise NotificationError("The handoff needs a valid release highlights SHA-256.")
+        title += f" highlights {digest}"
     run_id = report.get("workflow_run_id")
     if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id < 1:
         raise NotificationError("The handoff needs the accepted GitHub workflow run ID.")
@@ -141,7 +147,7 @@ def workflow_for(report):
             or run.get("event") != "workflow_dispatch"
             or run.get("head_repository", {}).get("full_name") != REPO
             or run.get("path") != ".github/workflows/fork-automation-release.yml"
-            or run.get("display_title") != f"Silora release {source} upstream {upstream}"
+            or run.get("display_title") != title
             or run.get("html_url") != f"https://github.com/{REPO}/actions/runs/{run_id}"):
         raise NotificationError("GitHub run does not match this exact source, upstream, and release handoff.")
     return run

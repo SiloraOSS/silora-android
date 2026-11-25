@@ -143,14 +143,16 @@ Use the same execution ID. The `validating` and `handoff` events and GitHub
 result notifications below apply to cloud. Use the checkout notifier for
 [local APK milestones](local-release.md#staff-milestones) on `--local` and
 `--release-only`. For upstream-merge start and pre-candidate events, and
-cloud merge milestones, use the installed sender:
+cloud merge validation, use the installed sender:
 
 ```sh
 python3 /home/albinoman887/Workspace/SigmaStreams/Staging/silora-upstream-automation/local-notifier/notify-local-automation.py EVENT \
   --execution-id EXECUTION_ID
 ```
 
-Append `--report-file PRIVATE_REPORT_JSON` for events that require a report.
+For a cloud handoff use `scripts/notify-local-automation.py` from the reviewed
+checkout, which verifies the run title including its highlights checksum when
+present. Append `--report-file PRIVATE_REPORT_JSON` for events that require a report.
 Use the existing SiloraOSS webhook in #📋・mod-log. Never print its URL/token,
 create a replacement webhook, or use `setup` for a normal run. Keep staff
 milestones distinct from the
@@ -161,7 +163,7 @@ milestones distinct from the
 | `started` | Once per new execution, before workspace/fetch/merge work | None |
 | `validating` | Cloud merge, audit and resolutions complete and local checks about to start | `summary`, `upstream_sha`, `recovery_ref` |
 | `unchanged` | Fresh upstream is already included and the selected route concludes without building or releasing | `upstream_sha` |
-| `handoff` | Cloud merge, approval received, push verified and exact publishing run accepted | `summary`, `upstream_sha`, `merge_sha`, `validation`, `recovery_ref`, `changelog_line`, `workflow_run_id` |
+| `handoff` | Cloud merge, approval received, push verified and exact publishing run accepted | `summary`, `upstream_sha`, `merge_sha`, `validation`, `recovery_ref`, `changelog_line`, `workflow_run_id`, `release_highlights_sha256` when present |
 | `failed` | Work stopped before cloud handoff or before a local APK candidate was pinned | `stage`, factual `summary`, optional `recovery_ref` |
 
 An approval wait sends no terminal event. A decline or deferral is recorded in

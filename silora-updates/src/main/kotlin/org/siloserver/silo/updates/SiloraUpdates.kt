@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -57,6 +59,7 @@ class SiloraUpdates private constructor(private val context: Context) {
         offerPolicy.launch()
         shizuku.refresh()
         scope.launch {
+            refreshWhatChanged()
             gate.withLock {
                 reconcile()
                 try {
@@ -94,7 +97,8 @@ class SiloraUpdates private constructor(private val context: Context) {
         val next = settings.normalized()
         if (old == next) return
         store.save(next)
-        _state.update { it.copy(settings = next) }
+        if (!next.showWhatChanged) store.markWhatChangedHandled(initialCode)
+        _state.update { it.copy(settings = next, whatChanged = it.whatChanged.takeIf { next.showWhatChanged }) }
         if (old.interval != next.interval || old.dailyCheckHour != next.dailyCheckHour) {
             UpdateSchedule.configure(context, next, restart = true)
         }
@@ -104,6 +108,11 @@ class SiloraUpdates private constructor(private val context: Context) {
     @Synchronized
     fun setNotifyOnAutomaticInstall(enabled: Boolean) {
         setSettings(state.value.settings.copy(notifyOnAutomaticInstall = enabled))
+    }
+
+    @Synchronized
+    fun setShowWhatChanged(enabled: Boolean) {
+        setSettings(state.value.settings.copy(showWhatChanged = enabled))
     }
 
     fun canUseStandard(): Boolean =
@@ -121,10 +130,11 @@ class SiloraUpdates private constructor(private val context: Context) {
 
     suspend fun foregroundPrompt(showing: UpdatePrompt?): UpdatePrompt? {
         val current = state.value
-        if (current.busy) return null
+        if (!current.canShowForegroundPrompt) return null
 
         val release = current.release
         val prompt = when {
+            current.whatChanged != null -> UpdatePrompt.WHAT_CHANGED
             release != null && offerPolicy.visible(
                 release.versionCode, current.settings.interval.hours, System.currentTimeMillis(),
             ) -> UpdatePrompt.UPDATE_AVAILABLE
@@ -138,6 +148,36 @@ class SiloraUpdates private constructor(private val context: Context) {
     fun dismissStandaloneUpdaterNotice() {
         store.dismissStandaloneUpdaterNotice()
         _state.update { it.copy(standaloneUpdaterNoticePending = false) }
+    }
+
+    @Synchronized
+    fun dismissWhatChanged() {
+        store.markWhatChangedHandled(initialCode)
+        _state.update { it.copy(whatChanged = null) }
+    }
+
+    @Synchronized
+    private fun refreshWhatChanged() {
+        if (initialCode <= store.whatChangedHandledThrough() || state.value.whatChanged != null) return
+        val installed = context.packageManager.getPackageInfo(context.packageName, 0)
+        if (!state.value.settings.showWhatChanged || installed.firstInstallTime == installed.lastUpdateTime) {
+            store.markWhatChangedHandled(initialCode)
+            return
+        }
+        val highlights = try {
+            context.assets.open("silora-release-highlights.md").bufferedReader().useLines { lines ->
+                lines.filter { it.startsWith("- ") }.joinToString("\n\n") { line ->
+                    "• " + line.removePrefix("- ").removeSuffix(" *(Silora)*").removeSuffix(" *(Silo upstream)*")
+                }
+            }
+        } catch (_: FileNotFoundException) {
+            ""
+        } catch (error: IOException) {
+            Log.w("SiloraUpdates", "Could not read the bundled release highlights.", error)
+            return
+        }
+        if (highlights.isBlank()) store.markWhatChangedHandled(initialCode)
+        else _state.update { it.copy(whatChanged = highlights) }
     }
 
     private fun refreshStandaloneUpdaterNotice() {

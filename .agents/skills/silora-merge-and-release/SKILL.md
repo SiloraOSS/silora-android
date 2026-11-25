@@ -168,11 +168,17 @@ For a live `--local` run, send the first
 [local APK milestone](references/local-release.md#staff-milestones) after the
 merge commit is pinned and before building.
 
+Before compiling, write the [shared release highlights](references/release-announcement.md#write-the-shared-highlights-before-building)
+from the candidate and the preceding published build. Use the private
+execution directory for the file and pass it to the signed local validation
+build for both routes. Omit the flag when there is no summary file.
+
 For every new upstream merge, including documentation-only merges, require
 both signed local release builds with tests and full release lint:
 
 ```sh
 ./build.sh --release=both --tests --lint \
+  --highlights-file "$execution_dir/release-highlights.md" \
   --signing-dir /home/albinoman887/Workspace/SigmaStreams/Silo/source/silora-signing
 ```
 
@@ -234,6 +240,7 @@ invocation, use the [current-branch review](references/release-only.md#review-an
 with the same approval rules.
 
 - The meaningful upstream changes, conflict decisions, and retained fork fixes.
+- The shared What Changed bullets and SHA-256, or the choice to omit the summary.
 - Local checks and their actual results, with device-testing limits.
 - The full local source and pinned upstream SHAs, recovery ref, reviewed remote
   baseline, and local changelog/diff so Matt can inspect the unpublished commit.
@@ -249,8 +256,8 @@ with the same approval rules.
 ### Apply live approval
 
 Save the review in the private receipt with its source, upstream, push
-destination, workflow, mode and route. For local publication, include the
-exact archive identity.
+destination, workflow, mode, route, and the release highlights hash when
+present. For local publication, include the exact archive identity.
 
 - With `--unattended` from this live invocation, post the validated review as a
   progress update. Bind the recorded invocation to these exact inputs and
@@ -311,9 +318,14 @@ and substitute its full lowercase SHAs. No second release confirmation is needed
 python3 scripts/dispatch-automation-release.py \
   --source-sha FULL_VALIDATED_RESULT_SHA \
   --upstream-sha FULL_PINNED_UPSTREAM_SHA \
+  --highlights-file "$execution_dir/release-highlights.md" \
   --receipt-dir /home/albinoman887/Workspace/SigmaStreams/Staging/silora-upstream-automation/handoffs \
   --publish
 ```
+
+Omit `--highlights-file` when the review has no summary. Otherwise verify the
+private file against the reviewed checksum before dispatch. Verify the
+accepted run's highlights digest matches the reviewed file.
 
 Verify the helper still targets `SiloraOSS/silora-android`,
 `fork-automation-release.yml`, and `main`. Keep its durable receipts and run

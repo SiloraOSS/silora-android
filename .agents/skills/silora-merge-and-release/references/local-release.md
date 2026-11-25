@@ -22,7 +22,9 @@ The same archive checks apply to interactive and invocation approval.
    tree and index and no untracked build inputs. Run the skill's mandatory
    build from this checkout with the same persistent signing directory and
    add `--output-file` pointing to a fresh path in the private execution
-   directory. Use the reported archive under this checkout's `dist/local-*`.
+   directory. Pass the same private `--highlights-file` prepared for the build
+   and compare its hash with `release_highlights_sha256` in build metadata.
+   Use the reported archive under this checkout's `dist/local-*`.
    A failed build leaves its local commit and recovery ref available for
    repair. After repair, rerun validation on the exact corrected commit.
 3. Validate the archive with `scripts/local-release.py`'s `validate_archive`

@@ -24,6 +24,12 @@ order_spec = importlib.util.spec_from_file_location("release_order", Path(__file
 order = importlib.util.module_from_spec(order_spec)
 order_spec.loader.exec_module(order)
 
+highlights_spec = importlib.util.spec_from_file_location(
+    "silora_release_highlights", Path(__file__).with_name("silora_release_highlights.py"),
+)
+highlights = importlib.util.module_from_spec(highlights_spec)
+highlights_spec.loader.exec_module(highlights)
+
 
 def run(*args):
     return subprocess.run(args, check=True, capture_output=True, text=True).stdout.strip()
@@ -74,6 +80,7 @@ def published_source(source, entries):
 
 def prepare():
     source, upstream = sha(os.environ["SOURCE_SHA"]), sha(os.environ["UPSTREAM_SHA"])
+    highlights.decode(os.environ.get("HIGHLIGHTS_B64", ""), os.environ.get("HIGHLIGHTS_SHA256", ""))
     if (os.environ["GITHUB_REPOSITORY"] != REPO or os.environ["GITHUB_REF"] != "refs/heads/main"
             or os.environ["GITHUB_EVENT_NAME"] != "workflow_dispatch"):
         raise ValueError("Release handoff requires workflow_dispatch on Silora main")
@@ -140,6 +147,8 @@ def receipt(folder):
     verification = json.loads((Path(os.environ["RUNNER_TEMP"]) / "automation-verification.json").read_text())
     if verification["source_sha"] != source or verification["upstream_sha"] != upstream:
         raise ValueError("APK verification belongs to a different handoff")
+    if verification.get("release_highlights_sha256") != info.get("release_highlights_sha256"):
+        raise ValueError("Packaged release highlights differ from the verified APKs")
     record = {
         "schema_version": 1, "status": "verified", "source_sha": source,
         "upstream_sha": upstream, "tag": info["tag"], "workflow": WORKFLOW,
@@ -151,6 +160,8 @@ def receipt(folder):
         "apk_sha256": {name: hashlib.sha256((folder / name).read_bytes()).hexdigest()
                        for name in ("silora-phone.apk", "silora-tv.apk")},
     }
+    if "release_highlights_sha256" in info:
+        record["release_highlights_sha256"] = info["release_highlights_sha256"]
     (folder / "release-receipt.json").write_text(json.dumps(record, indent=2) + "\n")
     (folder / "SHA256SUMS").write_text("".join(
         f"{hashlib.sha256((folder / name).read_bytes()).hexdigest()}  {name}\n" for name in sorted(PAYLOAD)))
@@ -174,6 +185,7 @@ def verify():
     local.verify_apks(os.environ.copy(), info, fingerprint)
     (Path(os.environ["RUNNER_TEMP"]) / "automation-verification.json").write_text(json.dumps({
         "source_sha": source, "upstream_sha": upstream, "signing_certificate_sha256": fingerprint,
+        "release_highlights_sha256": info.get("release_highlights_sha256"),
     }) + "\n")
 
 
@@ -181,11 +193,16 @@ def verified_payload(folder, source, upstream, tag):
     checksums(folder)
     info = json.loads((folder / "build-info.json").read_text())
     record = json.loads((folder / "release-receipt.json").read_text())
+    digest = info.get("release_highlights_sha256")
     if (info["source_sha"] != source or info["upstream_checked_sha"] != upstream or info["tag"] != tag
             or record["source_sha"] != source or record["upstream_sha"] != upstream
             or record["tag"] != tag or record["status"] != "verified"
             or record["publication_requested"] is not True):
         raise ValueError("Release payload does not match the authorized source, upstream, and tag")
+    if digest != record.get("release_highlights_sha256") or (
+        digest is not None and (not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest))
+    ):
+        raise ValueError("Release highlights verification does not match the build metadata")
     if (set(record["apk_sha256"]) != {"silora-phone.apk", "silora-tv.apk"}
             or not re.fullmatch(r"[0-9a-f]{64}", record["signing_certificate_sha256"])):
         raise ValueError("Release receipt is missing APK or signing verification")
@@ -200,6 +217,8 @@ def publish(folder):
     if not TAG.fullmatch(tag) or os.environ.get("PUBLISH") != "true":
         raise ValueError("Explicit publication authorization and a valid tag are required")
     record = verified_payload(folder, source, upstream, tag)
+    if record.get("release_highlights_sha256", "") != os.environ.get("HIGHLIGHTS_SHA256", ""):
+        raise ValueError("The verified release highlights differ from the dispatch")
     if record["run_id"] != int(os.environ["GITHUB_RUN_ID"]):
         raise ValueError("Artifacts belong to a different workflow run")
     if api(f"git/ref/tags/{tag}")["object"]["sha"] != source:

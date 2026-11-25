@@ -77,7 +77,8 @@ scheduling, publishing, or auto-deleting it.
 Before acting, identify the exact preview and verify the recorded checkout
 ownership, branch HEAD, clean tracked/index state, absence of unexpected build
 inputs, pinned SHAs, actual validation evidence, remote URL and workflow/helper
-identity. For local, recheck the reviewed archive against its recorded hashes
+identity. Recheck the private release highlights against the saved SHA-256 when present.
+For local, recheck the reviewed archive against its recorded hashes
 and eligibility. For a merge, the result must include the reviewed fork base
 and upstream input. For release-only or an unpublished-main release, verify
 the exact pinned commit and its eligibility to fast-forward remote main.
@@ -107,7 +108,8 @@ Use no force flag or `+` refspec. This is the continuation route's equivalent
 of the normal main push; it preserves the local main checkout while updating
 the same verified remote main. Do not push the preview branch name as a new
 remote branch. Verify GitHub main equals the approved SHA. For cloud, use the
-existing exact-commit release helper with `--publish`. For local, use
+existing exact-commit release helper with `--publish` and the reviewed
+`--highlights-file` when present. For local, use
 [publish and verify](local-release.md#publish-and-verify) with the reviewed
 archive. Continue through reconciliation, handoff and publication checks under
 the same approval.

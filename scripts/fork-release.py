@@ -17,6 +17,12 @@ spec = importlib.util.spec_from_file_location("release_version", Path(__file__).
 release_version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release_version)
 
+highlights_spec = importlib.util.spec_from_file_location(
+    "silora_release_highlights", Path(__file__).with_name("silora_release_highlights.py"),
+)
+highlights = importlib.util.module_from_spec(highlights_spec)
+highlights_spec.loader.exec_module(highlights)
+
 BUILD_TAG = re.compile(r"build-(\d{4}-\d{2}-\d{2})\.(\d{6})\.([1-9]\d*)")
 LEGACY_TAG = re.compile(r"(?:daily|manual)-(\d{4}-\d{2}-\d{2})\.([1-9]\d*)")
 SILORA_REPOSITORY = "https://github.com/SiloraOSS/silora-android"
@@ -156,6 +162,13 @@ def prepare():
     info = metadata(dt.datetime.now(dt.timezone.utc), int(os.environ["GITHUB_RUN_NUMBER"]),
                     os.environ["SOURCE_SHA"], os.environ["UPSTREAM_SHA"], os.environ.get("FORK_RELEASE_TAG"),
                     upstream=upstream, run_id=int(os.environ["GITHUB_RUN_ID"]))
+    build_env = {}
+    expected = os.environ.get("HIGHLIGHTS_SHA256", "")
+    data = highlights.decode(os.environ.get("HIGHLIGHTS_B64", ""), expected)
+    if data is not None:
+        assets = Path(os.environ["RUNNER_TEMP"]) / "silora-release-assets"
+        info["release_highlights_sha256"] = highlights.stage(data, assets)
+        build_env["SILORA_RELEASE_HIGHLIGHTS_DIR"] = str(assets)
     path = Path(os.environ["RUNNER_TEMP"]) / "fork-build-info.json"
     path.write_text(json.dumps(info, indent=2) + "\n")
     with open(os.environ["GITHUB_ENV"], "a") as out:
@@ -163,6 +176,7 @@ def prepare():
             "FORK_BUILD_INFO": str(path), "SILO_VERSION_NAME": info["version_name"],
             "SILO_VERSION_CODE": info["version_code_base"],
             "SILO_BUILD_NUMBER": info["build_number"], "SILO_RELEASE_CHANNEL": "sideload",
+            **build_env,
         }.items():
             print(f"{key}={value}", file=out)
     with open(os.environ["GITHUB_OUTPUT"], "a") as out:

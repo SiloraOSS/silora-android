@@ -67,6 +67,14 @@ class ReleaseAnnouncementTest(unittest.TestCase):
         self.assertIn(URL, body)
         self.assertNotIn("## Downloads", body)
 
+    def test_announcement_uses_the_exact_bundled_summary(self):
+        data = HIGHLIGHTS.encode()
+        info = dict(tag=TAG, source_sha=SOURCE, release_highlights_sha256=announce.highlights.validate(data))
+        with patch.object(announce.release, "run", return_value=json.dumps(info)):
+            announce.verify_published_highlights(TAG, SOURCE, data)
+            with self.assertRaisesRegex(ValueError, "differ from the summary bundled"):
+                announce.verify_published_highlights(TAG, SOURCE, data + b"\n")
+
     def test_oversized_highlights_are_rejected_in_utf16_units(self):
         with self.assertRaisesRegex(ValueError, "fit one Discord embed"):
             announce.embed_body(RELEASE, f"- {'📺' * 2000} *(Silora)*")

@@ -28,6 +28,7 @@ data class UpdateSettings(
     val method: InstallMethod = InstallMethod.STANDARD,
     val checkHour: Int = DEFAULT_CHECK_HOUR,
     val notifyOnAutomaticInstall: Boolean = false,
+    val showWhatChanged: Boolean = true,
 ) {
     internal val dailyCheckHour: Int? get() = checkHour.takeIf { interval == UpdateCheckInterval.CUSTOM }
 
@@ -40,7 +41,7 @@ enum class UpdateStatus {
     WAITING_FOR_PLAYBACK, NEEDS_CONFIRMATION, NEEDS_INSTALL_PERMISSION, INSTALLED, ERROR,
 }
 
-enum class UpdatePrompt { UPDATE_AVAILABLE, STANDALONE_UPDATER }
+enum class UpdatePrompt { UPDATE_AVAILABLE, STANDALONE_UPDATER, WHAT_CHANGED }
 
 data class UpdateState(
     val settings: UpdateSettings,
@@ -50,9 +51,13 @@ data class UpdateState(
     val status: UpdateStatus = UpdateStatus.IDLE,
     val detail: String? = null,
     val standaloneUpdaterNoticePending: Boolean = false,
+    val whatChanged: String? = null,
 ) {
     val busy: Boolean
         get() = status in listOf(UpdateStatus.CHECKING, UpdateStatus.DOWNLOADING, UpdateStatus.INSTALLING)
+
+    val canShowForegroundPrompt: Boolean
+        get() = !busy || whatChanged != null && status == UpdateStatus.CHECKING
 }
 
 internal data class InstallAttempt(
@@ -85,6 +90,7 @@ internal class UpdateStore(context: Context) {
         method = if (prefs.getBoolean("shizuku", false)) InstallMethod.SHIZUKU else InstallMethod.STANDARD,
         checkHour = prefs.getInt("check-hour", DEFAULT_CHECK_HOUR).coerceIn(0, 23),
         notifyOnAutomaticInstall = prefs.getBoolean("notify-on-automatic-install", false),
+        showWhatChanged = prefs.getBoolean("show-what-changed", true),
     ).normalized()
 
     fun save(settings: UpdateSettings) {
@@ -95,6 +101,7 @@ internal class UpdateStore(context: Context) {
             .putBoolean("automatic", settings.automatic)
             .putBoolean("shizuku", settings.method == InstallMethod.SHIZUKU)
             .putBoolean("notify-on-automatic-install", settings.notifyOnAutomaticInstall)
+            .putBoolean("show-what-changed", settings.showWhatChanged)
             .also { if (!settings.notifyOnAutomaticInstall) it.remove(PENDING_INSTALL_NOTIFICATION) }
             .apply()
     }
@@ -109,6 +116,14 @@ internal class UpdateStore(context: Context) {
 
     fun dismissStandaloneUpdaterNotice() {
         prefs.edit().putBoolean("standalone-updater-notice-dismissed", true).apply()
+    }
+
+    fun whatChangedHandledThrough(): Long = prefs.getLong("what-changed-handled-through", 0)
+
+    fun markWhatChangedHandled(version: Long) {
+        if (version > whatChangedHandledThrough()) {
+            prefs.edit().putLong("what-changed-handled-through", version).apply()
+        }
     }
 
     fun recordCheck(release: SiloraRelease?, time: Long) {

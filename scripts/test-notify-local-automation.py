@@ -62,6 +62,16 @@ class PayloadTest(unittest.TestCase):
                 ["gh", "api"], 0, stdout=json.dumps(workflow()))):
             self.assertEqual(notify.workflow_for(REPORT)["head_sha"], SOURCE)
 
+    def test_handoff_matches_the_release_highlights_digest(self):
+        digest = "e" * 64
+        run = workflow()
+        run["display_title"] += f" highlights {digest}"
+        with mock.patch.object(notify.subprocess, "run", return_value=subprocess.CompletedProcess(
+                ["gh", "api"], 0, stdout=json.dumps(run))):
+            self.assertEqual(notify.workflow_for(REPORT | {"release_highlights_sha256": digest}), run)
+            with self.assertRaises(notify.NotificationError):
+                notify.workflow_for(REPORT | {"release_highlights_sha256": "f" * 64})
+
     def test_secret_local_path_and_oversize_report_are_rejected(self):
         for value in (URL, "Changelog: /home/user/private/file", "a" * 4097, "\U0001f600" * 2050):
             with self.subTest(value=value[:30]), self.assertRaises(notify.NotificationError):

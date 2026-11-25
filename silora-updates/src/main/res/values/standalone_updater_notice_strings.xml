@@ -2,5 +2,8 @@
 <resources>
     <string name="updates_standalone_notice_title">Silora can now update itself</string>
     <string name="updates_standalone_notice_message">Set up updates in Silora → Settings → Updates. Once you’re set up, we recommend uninstalling the separate Silora Updater app. Keep it if you use it to restore older builds.</string>
-    <string name="updates_standalone_notice_dismiss">Got it</string>
+    <string name="updates_got_it">Got it</string>
+    <string name="updates_what_changed_title">What Changed</string>
+    <string name="updates_what_changed_version">Silora %1$s</string>
+    <string name="updates_show_what_changed">Show What Changed after updates</string>
 </resources>

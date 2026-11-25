@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Dispatch or reconcile one exact-commit handoff; validation is the default."""
 import argparse
+import base64
 import fcntl
 import importlib.util
 import json
@@ -12,6 +13,7 @@ import time
 spec = importlib.util.spec_from_file_location("release", Path(__file__).with_name("automation-release.py"))
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
+highlights = release.highlights
 
 
 def save(path, record):
@@ -28,8 +30,10 @@ def save(path, record):
         os.close(directory)
 
 
-def find_run(source, upstream, publishing):
+def find_run(source, upstream, publishing, digest=None):
     title = f"Silora {'release' if publishing else 'validation'} {source} upstream {upstream}"
+    if digest is not None:
+        title += f" highlights {digest}"
     pages = json.loads(release.run("gh", "api",
         f"repos/{release.REPO}/actions/workflows/{release.WORKFLOW}/runs?event=workflow_dispatch&branch=main&head_sha={source}&per_page=100",
         "--paginate", "--slurp"))
@@ -40,6 +44,8 @@ def find_run(source, upstream, publishing):
 
 def dispatch(args):
     source, upstream = release.sha(args.source_sha), release.sha(args.upstream_sha)
+    data = args.highlights_file.expanduser().read_bytes() if args.highlights_file else None
+    digest = highlights.validate(data) if data is not None else None
     args.receipt_dir.mkdir(parents=True, exist_ok=True)
     path = args.receipt_dir / f"{source}-{'release' if args.publish else 'validation'}.json"
     # Serialize local invocations and persist intent before the network mutation.
@@ -48,10 +54,13 @@ def dispatch(args):
         previous = json.loads(path.read_text()) if path.exists() else {}
         record = {"source_sha": source, "upstream_sha": upstream, "publish": args.publish,
                   "workflow": release.WORKFLOW}
-        if previous and any(previous.get(key) != value for key, value in record.items()):
+        if previous and (any(previous.get(key) != value for key, value in record.items())
+                         or previous.get("release_highlights_sha256") != digest):
             raise ValueError("Saved receipt differs from this handoff; inspect it before dispatch")
+        if digest is not None:
+            record["release_highlights_sha256"] = digest
         record = previous | record
-        found = find_run(source, upstream, args.publish)
+        found = find_run(source, upstream, args.publish, digest)
         if found:
             if previous.get("status") == "dispatch_pending" and previous.get("retry_of") == found["id"]:
                 raise ValueError("A reviewed retry may already have been accepted; reconcile the pending dispatch before retrying again")
@@ -74,11 +83,15 @@ def dispatch(args):
             record["retry_of"] = args.retry_reviewed
         save(path, record)
         # No automatic retry: even a failed response may follow an accepted dispatch.
-        release.run("gh", "workflow", "run", release.WORKFLOW, "--repo", release.REPO, "--ref", "main",
-                    "-f", f"source_sha={source}", "-f", f"upstream_sha={upstream}",
-                    "-f", f"publish={str(args.publish).lower()}")
+        command = ["gh", "workflow", "run", release.WORKFLOW, "--repo", release.REPO, "--ref", "main",
+                   "-f", f"source_sha={source}", "-f", f"upstream_sha={upstream}",
+                   "-f", f"publish={str(args.publish).lower()}"]
+        if data is not None:
+            command += ["-f", f"highlights_b64={base64.b64encode(data).decode('ascii')}",
+                        "-f", f"highlights_sha256={digest}"]
+        release.run(*command)
         for attempt in range(4):
-            found = find_run(source, upstream, args.publish)
+            found = find_run(source, upstream, args.publish, digest)
             if found and (not args.retry_reviewed or found["id"] > args.retry_reviewed):
                 record.update(status=found["status"], conclusion=found.get("conclusion"),
                               run_id=found["id"], run_url=found["html_url"])
@@ -95,6 +108,7 @@ if __name__ == "__main__":
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--upstream-sha", required=True)
     parser.add_argument("--receipt-dir", required=True, type=Path)
+    parser.add_argument("--highlights-file", type=Path, help="embed the reviewed highlights in both APKs")
     parser.add_argument("--publish", action="store_true", help="Publish after validation; omitted means build and verify only")
     parser.add_argument("--retry-reviewed", type=int, help="Explicitly retry this failed/cancelled run after reviewing it")
     try:
