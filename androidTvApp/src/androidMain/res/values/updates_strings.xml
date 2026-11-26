@@ -13,6 +13,7 @@
     <string name="updates_interval_hours">Every %1$d hours</string>
     <string name="updates_automatic">Install updates automatically</string>
     <string name="updates_install_method">Installation method</string>
+    <string name="updates_install_permission_settings">Install permission settings</string>
     <string name="updates_standard">Standard Android installer</string>
     <string name="updates_authorize_shizuku">Authorize Shizuku</string>
     <string name="updates_offer_title">Silora update available</string>

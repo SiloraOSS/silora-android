@@ -104,7 +104,38 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
                 )
             }
         }
-        item {
+        item(key = "installMethod") {
+            SettingsValueRow(
+                label = stringResource(R.string.updates_install_method),
+                value = methodLabel(state.settings.method),
+                onClick = { picker = UpdatePicker.Method },
+            )
+        }
+        when (state.settings.method) {
+            InstallMethod.STANDARD -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                item(key = "installPermissionSettings") {
+                    SettingsActionRow(
+                        label = stringResource(R.string.updates_install_permission_settings),
+                        onClick = {
+                            if (!openInstallPermissionSettings(context)) {
+                                Toast.makeText(context, UpdatesR.string.updates_install_permission_help, Toast.LENGTH_LONG).show()
+                            }
+                        },
+                    )
+                }
+            }
+            InstallMethod.SHIZUKU -> {
+                item(key = "shizukuStatus") { SettingsInfoRow("Shizuku", shizuku.help, singleLine = false) }
+                if (!shizuku.ready) {
+                    item(key = "authorizeShizuku") {
+                        SettingsActionRow(stringResource(R.string.updates_authorize_shizuku), onClick = {
+                            updates.requestShizukuPermission()?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                        })
+                    }
+                }
+            }
+        }
+        item(key = "automaticInstall") {
             SettingsToggleRow(
                 label = stringResource(R.string.updates_automatic),
                 checked = state.settings.automatic,
@@ -117,7 +148,7 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
                 },
             )
         }
-        item {
+        item(key = "notifyAfterAutomaticInstall") {
             SettingsToggleRow(
                 label = stringResource(UpdatesR.string.updates_notify_on_automatic_install),
                 checked = state.settings.notifyOnAutomaticInstall,
@@ -132,29 +163,12 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
                 },
             )
         }
-        item {
-            SettingsValueRow(
-                label = stringResource(R.string.updates_install_method),
-                value = methodLabel(state.settings.method),
-                onClick = { picker = UpdatePicker.Method },
-            )
-        }
-        item {
+        item(key = "showWhatChanged") {
             SettingsToggleRow(
                 label = stringResource(UpdatesR.string.updates_show_what_changed),
                 checked = state.settings.showWhatChanged,
                 onCheckedChange = updates::setShowWhatChanged,
             )
-        }
-        if (state.settings.method == InstallMethod.SHIZUKU) {
-            item { SettingsInfoRow("Shizuku", shizuku.help, singleLine = false) }
-            if (!shizuku.ready) {
-                item {
-                    SettingsActionRow(stringResource(R.string.updates_authorize_shizuku), onClick = {
-                        updates.requestShizukuPermission()?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
-                    })
-                }
-            }
         }
     }
 
