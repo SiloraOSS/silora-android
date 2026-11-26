@@ -248,9 +248,9 @@ internal object PhoneUpdates {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 updates.confirmation.collect { confirmation ->
                     if (confirmation != null) updates.takeConfirmation()?.let { pending ->
-                        if (runCatching { context.startActivity(pending.intent) }.isFailure) {
-                            updates.unavailableConfirmation(pending)
-                        }
+                        runCatching { context.startActivity(pending.intent) }
+                            .onSuccess { updates.confirmationOpened(pending) }
+                            .onFailure { updates.unavailableConfirmation(pending) }
                     }
                 }
             }

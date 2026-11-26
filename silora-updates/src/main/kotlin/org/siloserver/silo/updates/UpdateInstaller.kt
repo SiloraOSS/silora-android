@@ -53,6 +53,7 @@ internal class UpdateInstaller(private val context: Context, private val shizuku
         apk: File,
         attempt: String,
         background: Boolean,
+        sessionCreated: (Int) -> Unit,
         canCommit: suspend () -> Boolean,
     ): Boolean {
         val installer = context.packageManager.packageInstaller
@@ -67,6 +68,7 @@ internal class UpdateInstaller(private val context: Context, private val shizuku
         val sessionId = installer.createSession(params)
         var committed = false
         try {
+            sessionCreated(sessionId)
             installer.openSession(sessionId).use { session ->
                 session.openWrite("base.apk", 0, apk.length()).use { out ->
                     apk.inputStream().use { it.copyTo(out) }
@@ -90,6 +92,9 @@ internal class UpdateInstaller(private val context: Context, private val shizuku
     fun abandon(sessionId: Int) {
         if (sessionId >= 0) runCatching { context.packageManager.packageInstaller.abandonSession(sessionId) }
     }
+
+    fun hasSession(sessionId: Int): Boolean =
+        context.packageManager.packageInstaller.getSessionInfo(sessionId)?.appPackageName == context.packageName
 
     suspend fun shizuku(apk: File, attempt: String, canCommit: suspend () -> Boolean): Boolean {
         val status = shizuku.awaitReady()

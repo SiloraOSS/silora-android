@@ -63,6 +63,9 @@ class SiloraUpdates private constructor(private val context: Context) {
     private val _confirmation = MutableStateFlow<InstallConfirmation?>(null)
     val confirmation = _confirmation.asStateFlow()
     private var recoveryJob: Job? = null
+    private val restoredAttemptId = store.attempt()?.id
+    private var liveConfirmationId: String? = null
+    private var cleanupNeedsFlush = false
 
     fun launch() {
         offerPolicy.launch()
@@ -224,6 +227,19 @@ class SiloraUpdates private constructor(private val context: Context) {
 
     fun takeConfirmation(): InstallConfirmation? = _confirmation.getAndUpdate { null }
 
+    fun confirmationOpened(confirmation: InstallConfirmation) {
+        scope.launch {
+            gate.withLock {
+                val attempt = store.attempt()?.takeIf {
+                    it.id == confirmation.attemptId && it.phase == InstallPhase.AWAITING_CONFIRMATION
+                } ?: return@withLock
+                if (!store.saveAttempt(attempt.copy(phase = InstallPhase.CONFIRMATION_OPENED))) {
+                    Log.w("SiloraUpdates", "Could not save that Android opened install confirmation.")
+                }
+            }
+        }
+    }
+
     fun unavailableConfirmation(confirmation: InstallConfirmation) {
         scope.launch {
             gate.withLock {
@@ -362,7 +378,11 @@ class SiloraUpdates private constructor(private val context: Context) {
             }
             val submitted = when (current.settings.method) {
                 InstallMethod.SHIZUKU -> installer.shizuku(apk, attempt.id, canCommit)
-                InstallMethod.STANDARD -> installer.standard(apk, attempt.id, background, canCommit)
+                InstallMethod.STANDARD -> installer.standard(
+                    apk, attempt.id, background,
+                    sessionCreated = { store.begin(attempt.copy(sessionId = it)) },
+                    canCommit = canCommit,
+                )
             }
             if (submitted) return false
 
@@ -385,9 +405,10 @@ class SiloraUpdates private constructor(private val context: Context) {
     }
 
     /** Handles a process killed between committing a self-update and receiving its result. */
-    private fun reconcile(expiredAttemptId: String? = null): Boolean {
+    private fun reconcile(expiredAttemptId: String? = null, recoverInterrupted: Boolean = true): Boolean {
         val attempt = store.attempt()
         if (attempt == null) {
+            if (cleanupNeedsFlush && store.flush()) cleanupNeedsFlush = false
             postPendingInstallNotification()
             return false
         }
@@ -397,8 +418,19 @@ class SiloraUpdates private constructor(private val context: Context) {
             Log.i("SiloraUpdates", "Recovered installed version ${attempt.version}")
             return true
         }
+        if (recoverInterrupted && attempt.id == restoredAttemptId && liveConfirmationId != attempt.id &&
+            (attempt.phase == InstallPhase.AWAITING_CONFIRMATION || attempt.sessionId?.let { !installer.hasSession(it) } == true)
+        ) {
+            if (attempt.phase == InstallPhase.AWAITING_CONFIRMATION) {
+                attempt.sessionId?.let(installer::abandon)
+            }
+            finishAttempt(confirmationVersion = if (attempt.background) 0 else attempt.version)
+            status(if (attempt.background) UpdateStatus.AVAILABLE else UpdateStatus.NEEDS_CONFIRMATION)
+            return false
+        }
         if (attempt.id == expiredAttemptId || System.currentTimeMillis() - attempt.startedAt >= INSTALL_TIMEOUT_MS) {
-            context.packageManager.packageInstaller.mySessions
+            if (attempt.sessionId != null) installer.abandon(attempt.sessionId)
+            else context.packageManager.packageInstaller.mySessions
                 .filter { it.appPackageName == context.packageName }.forEach { installer.abandon(it.sessionId) }
             finishAttempt()
             status(UpdateStatus.ERROR, "The installation did not finish. Choose Install update to try again.")
@@ -419,8 +451,10 @@ class SiloraUpdates private constructor(private val context: Context) {
     }
 
     private fun finishAttempt(confirmationVersion: Long = 0, installedVersion: Long = 0, notify: Boolean = false) {
-        store.finish(confirmationVersion, installedVersion, notify)
+        cleanupNeedsFlush = !store.finish(confirmationVersion, installedVersion, notify)
+        if (cleanupNeedsFlush) Log.w("SiloraUpdates", "Could not persist install cleanup. Will retry on the next updater action.")
         _confirmation.value = null
+        liveConfirmationId = null
         recoveryJob?.cancel()
         recoveryJob = null
     }
@@ -450,7 +484,7 @@ class SiloraUpdates private constructor(private val context: Context) {
     internal suspend fun onInstallResult(intent: Intent, broadcastCode: Int) = gate.withLock {
         val id = intent.data?.lastPathSegment ?: return@withLock
         val attempt = store.attempt()?.takeIf { it.id == id } ?: return@withLock
-        if (reconcile() || store.attempt()?.id != id) return@withLock
+        if (reconcile(recoverInterrupted = false) || store.attempt()?.id != id) return@withLock
         val session = intent.getIntExtra(UpdateInstaller.EXTRA_SESSION, -1)
         val result = if (session < 0) broadcastCode
             else intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
@@ -460,7 +494,18 @@ class SiloraUpdates private constructor(private val context: Context) {
                 @Suppress("DEPRECATION")
                 val prompt = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 if (!attempt.background && prompt != null) {
-                    _confirmation.value = InstallConfirmation(prompt, session, id)
+                    val awaiting = attempt.copy(
+                        sessionId = session.takeIf { it >= 0 } ?: attempt.sessionId,
+                        phase = InstallPhase.AWAITING_CONFIRMATION,
+                    )
+                    if (store.saveAttempt(awaiting)) {
+                        liveConfirmationId = id
+                        _confirmation.value = InstallConfirmation(prompt, session, id)
+                    } else {
+                        installer.abandon(session)
+                        finishAttempt(confirmationVersion = attempt.version)
+                        status(UpdateStatus.NEEDS_CONFIRMATION)
+                    }
                 } else {
                     installer.abandon(session)
                     finishAttempt(confirmationVersion = attempt.version)

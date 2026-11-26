@@ -70,22 +70,33 @@ data class UpdateState(
         get() = !busy || whatChanged != null && status == UpdateStatus.CHECKING
 }
 
+internal enum class InstallPhase { INSTALLING, AWAITING_CONFIRMATION, CONFIRMATION_OPENED }
+
 internal data class InstallAttempt(
     val id: String,
     val version: Long,
     val background: Boolean,
     val startedAt: Long,
+    val sessionId: Int? = null,
+    val phase: InstallPhase = InstallPhase.INSTALLING,
 ) {
     fun toJson(): String = JSONObject().apply {
         put("id", id)
         put("code", version)
         put("background", background)
         put("time", startedAt)
+        put("session", sessionId)
+        put("phase", phase.name)
     }.toString()
 
     companion object {
         fun fromJson(text: String): InstallAttempt = JSONObject(text).let {
-            InstallAttempt(it.getString("id"), it.getLong("code"), it.getBoolean("background"), it.getLong("time"))
+            InstallAttempt(
+                it.getString("id"), it.getLong("code"), it.getBoolean("background"), it.getLong("time"),
+                sessionId = it.optInt("session", -1).takeIf { id -> id >= 0 },
+                phase = InstallPhase.entries.firstOrNull { phase -> phase.name == it.optString("phase") }
+                    ?: InstallPhase.INSTALLING,
+            )
         }
     }
 }
@@ -149,15 +160,19 @@ internal class UpdateStore(context: Context) {
     }
 
     fun begin(attempt: InstallAttempt) {
-        check(prefs.edit().putString("attempt", attempt.toJson()).commit()) { "Could not save the installation attempt." }
+        check(saveAttempt(attempt)) { "Could not save the installation attempt." }
     }
 
-    fun finish(confirmationVersion: Long = 0, installedVersion: Long = 0, notify: Boolean = false) {
+    fun saveAttempt(attempt: InstallAttempt): Boolean =
+        prefs.edit().putString("attempt", attempt.toJson()).commit()
+
+    fun finish(confirmationVersion: Long = 0, installedVersion: Long = 0, notify: Boolean = false): Boolean =
         prefs.edit().remove("attempt").putLong("confirmation", confirmationVersion)
             .putLong("installed", installedVersion)
             .also { if (notify) it.putLong(PENDING_INSTALL_NOTIFICATION, installedVersion) }
             .commit()
-    }
+
+    fun flush(): Boolean = prefs.edit().commit()
 
     fun pendingInstallNotification(): Long? =
         prefs.getLong(PENDING_INSTALL_NOTIFICATION, 0).takeIf { it > 0 }
