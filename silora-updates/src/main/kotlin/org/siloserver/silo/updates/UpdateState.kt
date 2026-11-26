@@ -31,6 +31,8 @@ enum class UpdateCheckInterval(val hours: Int) {
 
 private const val DEFAULT_CHECK_HOUR = 3
 private const val PENDING_INSTALL_NOTIFICATION = "pending-install-notification"
+private const val SNOOZED_VERSION = "later-version"
+private const val SNOOZE_UNTIL = "later-until"
 
 data class UpdateSettings(
     val interval: UpdateCheckInterval = UpdateCheckInterval.DEFAULT,
@@ -198,11 +200,21 @@ internal class UpdateStore(context: Context) {
 
     fun confirmationVersion(): Long = prefs.getLong("confirmation", 0)
     fun recordedInstall(): Long = prefs.getLong("installed", 0)
-    fun laterVersion(): Long = prefs.getLong("later-version", 0)
-    fun laterUntil(): Long = prefs.getLong("later-until", 0)
 
-    fun later(version: Long, until: Long) {
-        prefs.edit().putLong("later-version", version).putLong("later-until", until).apply()
+    @Synchronized
+    fun isSnoozed(version: Long, now: Long): Boolean =
+        prefs.getLong(SNOOZED_VERSION, 0) == version && now < prefs.getLong(SNOOZE_UNTIL, 0)
+
+    @Synchronized
+    fun snooze(version: Long, until: Long) {
+        prefs.edit().putLong(SNOOZED_VERSION, version).putLong(SNOOZE_UNTIL, until).apply()
+    }
+
+    @Synchronized
+    fun clearSnooze(version: Long) {
+        if (prefs.getLong(SNOOZED_VERSION, 0) == version) {
+            prefs.edit().remove(SNOOZED_VERSION).remove(SNOOZE_UNTIL).apply()
+        }
     }
 }
 
@@ -215,7 +227,7 @@ internal class UpdateOfferPolicy {
         dismissedVersion = null
     }
 
-    fun later(version: Long, now: Long) {
+    fun dismiss(version: Long, now: Long) {
         dismissedVersion = version
         dismissedAt = now
     }

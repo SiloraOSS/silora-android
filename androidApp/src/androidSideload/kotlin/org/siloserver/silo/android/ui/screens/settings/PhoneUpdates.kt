@@ -112,7 +112,7 @@ internal object PhoneUpdates {
                     if (state.release != null) {
                         SettingsNavigationRow(
                             label = stringResource(R.string.updates_install_update),
-                            onClick = { requestInstall(context, updates) },
+                            onClick = { updates.installNow(context, R.string.updates_permission) },
                             showChevron = false,
                             enabled = !state.busy && !manualActionPending,
                         )
@@ -286,23 +286,26 @@ internal object PhoneUpdates {
             }
         }
         if (ready && prompt == UpdatePrompt.UPDATE_AVAILABLE && release != null && !state.busy) {
-            val later = {
-                updates.later()
+            val dismiss = {
+                updates.dismissUpdateOffer(release.versionCode)
                 prompt = null
             }
             AlertDialog(
-                onDismissRequest = later,
+                onDismissRequest = dismiss,
                 title = { Text(stringResource(R.string.updates_offer_title)) },
                 text = { Text(stringResource(R.string.updates_offer_message, release.versionName)) },
                 confirmButton = {
                     TextButton(onClick = {
-                        if (requestInstall(context, updates)) later()
+                        if (updates.installNow(context, R.string.updates_permission)) dismiss()
                     }) {
                         Text(stringResource(R.string.updates_install_now))
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = later) { Text(stringResource(R.string.updates_later)) }
+                    TextButton(onClick = {
+                        updates.later(release.versionCode)
+                        prompt = null
+                    }) { Text(stringResource(R.string.updates_later)) }
                 },
             )
         } else if (ready && prompt == UpdatePrompt.STANDALONE_UPDATER && noticePending && !state.busy) {
@@ -380,22 +383,6 @@ private fun <T> UpdatePickerDialog(
         },
         confirmButton = {},
     )
-}
-
-private fun requestInstall(context: Context, updates: SiloraUpdates): Boolean {
-    when (updates.state.value.settings.method) {
-        InstallMethod.STANDARD -> if (!updates.canUseStandard()) {
-            if (!openInstallPermissionSettings(context)) {
-                Toast.makeText(context, R.string.updates_permission, Toast.LENGTH_LONG).show()
-            }
-            return false
-        }
-        InstallMethod.SHIZUKU -> if (!updates.shizukuState.value.ready) {
-            authorizeShizuku(context, updates)
-            return false
-        }
-    }
-    return updates.installNow()
 }
 
 private fun authorizeShizuku(context: Context, updates: SiloraUpdates) {

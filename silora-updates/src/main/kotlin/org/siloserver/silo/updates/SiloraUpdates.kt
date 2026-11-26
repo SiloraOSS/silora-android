@@ -6,6 +6,8 @@ import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.work.Operation
 import androidx.work.await
 import kotlinx.coroutines.CancellationException
@@ -129,16 +131,14 @@ class SiloraUpdates private constructor(private val context: Context) {
 
     fun requestShizukuPermission(): String? = shizuku.requestPermission()
 
-    fun later() = dismissUpdateOffer(postponeAutomaticInstall = true)
-
-    fun dismissUpdateOffer(postponeAutomaticInstall: Boolean = false) {
-        val current = state.value
-        val release = current.release ?: return
+    fun later(version: Long) {
         val now = System.currentTimeMillis()
-        offerPolicy.later(release.versionCode, now)
-        if (postponeAutomaticInstall) {
-            store.later(release.versionCode, now + TimeUnit.HOURS.toMillis(current.settings.interval.hours.toLong()))
-        }
+        offerPolicy.dismiss(version, now)
+        store.snooze(version, now + TimeUnit.HOURS.toMillis(state.value.settings.interval.hours.toLong()))
+    }
+
+    fun dismissUpdateOffer(version: Long) {
+        offerPolicy.dismiss(version, System.currentTimeMillis())
     }
 
     suspend fun foregroundPrompt(showing: UpdatePrompt?): UpdatePrompt? {
@@ -210,7 +210,24 @@ class SiloraUpdates private constructor(private val context: Context) {
 
     private suspend fun idleForPrompt(): Boolean = playback.read() == SiloraPlaybackStatus.IDLE
 
-    fun installNow(): Boolean = enqueueManualAction { install(background = false) }
+    fun installNow(activityContext: Context, @StringRes permissionHelp: Int): Boolean {
+        when (state.value.settings.method) {
+            InstallMethod.STANDARD -> if (!canUseStandard()) {
+                return openInstallPermissionSettings(activityContext).also { opened ->
+                    if (!opened) Toast.makeText(activityContext, permissionHelp, Toast.LENGTH_LONG).show()
+                }
+            }
+            InstallMethod.SHIZUKU -> if (!shizukuState.value.ready) {
+                val error = requestShizukuPermission()
+                if (error != null) {
+                    Toast.makeText(activityContext, error, Toast.LENGTH_LONG).show()
+                    return false
+                }
+                if (!shizukuState.value.ready) return true
+            }
+        }
+        return enqueueManualAction { install(background = false) }
+    }
 
     private fun enqueueManualAction(action: suspend () -> Unit): Boolean {
         if (!_manualActionPending.compareAndSet(false, true)) return false
@@ -364,7 +381,7 @@ class SiloraUpdates private constructor(private val context: Context) {
             return false
         }
         if (background && (
-                store.laterVersion() == release.versionCode && System.currentTimeMillis() < store.laterUntil() ||
+                store.isSnoozed(release.versionCode, System.currentTimeMillis()) ||
                     current.settings.method == InstallMethod.STANDARD && store.confirmationVersion() == release.versionCode
             )
         ) return false
@@ -414,7 +431,11 @@ class SiloraUpdates private constructor(private val context: Context) {
                     canCommit = canCommit,
                 )
             }
-            if (submitted) return false
+            if (submitted) {
+                // Standard returns after committing the session. Shizuku reports the outcome separately.
+                if (!background && current.settings.method == InstallMethod.STANDARD) store.clearSnooze(attempt.version)
+                return false
+            }
 
             finishAttempt()
             val blocked = blockedAtCommit.get() ?: UpdateStatus.AVAILABLE
@@ -497,6 +518,7 @@ class SiloraUpdates private constructor(private val context: Context) {
     private fun completeInstall(attempt: InstallAttempt, installedVersion: Long) {
         val notify = attempt.background && installedVersion == attempt.version &&
             state.value.settings.notifyOnAutomaticInstall
+        if (!attempt.background) store.clearSnooze(attempt.version)
         finishAttempt(installedVersion = installedVersion, notify = notify)
         apk.delete()
         _state.update { it.copy(release = null, status = UpdateStatus.INSTALLED, detail = null) }
@@ -527,6 +549,7 @@ class SiloraUpdates private constructor(private val context: Context) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 @Suppress("DEPRECATION")
                 val prompt = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                if (!attempt.background) store.clearSnooze(attempt.version)
                 if (!attempt.background && prompt != null) {
                     val awaiting = attempt.copy(
                         sessionId = session.takeIf { it >= 0 } ?: attempt.sessionId,

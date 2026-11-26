@@ -84,11 +84,11 @@ class UpdatePolicyTest {
     }
 
     @Test
-    fun laterSuppressesOnlyTheOfferedBuildUntilIntervalOrLaunch() {
+    fun dismissingAnOfferHidesOnlyThatBuildUntilIntervalOrLaunch() {
         val policy = UpdateOfferPolicy()
         val now = 100L
         val snooze = TimeUnit.HOURS.toMillis(3)
-        policy.later(5L, now)
+        policy.dismiss(5L, now)
 
         assertFalse(policy.visible(5L, 3, now + snooze - 1))
         assertTrue(policy.visible(7L, 3, now))

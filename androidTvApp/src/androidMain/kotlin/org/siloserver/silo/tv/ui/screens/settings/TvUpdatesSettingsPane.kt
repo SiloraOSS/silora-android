@@ -1,7 +1,6 @@
 package org.siloserver.silo.tv.ui.screens.settings
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.text.format.DateUtils
@@ -108,7 +107,7 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
             item {
                 SettingsActionRow(
                     label = stringResource(R.string.updates_install_update),
-                    onClick = { requestInstall(context, updates) },
+                    onClick = { updates.installNow(context, R.string.updates_permission) },
                     enabled = !state.busy && !manualActionPending,
                 )
             }
@@ -294,23 +293,23 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
     }
 
     if (ready && prompt == UpdatePrompt.UPDATE_AVAILABLE && release != null && !state.busy) {
-        val later = {
-            updates.later()
+        val dismiss = {
+            updates.dismissUpdateOffer(release.versionCode)
             prompt = null
         }
         TvDialog(
             title = stringResource(R.string.updates_offer_title),
             message = stringResource(R.string.updates_offer_message, release.versionName),
             actions = listOf(
-                TvDialogAction(stringResource(R.string.updates_later), later),
+                TvDialogAction(stringResource(R.string.updates_later), onClick = {
+                    updates.later(release.versionCode)
+                    prompt = null
+                }),
                 TvDialogAction(stringResource(R.string.updates_install_now), onClick = {
-                    if (requestInstall(context, updates)) {
-                        updates.dismissUpdateOffer()
-                        prompt = null
-                    }
+                    if (updates.installNow(context, R.string.updates_permission)) dismiss()
                 }, style = TvDialogActionStyle.Primary),
             ),
-            onDismissRequest = later,
+            onDismissRequest = dismiss,
         )
     } else if (ready && prompt == UpdatePrompt.STANDALONE_UPDATER && noticePending && !state.busy) {
         val dismiss = {
@@ -344,30 +343,6 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
         }
     }
 }
-
-private fun requestInstall(context: Context, updates: SiloraUpdates): Boolean =
-    when (updates.state.value.settings.method) {
-        InstallMethod.STANDARD -> {
-            if (updates.canUseStandard()) updates.installNow()
-            else openInstallPermissionSettings(context).also { opened ->
-                if (!opened) Toast.makeText(context, R.string.updates_permission, Toast.LENGTH_LONG).show()
-            }
-        }
-        InstallMethod.SHIZUKU -> {
-            if (updates.shizukuState.value.ready) updates.installNow()
-            else {
-                val error = updates.requestShizukuPermission()
-                when {
-                    error != null -> {
-                        Toast.makeText(context, error, Toast.LENGTH_LONG).show()
-                        false
-                    }
-                    updates.shizukuState.value.ready -> updates.installNow()
-                    else -> true
-                }
-            }
-        }
-    }
 
 @Composable
 private fun intervalLabel(interval: UpdateCheckInterval): String = when (interval) {
