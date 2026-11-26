@@ -12,7 +12,7 @@ data class InstallSource(val name: String, val size: Long, val input: InputStrea
 
 /** Uses Android's session commands under Shizuku's shell identity; no shell interpolation. */
 class ShellPackageInstaller(private val commands: InstallCommandRunner) {
-    fun install(sources: List<InstallSource>, packageName: String, userId: Int) {
+    fun install(sources: List<InstallSource>, packageName: String, userId: Int, canCommit: () -> Boolean): Boolean {
         require(sources.isNotEmpty() && sources.size <= 128) { "No valid APKs to install" }
         require(sources.all { it.size > 0 && it.name.matches(Regex("[A-Za-z0-9._-]+\\.apk")) }) { "Invalid APK input" }
         require(sources.map { it.name }.distinct().size == sources.size) { "Duplicate APK names" }
@@ -30,8 +30,10 @@ class ShellPackageInstaller(private val commands: InstallCommandRunner) {
             sources.forEach { source ->
                 requireSuccess(commands.run(listOf("install-write", "-S", "${source.size}", session, source.name, "-"), source.input))
             }
+            if (!canCommit()) return false
             requireSuccess(commands.run(listOf("install-commit", session), null))
             committed = true
+            return true
         } finally {
             if (!committed) runCatching { commands.run(listOf("install-abandon", session), null) }
         }

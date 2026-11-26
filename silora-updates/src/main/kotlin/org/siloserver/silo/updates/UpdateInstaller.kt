@@ -15,8 +15,12 @@ import android.os.Process
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import rikka.shizuku.Shizuku
 import java.io.File
 import java.io.IOException
@@ -45,7 +49,12 @@ internal class UpdateInstaller(private val context: Context, private val shizuku
         }
     }
 
-    fun standard(apk: File, attempt: String, background: Boolean) {
+    suspend fun standard(
+        apk: File,
+        attempt: String,
+        background: Boolean,
+        canCommit: suspend () -> Boolean,
+    ): Boolean {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
@@ -56,17 +65,25 @@ internal class UpdateInstaller(private val context: Context, private val shizuku
             }
         }
         val sessionId = installer.createSession(params)
+        var committed = false
         try {
             installer.openSession(sessionId).use { session ->
                 session.openWrite("base.apk", 0, apk.length()).use { out ->
                     apk.inputStream().use { it.copyTo(out) }
                     session.fsync(out)
                 }
-                session.commit(callback(attempt, sessionId).intentSender)
+                val result = callback(attempt, sessionId).intentSender
+                // Keep the playback decision and the Standard commit in the same main-thread turn.
+                return withContext(Dispatchers.Main.immediate) {
+                    if (!canCommit()) return@withContext false
+                    ensureActive()
+                    session.commit(result)
+                    committed = true
+                    true
+                }
             }
-        } catch (error: Exception) {
-            abandon(sessionId)
-            throw error
+        } finally {
+            if (!committed) abandon(sessionId)
         }
     }
 
@@ -74,11 +91,11 @@ internal class UpdateInstaller(private val context: Context, private val shizuku
         if (sessionId >= 0) runCatching { context.packageManager.packageInstaller.abandonSession(sessionId) }
     }
 
-    suspend fun shizuku(apk: File, attempt: String) {
+    suspend fun shizuku(apk: File, attempt: String, canCommit: suspend () -> Boolean): Boolean {
         val status = shizuku.awaitReady()
         if (!status.ready) throw IOException(status.help)
         val args = Shizuku.UserServiceArgs(ComponentName(context, ShizukuInstallService::class.java))
-            .tag("silora-updates-${Process.myUid()}")
+            .tag("silora-updates-commit-check-${Process.myUid()}")
             .processNameSuffix("shizuku_install")
             .version(installedCode(context).toInt())
             .daemon(true)
@@ -92,14 +109,21 @@ internal class UpdateInstaller(private val context: Context, private val shizuku
             }
         }
         try {
-            val service = withTimeout(15_000) {
+            val service = withTimeoutOrNull(15_000) {
                 withContext(Dispatchers.Main.immediate) { Shizuku.bindUserService(args, connection) }
                 connected.await()
-            }
+            } ?: throw IOException("Shizuku did not connect in time. Start it and try again.")
             if (service.uid !in listOf(0, 2000)) throw IOException("Shizuku did not provide installation privileges.")
-            ParcelFileDescriptor.open(apk, ParcelFileDescriptor.MODE_READ_ONLY).use {
+            val caller = currentCoroutineContext()
+            val check = object : IUpdateCommitCheck.Stub() {
+                override fun canCommit(): Boolean = runBlocking {
+                    caller.isActive && canCommit.invoke() && caller.isActive
+                }
+            }
+            caller.ensureActive()
+            return ParcelFileDescriptor.open(apk, ParcelFileDescriptor.MODE_READ_ONLY).use {
                 service.install(context.packageName, arrayOf(it), arrayOf("base.apk"), longArrayOf(apk.length()),
-                    callback(attempt, -1).intentSender)
+                    callback(attempt, -1).intentSender, check)
             }
         } finally {
             withContext(NonCancellable + Dispatchers.Main.immediate) {

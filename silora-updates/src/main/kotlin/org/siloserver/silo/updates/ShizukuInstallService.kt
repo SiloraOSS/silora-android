@@ -23,35 +23,46 @@ class ShizukuInstallService : IShizukuInstaller.Stub() {
     override fun getUid(): Int = Process.myUid()
 
     @Synchronized
-    override fun install(packageName: String, apks: Array<ParcelFileDescriptor>, names: Array<String>, sizes: LongArray, result: IntentSender) {
+    override fun install(
+        packageName: String,
+        apks: Array<ParcelFileDescriptor>,
+        names: Array<String>,
+        sizes: LongArray,
+        result: IntentSender,
+        commitCheck: IUpdateCommitCheck,
+    ): Boolean {
         cleanup.cancel()
-        val status = try {
-            require(packageName == SILORA_PACKAGE) { "This is not a Silora package" }
-            require(apks.size == names.size && apks.size == sizes.size) { "Invalid APK input" }
-            val sources = apks.mapIndexed { index, fd ->
-                InstallSource(names[index], sizes[index], ParcelFileDescriptor.AutoCloseInputStream(fd))
-            }
-            // Preserve the caller's Android user/profile, including when Shizuku runs as root.
-            ShellPackageInstaller(InstallProcessRunner()).install(sources, packageName, Binder.getCallingUid() / 100_000)
-            PackageInstaller.STATUS_SUCCESS
-        } catch (error: Exception) {
-            val message = error.message ?: "Shizuku could not install the update"
-            Log.w("ShizukuInstall", message.take(700))
-            when {
-                "INSTALL_FAILED_UPDATE_INCOMPATIBLE" in message || "INSTALL_FAILED_CONFLICTING_PROVIDER" in message -> PackageInstaller.STATUS_FAILURE_CONFLICT
-                "INSTALL_FAILED_INSUFFICIENT_STORAGE" in message -> PackageInstaller.STATUS_FAILURE_STORAGE
-                "INSTALL_FAILED_NO_MATCHING_ABIS" in message || "INSTALL_FAILED_OLDER_SDK" in message -> PackageInstaller.STATUS_FAILURE_INCOMPATIBLE
-                else -> PackageInstaller.STATUS_FAILURE
-            }
-        } finally {
-            apks.forEach { runCatching { it.close() } }
-        }
-        // No normal app Context exists here. Sending no fill-in Intent avoids ContentResolver;
-        // the result code carries the status, and the immutable PendingIntent keeps the metadata.
         try {
-            result.sendIntent(null, status, null, null, null)
-        } catch (error: Exception) {
-            throw IllegalStateException("Installation finished but its result could not be recorded. Reopen Silora.", error)
+            val status = try {
+                require(packageName == SILORA_PACKAGE) { "This is not a Silora package" }
+                require(apks.size == names.size && apks.size == sizes.size) { "Invalid APK input" }
+                val sources = apks.mapIndexed { index, fd ->
+                    InstallSource(names[index], sizes[index], ParcelFileDescriptor.AutoCloseInputStream(fd))
+                }
+                // Preserve the caller's Android user/profile, including when Shizuku runs as root.
+                val userId = Binder.getCallingUid() / 100_000
+                val installer = ShellPackageInstaller(InstallProcessRunner())
+                if (!installer.install(sources, packageName, userId, commitCheck::canCommit)) return false
+                PackageInstaller.STATUS_SUCCESS
+            } catch (error: Exception) {
+                val message = error.message ?: "Shizuku could not install the update"
+                Log.w("ShizukuInstall", message.take(700))
+                when {
+                    "INSTALL_FAILED_UPDATE_INCOMPATIBLE" in message || "INSTALL_FAILED_CONFLICTING_PROVIDER" in message -> PackageInstaller.STATUS_FAILURE_CONFLICT
+                    "INSTALL_FAILED_INSUFFICIENT_STORAGE" in message -> PackageInstaller.STATUS_FAILURE_STORAGE
+                    "INSTALL_FAILED_NO_MATCHING_ABIS" in message || "INSTALL_FAILED_OLDER_SDK" in message -> PackageInstaller.STATUS_FAILURE_INCOMPATIBLE
+                    else -> PackageInstaller.STATUS_FAILURE
+                }
+            } finally {
+                apks.forEach { runCatching { it.close() } }
+            }
+            // Sending no fill-in Intent avoids ContentResolver in the privileged process.
+            try {
+                result.sendIntent(null, status, null, null, null)
+            } catch (error: Exception) {
+                throw IllegalStateException("Installation finished but its result could not be recorded. Reopen Silora.", error)
+            }
+            return true
         } finally {
             // Also exit if the caller died and cannot unbind this daemon after completion.
             cleanup = stopAfter(10_000)

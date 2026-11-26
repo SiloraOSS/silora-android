@@ -11,7 +11,9 @@ import androidx.work.await
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
@@ -24,8 +26,14 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
-class InstallConfirmation internal constructor(val intent: Intent, internal val session: Int)
+class InstallConfirmation internal constructor(
+    val intent: Intent,
+    internal val session: Int,
+    internal val attemptId: String,
+)
 
 class SiloraUpdates private constructor(private val context: Context) {
     private val store = UpdateStore(context)
@@ -54,6 +62,7 @@ class SiloraUpdates private constructor(private val context: Context) {
     val shizukuState = shizuku.state
     private val _confirmation = MutableStateFlow<InstallConfirmation?>(null)
     val confirmation = _confirmation.asStateFlow()
+    private var recoveryJob: Job? = null
 
     fun launch() {
         offerPolicy.launch()
@@ -214,9 +223,9 @@ class SiloraUpdates private constructor(private val context: Context) {
     fun unavailableConfirmation(confirmation: InstallConfirmation) {
         scope.launch {
             gate.withLock {
+                val attempt = store.attempt()?.takeIf { it.id == confirmation.attemptId } ?: return@withLock
                 installer.abandon(confirmation.session)
-                val attempt = store.attempt() ?: return@withLock
-                store.finish(confirmationVersion = attempt.version)
+                finishAttempt(confirmationVersion = attempt.version)
                 status(UpdateStatus.NEEDS_CONFIRMATION)
             }
         }
@@ -226,12 +235,13 @@ class SiloraUpdates private constructor(private val context: Context) {
         reconcile()
         if (!state.value.settings.interval.enabled) return@withLock true
         val checked = checkRelease(reportError = true)
-        val retry = !checked && canRetry
         // Persist the next daily run before a self-update can stop this process.
-        refreshDailySchedule(retry)?.await()
-        if (checked && state.value.settings.automatic && state.value.settings.interval.enabled) {
-            install(background = true)
-        }
+        refreshDailySchedule()?.await()
+        val settings = state.value.settings
+        val retryable = !checked || settings.automatic && settings.interval.enabled && install(background = true)
+        val latestSettings = state.value.settings
+        val retry = canRetry && retryable && latestSettings.interval.enabled && (!checked || latestSettings.automatic)
+        if (retry) refreshDailySchedule(retry = true)?.await()
         !retry
     }
 
@@ -261,7 +271,7 @@ class SiloraUpdates private constructor(private val context: Context) {
         val now = System.currentTimeMillis()
         val nextDay = nextDailyCheck(hour, now)
         // A WorkManager schedule override takes precedence over its normal retry backoff.
-        val nextRun = if (retry) minOf(nextDay, now + TimeUnit.MINUTES.toMillis(15)) else nextDay
+        val nextRun = if (retry) minOf(nextDay, now + TimeUnit.MINUTES.toMillis(UPDATE_RETRY_MINUTES)) else nextDay
         return UpdateSchedule.configure(context, settings, nextDailyRunAt = nextRun)
     }
 
@@ -287,62 +297,91 @@ class SiloraUpdates private constructor(private val context: Context) {
         }
     }
 
-    private suspend fun install(background: Boolean) {
+    private suspend fun backgroundInstallBlock(method: InstallMethod): UpdateStatus? {
+        val idle = idleForPrompt()
+        val settings = state.value.settings
+        return when {
+            !settings.automatic || !settings.interval.enabled || settings.method != method -> UpdateStatus.AVAILABLE
+            method == InstallMethod.STANDARD && !canUseStandard() -> UpdateStatus.NEEDS_INSTALL_PERMISSION
+            !idle -> UpdateStatus.WAITING_FOR_PLAYBACK
+            else -> null
+        }
+    }
+
+    /** Returns true if a scheduled worker should retry before its next regular run. */
+    private suspend fun install(background: Boolean): Boolean {
         val current = state.value
-        val release = current.release ?: return
-        if (store.attempt() != null || release.versionCode <= installedCode(context)) return
+        val release = current.release ?: return false
+        if (store.attempt() != null || release.versionCode <= installedCode(context)) return false
         if (background && (
                 store.laterVersion() == release.versionCode && System.currentTimeMillis() < store.laterUntil() ||
                     current.settings.method == InstallMethod.STANDARD && store.confirmationVersion() == release.versionCode
             )
-        ) return
+        ) return false
+        val allowedToCommit = AtomicBoolean(false)
         try {
             if (current.settings.method == InstallMethod.STANDARD && !canUseStandard()) {
                 status(UpdateStatus.NEEDS_INSTALL_PERMISSION)
-                return
+                return false
             }
-            if (current.settings.method == InstallMethod.SHIZUKU && !shizuku.awaitReady().ready) {
-                status(UpdateStatus.ERROR, shizuku.state.value.help)
-                return
+            if (current.settings.method == InstallMethod.SHIZUKU) {
+                val state = shizuku.awaitReady()
+                if (!state.ready) {
+                    status(UpdateStatus.ERROR, state.help)
+                    return background && state == ShizukuState.NOT_RUNNING
+                }
             }
             if (background && !idleForPrompt()) {
                 status(UpdateStatus.WAITING_FOR_PLAYBACK)
-                return
+                return true
             }
             status(UpdateStatus.DOWNLOADING)
             source.download(release, apk)
             installer.verify(apk, release)
-            // Recheck after download. The viewer may have started playback or changed settings.
             if (background) {
-                val settings = state.value.settings
-                if (!settings.automatic || !settings.interval.enabled || settings.method != current.settings.method) {
-                    status(UpdateStatus.AVAILABLE)
-                    return
-                }
-                if (!idleForPrompt()) {
-                    status(UpdateStatus.WAITING_FOR_PLAYBACK)
-                    return
+                backgroundInstallBlock(current.settings.method)?.let { blocked ->
+                    status(blocked)
+                    return blocked == UpdateStatus.WAITING_FOR_PLAYBACK
                 }
             }
 
             val attempt = InstallAttempt(UUID.randomUUID().toString(), release.versionCode, background, System.currentTimeMillis())
             store.begin(attempt)
+            watchAttempt(attempt)
             status(UpdateStatus.INSTALLING)
-            if (current.settings.method == InstallMethod.SHIZUKU) installer.shizuku(apk, attempt.id)
-            else installer.standard(apk, attempt.id, background)
+            val blockedAtCommit = AtomicReference<UpdateStatus?>()
+            val canCommit: suspend () -> Boolean = {
+                val blocked = if (background) backgroundInstallBlock(current.settings.method) else null
+                blockedAtCommit.set(blocked)
+                allowedToCommit.set(blocked == null)
+                blocked == null
+            }
+            val submitted = when (current.settings.method) {
+                InstallMethod.SHIZUKU -> installer.shizuku(apk, attempt.id, canCommit)
+                InstallMethod.STANDARD -> installer.standard(apk, attempt.id, background, canCommit)
+            }
+            if (submitted) return false
+
+            finishAttempt()
+            val blocked = blockedAtCommit.get() ?: UpdateStatus.AVAILABLE
+            status(blocked)
+            return blocked == UpdateStatus.WAITING_FOR_PLAYBACK
         } catch (error: CancellationException) {
-            if (store.attempt() == null) status(UpdateStatus.AVAILABLE)
+            if (!allowedToCommit.get()) {
+                if (store.attempt() != null) finishAttempt()
+                status(UpdateStatus.AVAILABLE)
+            }
             throw error
         } catch (error: Exception) {
-            if (!reconcile()) {
-                store.finish()
-                status(UpdateStatus.ERROR, error.message)
-            }
+            if (reconcile()) return false
+            finishAttempt()
+            status(UpdateStatus.ERROR, error.message)
+            return background && error is IOException
         }
     }
 
     /** Handles a process killed between committing a self-update and receiving its result. */
-    private fun reconcile(): Boolean {
+    private fun reconcile(expiredAttemptId: String? = null): Boolean {
         val attempt = store.attempt()
         if (attempt == null) {
             postPendingInstallNotification()
@@ -354,22 +393,39 @@ class SiloraUpdates private constructor(private val context: Context) {
             Log.i("SiloraUpdates", "Recovered installed version ${attempt.version}")
             return true
         }
-        if (System.currentTimeMillis() - attempt.startedAt >= TimeUnit.MINUTES.toMillis(15)) {
+        if (attempt.id == expiredAttemptId || System.currentTimeMillis() - attempt.startedAt >= INSTALL_TIMEOUT_MS) {
             context.packageManager.packageInstaller.mySessions
                 .filter { it.appPackageName == context.packageName }.forEach { installer.abandon(it.sessionId) }
-            store.finish()
+            finishAttempt()
             status(UpdateStatus.ERROR, "The installation did not finish. Choose Install update to try again.")
         } else {
+            watchAttempt(attempt)
             status(UpdateStatus.INSTALLING)
         }
         return false
+    }
+
+    private fun watchAttempt(attempt: InstallAttempt) {
+        if (recoveryJob?.isActive == true) return
+        val remaining = (INSTALL_TIMEOUT_MS - (System.currentTimeMillis() - attempt.startedAt)).coerceIn(0L, INSTALL_TIMEOUT_MS)
+        recoveryJob = scope.launch {
+            delay(remaining)
+            gate.withLock { reconcile(expiredAttemptId = attempt.id) }
+        }
+    }
+
+    private fun finishAttempt(confirmationVersion: Long = 0, installedVersion: Long = 0, notify: Boolean = false) {
+        store.finish(confirmationVersion, installedVersion, notify)
+        _confirmation.value = null
+        recoveryJob?.cancel()
+        recoveryJob = null
     }
 
     @Synchronized
     private fun completeInstall(attempt: InstallAttempt, installedVersion: Long) {
         val notify = attempt.background && installedVersion == attempt.version &&
             state.value.settings.notifyOnAutomaticInstall
-        store.finish(installedVersion = installedVersion, notify = notify)
+        finishAttempt(installedVersion = installedVersion, notify = notify)
         apk.delete()
         _state.update { it.copy(release = null, status = UpdateStatus.INSTALLED, detail = null) }
         postPendingInstallNotification()
@@ -390,7 +446,7 @@ class SiloraUpdates private constructor(private val context: Context) {
     internal suspend fun onInstallResult(intent: Intent, broadcastCode: Int) = gate.withLock {
         val id = intent.data?.lastPathSegment ?: return@withLock
         val attempt = store.attempt()?.takeIf { it.id == id } ?: return@withLock
-        if (reconcile()) return@withLock
+        if (reconcile() || store.attempt()?.id != id) return@withLock
         val session = intent.getIntExtra(UpdateInstaller.EXTRA_SESSION, -1)
         val result = if (session < 0) broadcastCode
             else intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
@@ -400,16 +456,16 @@ class SiloraUpdates private constructor(private val context: Context) {
                 @Suppress("DEPRECATION")
                 val prompt = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 if (!attempt.background && prompt != null) {
-                    _confirmation.value = InstallConfirmation(prompt, session)
+                    _confirmation.value = InstallConfirmation(prompt, session, id)
                 } else {
                     installer.abandon(session)
-                    store.finish(confirmationVersion = attempt.version)
+                    finishAttempt(confirmationVersion = attempt.version)
                     status(UpdateStatus.NEEDS_CONFIRMATION)
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> completeInstall(attempt, attempt.version)
             else -> {
-                store.finish()
+                finishAttempt()
                 status(UpdateStatus.ERROR, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
                     ?: "Android did not install the update. Try again in Settings.")
             }
@@ -422,6 +478,7 @@ class SiloraUpdates private constructor(private val context: Context) {
 
     companion object {
         private const val STANDALONE_UPDATER_PACKAGE = "org.silora.updater"
+        private val INSTALL_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(15)
         private var instance: SiloraUpdates? = null
 
         @Synchronized

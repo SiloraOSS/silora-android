@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.text.format.DateFormat
 import android.util.Log
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -20,6 +21,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+
+internal const val UPDATE_RETRY_MINUTES = 15L
+internal const val MAX_UPDATE_RETRIES = 3
 
 internal object UpdateSchedule {
     private const val WORK_NAME = "silora-in-app-update-check"
@@ -44,6 +48,7 @@ internal object UpdateSchedule {
         val dailyHour = settings.dailyCheckHour
         val request = PeriodicWorkRequestBuilder<SiloraUpdateWorker>(hours, TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setBackoffCriteria(BackoffPolicy.LINEAR, UPDATE_RETRY_MINUTES, TimeUnit.MINUTES)
             .apply {
                 if (dailyHour == null) {
                     setInitialDelay(hours, TimeUnit.HOURS)
@@ -89,7 +94,7 @@ fun formatUpdateCheckHour(context: Context, hour: Int): String =
 
 class SiloraUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result =
-        if (SiloraUpdates.get(applicationContext).scheduledCheck(canRetry = runAttemptCount < 2)) Result.success()
+        if (SiloraUpdates.get(applicationContext).scheduledCheck(canRetry = runAttemptCount < MAX_UPDATE_RETRIES)) Result.success()
         else Result.retry()
 }
 
