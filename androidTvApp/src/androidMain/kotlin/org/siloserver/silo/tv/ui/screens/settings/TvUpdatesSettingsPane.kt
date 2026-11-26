@@ -52,6 +52,7 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
     val context = LocalContext.current
     val updates = remember(context) { SiloraUpdates.get(context) }
     val state by updates.state.collectAsState()
+    val manualActionPending by updates.manualActionPending.collectAsState()
     val shizuku by updates.shizukuState.collectAsState()
     var picker by remember { mutableStateOf<UpdatePicker?>(null) }
     var showInstallPermission by rememberSaveable { mutableStateOf(false) }
@@ -77,16 +78,25 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
         item {
             SettingsActionRow(
                 label = stringResource(R.string.updates_check_now),
-                onClick = { if (!state.busy) updates.checkNow() },
+                onClick = { updates.checkNow() },
+                enabled = !state.busy && !manualActionPending,
                 focusRequester = firstFocusRequester,
             )
         }
-        item { SettingsInfoRow(stringResource(R.string.updates_status), state.statusText(), singleLine = false) }
+        item {
+            SettingsInfoRow(
+                stringResource(R.string.updates_status),
+                if (manualActionPending && !state.busy) stringResource(UpdatesR.string.updates_action_queued)
+                else state.statusText(),
+                singleLine = false,
+            )
+        }
         if (state.release != null) {
             item {
                 SettingsActionRow(
                     label = stringResource(R.string.updates_install_update),
-                    onClick = { if (!state.busy) requestInstall(context, updates) },
+                    onClick = { requestInstall(context, updates) },
+                    enabled = !state.busy && !manualActionPending,
                 )
             }
         }
@@ -281,9 +291,10 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
             actions = listOf(
                 TvDialogAction(stringResource(R.string.updates_later), later),
                 TvDialogAction(stringResource(R.string.updates_install_now), onClick = {
-                    updates.dismissUpdateOffer()
-                    prompt = null
-                    requestInstall(context, updates)
+                    if (requestInstall(context, updates)) {
+                        updates.dismissUpdateOffer()
+                        prompt = null
+                    }
                 }, style = TvDialogActionStyle.Primary),
             ),
             onDismissRequest = later,
@@ -321,20 +332,29 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
     }
 }
 
-private fun requestInstall(context: Context, updates: SiloraUpdates) {
+private fun requestInstall(context: Context, updates: SiloraUpdates): Boolean =
     when (updates.state.value.settings.method) {
         InstallMethod.STANDARD -> {
             if (updates.canUseStandard()) updates.installNow()
-            else if (!openInstallPermissionSettings(context)) {
-                Toast.makeText(context, R.string.updates_permission, Toast.LENGTH_LONG).show()
+            else openInstallPermissionSettings(context).also { opened ->
+                if (!opened) Toast.makeText(context, R.string.updates_permission, Toast.LENGTH_LONG).show()
             }
         }
         InstallMethod.SHIZUKU -> {
             if (updates.shizukuState.value.ready) updates.installNow()
-            else updates.requestShizukuPermission()?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+            else {
+                val error = updates.requestShizukuPermission()
+                when {
+                    error != null -> {
+                        Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                        false
+                    }
+                    updates.shizukuState.value.ready -> updates.installNow()
+                    else -> true
+                }
+            }
         }
     }
-}
 
 @Composable
 private fun intervalLabel(interval: UpdateCheckInterval): String = when (interval) {

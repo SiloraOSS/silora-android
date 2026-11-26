@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="updates_action_queued">Waiting to start update action…</string>
+</resources>

@@ -65,6 +65,7 @@ internal object PhoneUpdates {
         val context = LocalContext.current
         val updates = remember(context) { SiloraUpdates.get(context) }
         val state by updates.state.collectAsStateWithLifecycle()
+        val manualActionPending by updates.manualActionPending.collectAsStateWithLifecycle()
         val shizuku by updates.shizukuState.collectAsStateWithLifecycle()
         var picker by rememberSaveable { mutableStateOf<UpdatePicker?>(null) }
         var showInstallPermission by rememberSaveable { mutableStateOf(false) }
@@ -88,20 +89,21 @@ internal object PhoneUpdates {
                     }
                     SettingsNavigationRow(
                         label = stringResource(R.string.updates_status),
-                        description = state.statusText(),
+                        description = if (manualActionPending && !state.busy) stringResource(UpdatesR.string.updates_action_queued)
+                            else state.statusText(),
                     )
                     SettingsNavigationRow(
                         label = stringResource(R.string.updates_check_now),
-                        onClick = updates::checkNow,
+                        onClick = { updates.checkNow() },
                         showChevron = false,
-                        enabled = !state.busy,
+                        enabled = !state.busy && !manualActionPending,
                     )
                     if (state.release != null) {
                         SettingsNavigationRow(
                             label = stringResource(R.string.updates_install_update),
                             onClick = { requestInstall(context, updates) },
                             showChevron = false,
-                            enabled = !state.busy,
+                            enabled = !state.busy && !manualActionPending,
                         )
                     }
                 }
@@ -382,8 +384,7 @@ private fun requestInstall(context: Context, updates: SiloraUpdates): Boolean {
             return false
         }
     }
-    updates.installNow()
-    return true
+    return updates.installNow()
 }
 
 private fun authorizeShizuku(context: Context, updates: SiloraUpdates) {

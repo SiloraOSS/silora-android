@@ -66,6 +66,8 @@ class SiloraUpdates private constructor(private val context: Context) {
     private val restoredAttemptId = store.attempt()?.id
     private var liveConfirmationId: String? = null
     private var cleanupNeedsFlush = false
+    private val _manualActionPending = MutableStateFlow(false)
+    val manualActionPending = _manualActionPending.asStateFlow()
 
     fun launch() {
         offerPolicy.launch()
@@ -90,17 +92,7 @@ class SiloraUpdates private constructor(private val context: Context) {
         }
     }
 
-    fun checkNow() {
-        scope.launch {
-            if (!gate.tryLock()) return@launch
-            try {
-                reconcile()
-                checkRelease(reportError = true)
-            } finally {
-                gate.unlock()
-            }
-        }
-    }
+    fun checkNow(): Boolean = enqueueManualAction { checkRelease(reportError = true) }
 
     @Synchronized
     fun setSettings(settings: UpdateSettings) {
@@ -213,16 +205,21 @@ class SiloraUpdates private constructor(private val context: Context) {
 
     private suspend fun idleForPrompt(): Boolean = playback.read() == SiloraPlaybackStatus.IDLE
 
-    fun installNow() {
+    fun installNow(): Boolean = enqueueManualAction { install(background = false) }
+
+    private fun enqueueManualAction(action: suspend () -> Unit): Boolean {
+        if (!_manualActionPending.compareAndSet(false, true)) return false
         scope.launch {
-            if (!gate.tryLock()) return@launch
             try {
-                reconcile()
-                install(background = false)
+                gate.withLock {
+                    reconcile()
+                    action()
+                }
             } finally {
-                gate.unlock()
+                _manualActionPending.value = false
             }
         }
+        return true
     }
 
     fun takeConfirmation(): InstallConfirmation? = _confirmation.getAndUpdate { null }
