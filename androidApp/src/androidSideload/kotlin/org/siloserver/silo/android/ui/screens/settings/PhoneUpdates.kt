@@ -393,6 +393,7 @@ private fun authorizeShizuku(context: Context, updates: SiloraUpdates) {
 @Composable
 private fun intervalLabel(interval: UpdateCheckInterval): String = when (interval) {
     UpdateCheckInterval.OFF -> stringResource(R.string.updates_interval_off)
+    UpdateCheckInterval.ON_LAUNCH -> stringResource(UpdatesR.string.updates_interval_on_launch)
     UpdateCheckInterval.CUSTOM -> stringResource(UpdatesR.string.updates_interval_custom)
     else -> pluralStringResource(R.plurals.updates_interval_hours, interval.hours, interval.hours)
 }

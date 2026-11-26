@@ -338,6 +338,7 @@ private fun requestInstall(context: Context, updates: SiloraUpdates) {
 @Composable
 private fun intervalLabel(interval: UpdateCheckInterval): String = when (interval) {
     UpdateCheckInterval.OFF -> stringResource(R.string.updates_interval_off)
+    UpdateCheckInterval.ON_LAUNCH -> stringResource(UpdatesR.string.updates_interval_on_launch)
     UpdateCheckInterval.CUSTOM -> stringResource(UpdatesR.string.updates_interval_custom)
     else -> stringResource(R.string.updates_interval_hours, interval.hours)
 }

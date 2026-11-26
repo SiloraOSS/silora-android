@@ -78,8 +78,8 @@ class SiloraUpdates private constructor(private val context: Context) {
                 } catch (error: Exception) {
                     Log.w("SiloraUpdates", "Could not restore update scheduling.", error)
                 }
-                val hours = state.value.settings.interval.hours.coerceAtLeast(1)
-                if (System.currentTimeMillis() - state.value.checkedAt >= TimeUnit.HOURS.toMillis(hours.toLong())) {
+                val current = state.value
+                if (current.settings.interval.shouldCheckOnLaunch(current.checkedAt, System.currentTimeMillis())) {
                     checkRelease(reportError = false)
                 }
             }

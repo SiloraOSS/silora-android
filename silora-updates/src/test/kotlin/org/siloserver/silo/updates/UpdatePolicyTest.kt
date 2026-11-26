@@ -20,6 +20,24 @@ class UpdatePolicyTest {
     }
 
     @Test
+    fun offAndLaunchOnlyKeepDistinctCheckPoliciesWithoutEnablingBackgroundWork() {
+        val now = TimeUnit.HOURS.toMillis(24)
+        val off = UpdateCheckInterval.fromSavedHours(0)
+        val launchOnly = UpdateCheckInterval.fromSavedHours(0, checkOnLaunch = true)
+
+        assertEquals(UpdateCheckInterval.OFF, off)
+        assertEquals(UpdateCheckInterval.ON_LAUNCH, launchOnly)
+        assertFalse(off.enabled)
+        assertFalse(off.shouldCheckOnLaunch(0, now))
+        assertFalse(launchOnly.enabled)
+        assertTrue(launchOnly.shouldCheckOnLaunch(now - 1, now))
+        assertFalse(UpdateSettings(interval = launchOnly, automatic = true).normalized().automatic)
+        assertEquals(UpdateCheckInterval.EVERY_12_HOURS, UpdateCheckInterval.fromSavedHours(12, checkOnLaunch = true))
+        assertFalse(UpdateCheckInterval.EVERY_12_HOURS.shouldCheckOnLaunch(now - 1, now))
+        assertTrue(UpdateCheckInterval.EVERY_12_HOURS.shouldCheckOnLaunch(now - TimeUnit.HOURS.toMillis(12), now))
+    }
+
+    @Test
     fun automaticInstallNotificationsDefaultOffAndKeepTheirOptInWhenTheScheduleIsDisabled() {
         assertFalse(UpdateSettings().notifyOnAutomaticInstall)
         val settings = UpdateSettings(

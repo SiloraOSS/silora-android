@@ -7,15 +7,25 @@ import java.util.concurrent.TimeUnit
 enum class InstallMethod { STANDARD, SHIZUKU }
 
 enum class UpdateCheckInterval(val hours: Int) {
-    OFF(0), EVERY_3_HOURS(3), EVERY_6_HOURS(6), EVERY_12_HOURS(12), EVERY_24_HOURS(24), CUSTOM(24);
+    OFF(0), ON_LAUNCH(0), EVERY_3_HOURS(3), EVERY_6_HOURS(6), EVERY_12_HOURS(12), EVERY_24_HOURS(24), CUSTOM(24);
 
-    val enabled: Boolean get() = this != OFF
+    val enabled: Boolean get() = hours > 0
+
+    internal fun shouldCheckOnLaunch(lastCheck: Long, now: Long): Boolean = when (this) {
+        OFF -> false
+        ON_LAUNCH -> true
+        else -> now - lastCheck >= TimeUnit.HOURS.toMillis(hours.toLong())
+    }
 
     companion object {
         internal val DEFAULT = EVERY_12_HOURS
 
-        internal fun fromSavedHours(hours: Int): UpdateCheckInterval =
-            entries.firstOrNull { it != CUSTOM && it.hours == hours } ?: DEFAULT
+        internal fun fromSavedHours(hours: Int, checkOnLaunch: Boolean = false): UpdateCheckInterval =
+            if (hours == 0) {
+                if (checkOnLaunch) ON_LAUNCH else OFF
+            } else {
+                entries.firstOrNull { it != CUSTOM && it.hours == hours } ?: DEFAULT
+            }
     }
 }
 
@@ -85,7 +95,10 @@ internal class UpdateStore(context: Context) {
 
     fun settings() = UpdateSettings(
         interval = if (prefs.getBoolean("custom-interval", false)) UpdateCheckInterval.CUSTOM
-            else UpdateCheckInterval.fromSavedHours(prefs.getInt("interval", UpdateCheckInterval.DEFAULT.hours)),
+            else UpdateCheckInterval.fromSavedHours(
+                prefs.getInt("interval", UpdateCheckInterval.DEFAULT.hours),
+                prefs.getBoolean("check-on-launch", false),
+            ),
         automatic = prefs.getBoolean("automatic", false),
         method = if (prefs.getBoolean("shizuku", false)) InstallMethod.SHIZUKU else InstallMethod.STANDARD,
         checkHour = prefs.getInt("check-hour", DEFAULT_CHECK_HOUR).coerceIn(0, 23),
@@ -97,6 +110,7 @@ internal class UpdateStore(context: Context) {
         prefs.edit()
             .putInt("interval", settings.interval.hours)
             .putBoolean("custom-interval", settings.interval == UpdateCheckInterval.CUSTOM)
+            .putBoolean("check-on-launch", settings.interval == UpdateCheckInterval.ON_LAUNCH)
             .putInt("check-hour", settings.checkHour)
             .putBoolean("automatic", settings.automatic)
             .putBoolean("shizuku", settings.method == InstallMethod.SHIZUKU)

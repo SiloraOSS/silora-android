@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="updates_interval_on_launch">On launch / manual only</string>
     <string name="updates_interval_custom">Custom</string>
     <string name="updates_daily_check_time">Daily check time</string>
 </resources>
