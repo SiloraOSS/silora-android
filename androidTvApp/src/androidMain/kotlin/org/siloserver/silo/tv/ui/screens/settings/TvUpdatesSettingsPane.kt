@@ -21,7 +21,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -149,9 +151,14 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
             )
         }
         item(key = "notifyAfterAutomaticInstall") {
+            val automatic = state.settings.automatic
             SettingsToggleRow(
                 label = stringResource(UpdatesR.string.updates_notify_on_automatic_install),
                 checked = state.settings.notifyOnAutomaticInstall,
+                enabled = automatic,
+                modifier = Modifier
+                    .alpha(if (automatic) 1f else 0.42f)
+                    .focusProperties { canFocus = automatic },
                 onCheckedChange = { enabled ->
                     if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
