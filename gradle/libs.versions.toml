@@ -122,6 +122,7 @@ media3-test-utils = { module = "androidx.media3:media3-test-utils", version.ref 
 media3-test-utils-robolectric = { module = "androidx.media3:media3-test-utils-robolectric", version.ref = "media3" }
 ass-media = { module = "io.github.peerless2012:ass-media", version.ref = "ass-media" }
 ass-kt = { module = "io.github.peerless2012:ass-kt", version.ref = "ass-media" }
+okhttp-core = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
 
 # DataStore

@@ -38,7 +38,10 @@ class InstallConfirmation internal constructor(
 class SiloraUpdates private constructor(private val context: Context) {
     private val store = UpdateStore(context)
     private val initialCode = installedCode(context)
-    private val source = SiloraReleaseSource(isTv = initialCode % 2 == 1L)
+    private val source = SiloraReleaseSource(
+        isTv = initialCode % 2 == 1L,
+        http = UpdateHttp(store::githubRetryAt, store::deferGithubRequests),
+    )
     private val shizuku = ShizukuManager(context)
     private val installer = UpdateInstaller(context, shizuku)
     private val playback = SiloraMediaSession(context)
@@ -250,7 +253,7 @@ class SiloraUpdates private constructor(private val context: Context) {
         }
     }
 
-    internal suspend fun scheduledCheck(canRetry: Boolean): Boolean = gate.withLock {
+    internal suspend fun scheduledCheck(runAttemptCount: Int): Boolean = gate.withLock {
         reconcile()
         if (!state.value.settings.interval.enabled) return@withLock true
         val checked = checkRelease(reportError = true)
@@ -259,8 +262,9 @@ class SiloraUpdates private constructor(private val context: Context) {
         val settings = state.value.settings
         val retryable = !checked || settings.automatic && settings.interval.enabled && install(background = true)
         val latestSettings = state.value.settings
-        val retry = canRetry && retryable && latestSettings.interval.enabled && (!checked || latestSettings.automatic)
-        if (retry) refreshDailySchedule(retry = true)?.await()
+        val retry = runAttemptCount < MAX_UPDATE_RETRIES && retryable &&
+            latestSettings.interval.enabled && (!checked || latestSettings.automatic)
+        if (retry) scheduleRetry(source.earliestCheckAt(), runAttemptCount)?.await()
         !retry
     }
 
@@ -284,18 +288,28 @@ class SiloraUpdates private constructor(private val context: Context) {
     }
 
     @Synchronized
-    private fun refreshDailySchedule(retry: Boolean = false): Operation? {
+    private fun refreshDailySchedule(): Operation? {
         val settings = state.value.settings
         val hour = settings.dailyCheckHour ?: return null
-        val now = System.currentTimeMillis()
-        val nextDay = nextDailyCheck(hour, now)
-        // A WorkManager schedule override takes precedence over its normal retry backoff.
-        val nextRun = if (retry) minOf(nextDay, now + TimeUnit.MINUTES.toMillis(UPDATE_RETRY_MINUTES)) else nextDay
-        return UpdateSchedule.configure(context, settings, nextDailyRunAt = nextRun)
+        return UpdateSchedule.configure(context, settings, nextRunAt = nextDailyCheck(hour, System.currentTimeMillis()))
     }
 
-    private fun checkRelease(reportError: Boolean): Boolean {
+    @Synchronized
+    private fun scheduleRetry(notBefore: Long, runAttemptCount: Int): Operation? {
+        val settings = state.value.settings
+        if (!settings.interval.enabled) return null
+        val now = System.currentTimeMillis()
+        val retryDelay = TimeUnit.MINUTES.toMillis(UPDATE_RETRY_MINUTES)
+        val retryAt = settings.dailyCheckHour?.let { minOf(nextDailyCheck(it, now), now + retryDelay) }
+        val fixedBackoffEnds = now + retryDelay * (runAttemptCount + 1)
+        // Leave fixed intervals on WorkManager's linear backoff unless GitHub requires a longer wait.
+        if (retryAt == null && notBefore <= fixedBackoffEnds) return null
+        return UpdateSchedule.configure(context, settings, nextRunAt = maxOf(retryAt ?: fixedBackoffEnds, notBefore))
+    }
+
+    private suspend fun checkRelease(reportError: Boolean): Boolean {
         if (store.attempt() != null) return true
+        val previous = state.value
         status(UpdateStatus.CHECKING)
         return try {
             val latest = source.latest().takeIf { it.versionCode > installedCode(context) }
@@ -310,6 +324,9 @@ class SiloraUpdates private constructor(private val context: Context) {
             }
             _state.update { it.copy(release = latest, checkedAt = now, status = result, detail = null) }
             true
+        } catch (error: CancellationException) {
+            status(previous.status, previous.detail)
+            throw error
         } catch (error: Exception) {
             if (reportError) status(UpdateStatus.ERROR, error.message)
             else status(if (state.value.release == null) UpdateStatus.IDLE else UpdateStatus.AVAILABLE)

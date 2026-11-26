@@ -2,10 +2,11 @@ package org.siloserver.silo.updates
 
 import kotlinx.coroutines.ensureActive
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
+import java.io.InputStream
+import java.io.OutputStream
 import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 
@@ -37,9 +38,13 @@ data class SiloraRelease(
 }
 
 /** The same build-info.json version and exact asset contract used by Silora Updater. */
-internal class SiloraReleaseSource(private val isTv: Boolean) {
-    fun latest(): SiloraRelease {
-        val release = JSONObject(text("https://api.github.com/repos/$REPO/releases/latest"))
+internal class SiloraReleaseSource(private val isTv: Boolean, private val http: UpdateHttp) {
+    fun earliestCheckAt(): Long = maxOf(http.retryAt(API_HOST), http.retryAt(RELEASE_HOST))
+
+    suspend fun latest(): SiloraRelease {
+        // Every check needs build-info.json. Avoid spending API quota while that host is unavailable.
+        http.requireAvailable(RELEASE_HOST)
+        val release = JSONObject(text("https://$API_HOST/repos/$REPO/releases/latest"))
         require(!release.getBoolean("draft") && !release.getBoolean("prerelease")) {
             "GitHub did not return a public stable release."
         }
@@ -51,7 +56,7 @@ internal class SiloraReleaseSource(private val isTv: Boolean) {
         fun asset(name: String) = listed.firstOrNull { it.getString("name") == name }
             ?: throw IOException("The Silora release is missing $name.")
         fun url(name: String): String {
-            val expected = "https://github.com/$REPO/releases/download/$tag/$name"
+            val expected = "https://$RELEASE_HOST/$REPO/releases/download/$tag/$name"
             require(asset(name).getString("browser_download_url") == expected) { "Unexpected Silora download URL." }
             return expected
         }
@@ -77,15 +82,14 @@ internal class SiloraReleaseSource(private val isTv: Boolean) {
         target.delete()
         requireSpace(checkNotNull(target.parentFile), release.bytes)
         try {
-            request(release.downloadUrl) { connection ->
-                connection.inputStream.use { input ->
-                    partial.outputStream().use { output ->
-                        require(digest(input, release.bytes, output).equals(release.digest, ignoreCase = true)) {
-                            "The Silora download did not match its release checksum."
-                        }
+            http.read(release.downloadUrl, APK_TIMEOUT_MILLIS) { input ->
+                partial.outputStream().use { output ->
+                    require(digest(input, release.bytes, output).equals(release.digest, ignoreCase = true)) {
+                        "The Silora download did not match its release checksum."
                     }
                 }
             }
+            coroutineContext.ensureActive()
             check(partial.renameTo(target)) { "Could not save the verified Silora APK." }
         } finally {
             partial.delete()
@@ -104,7 +108,7 @@ internal class SiloraReleaseSource(private val isTv: Boolean) {
         }
     }
 
-    private suspend fun digest(input: java.io.InputStream, expected: Long, output: java.io.OutputStream? = null): String {
+    private suspend fun digest(input: InputStream, expected: Long, output: OutputStream? = null): String {
         val sha = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(64 * 1024)
         var total = 0L
@@ -121,11 +125,12 @@ internal class SiloraReleaseSource(private val isTv: Boolean) {
         return sha.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun text(url: String): String = request(url) { connection ->
-        connection.inputStream.use { input ->
-            val output = java.io.ByteArrayOutputStream()
+    private suspend fun text(url: String): String =
+        http.read(url, METADATA_TIMEOUT_MILLIS) { input ->
+            val output = ByteArrayOutputStream()
             val buffer = ByteArray(8192)
             while (true) {
+                coroutineContext.ensureActive()
                 val count = input.read(buffer)
                 if (count == -1) break
                 require(output.size() + count <= 512 * 1024) { "Silora release metadata is too large." }
@@ -133,25 +138,13 @@ internal class SiloraReleaseSource(private val isTv: Boolean) {
             }
             output.toString("UTF-8")
         }
-    }
-
-    private inline fun <T> request(url: String, use: (HttpURLConnection) -> T): T {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 40_000
-            connection.setRequestProperty("User-Agent", "Silora-Android-Updater")
-            if (connection.responseCode !in 200..299) {
-                throw IOException("GitHub returned HTTP ${connection.responseCode}. Try again later.")
-            }
-            return use(connection)
-        } finally {
-            connection.disconnect()
-        }
-    }
 
     companion object {
         private const val REPO = "SiloraOSS/silora-android"
+        private const val API_HOST = "api.github.com"
+        private const val RELEASE_HOST = "github.com"
+        private const val METADATA_TIMEOUT_MILLIS = 30_000L
+        private const val APK_TIMEOUT_MILLIS = 5 * 60_000L
         private const val MAX_APK_BYTES = 512L * 1024 * 1024
 
         internal fun versionFor(base: Long, isTv: Boolean): Long {

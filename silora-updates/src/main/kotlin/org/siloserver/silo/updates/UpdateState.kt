@@ -137,6 +137,12 @@ internal class UpdateStore(context: Context) {
 
     fun checkedAt(): Long = prefs.getLong("checked", 0)
 
+    fun githubRetryAt(host: String): Long = prefs.getLong("github-retry-at-$host", 0)
+
+    fun deferGithubRequests(host: String, until: Long) {
+        if (until > githubRetryAt(host)) prefs.edit().putLong("github-retry-at-$host", until).apply()
+    }
+
     fun storageBlocked(version: Long, usableBytes: Long): Boolean =
         prefs.getLong("storage-block-version", 0) == version &&
             usableBytes <= prefs.getLong("storage-block-usable-bytes", -1)

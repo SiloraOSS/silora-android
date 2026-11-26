@@ -39,7 +39,7 @@ internal object UpdateSchedule {
         context: Context,
         settings: UpdateSettings,
         restart: Boolean = false,
-        nextDailyRunAt: Long? = null,
+        nextRunAt: Long? = null,
     ): Operation {
         val manager = WorkManager.getInstance(context)
         if (!settings.interval.enabled) return manager.cancelUniqueWork(WORK_NAME)
@@ -54,14 +54,15 @@ internal object UpdateSchedule {
                     setInitialDelay(hours, TimeUnit.HOURS)
                 } else {
                     addTag(dailyHourTag(dailyHour))
-                    setNextScheduleTimeOverride(nextDailyRunAt ?: nextDailyCheck(dailyHour, System.currentTimeMillis()))
                 }
+                val override = nextRunAt ?: dailyHour?.let { nextDailyCheck(it, System.currentTimeMillis()) }
+                if (override != null) setNextScheduleTimeOverride(override)
             }
             .build()
         val policy = when {
             dailyHour == null && restart -> ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE
             // Preserve a queued daily check, including one that is already overdue.
-            dailyHour != null && !restart && nextDailyRunAt == null -> ExistingPeriodicWorkPolicy.KEEP
+            dailyHour != null && !restart && nextRunAt == null -> ExistingPeriodicWorkPolicy.KEEP
             // UPDATE supports daily overrides and applies the new default without resetting fixed work.
             else -> ExistingPeriodicWorkPolicy.UPDATE
         }
@@ -94,7 +95,7 @@ fun formatUpdateCheckHour(context: Context, hour: Int): String =
 
 class SiloraUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result =
-        if (SiloraUpdates.get(applicationContext).scheduledCheck(canRetry = runAttemptCount < MAX_UPDATE_RETRIES)) Result.success()
+        if (SiloraUpdates.get(applicationContext).scheduledCheck(runAttemptCount)) Result.success()
         else Result.retry()
 }
 

@@ -30,6 +30,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.media3.session)
+    implementation(libs.okhttp.core)
     constraints {
         // Match the app's AndroidX versions when building this library on its own.
         implementation("androidx.core:core:1.16.0")
@@ -42,4 +43,5 @@ dependencies {
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
     testImplementation(libs.junit4)
+    testImplementation(libs.okhttp.mockwebserver)
 }

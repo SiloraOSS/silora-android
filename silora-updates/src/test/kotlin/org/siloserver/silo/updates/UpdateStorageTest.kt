@@ -16,7 +16,7 @@ class UpdateStorageTest {
     @get:Rule
     val directory = TemporaryFolder()
 
-    private val source = SiloraReleaseSource(isTv = true)
+    private val source = SiloraReleaseSource(isTv = true, http = UpdateHttp({ 0L }, { _, _ -> }))
     private val apkBytes = byteArrayOf(1, 2, 3)
     private val checksum = MessageDigest.getInstance("SHA-256").digest(apkBytes)
         .joinToString("") { "%02x".format(it) }
