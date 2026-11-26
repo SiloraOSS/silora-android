@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="updates_action_queued">Waiting to start update action…</string>
+    <string name="updates_needs_storage">Free up storage on this device, then choose Install update again.</string>
+    <string name="updates_storage_settings">Storage settings</string>
+    <string name="updates_storage_settings_help">Open your device settings and free up storage.</string>
 </resources>

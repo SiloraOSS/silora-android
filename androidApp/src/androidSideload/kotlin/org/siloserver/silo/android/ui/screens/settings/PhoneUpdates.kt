@@ -51,6 +51,7 @@ import org.siloserver.silo.updates.UpdateState
 import org.siloserver.silo.updates.UpdateStatus
 import org.siloserver.silo.updates.formatUpdateCheckHour
 import org.siloserver.silo.updates.openInstallPermissionSettings
+import org.siloserver.silo.updates.openUpdateStorageSettings
 import org.siloserver.silo.updates.R as UpdatesR
 
 internal object PhoneUpdates {
@@ -98,6 +99,16 @@ internal object PhoneUpdates {
                         showChevron = false,
                         enabled = !state.busy && !manualActionPending,
                     )
+                    if (state.status == UpdateStatus.NEEDS_STORAGE) {
+                        SettingsNavigationRow(
+                            label = stringResource(UpdatesR.string.updates_storage_settings),
+                            onClick = {
+                                if (!openUpdateStorageSettings(context)) {
+                                    Toast.makeText(context, UpdatesR.string.updates_storage_settings_help, Toast.LENGTH_LONG).show()
+                                }
+                            },
+                        )
+                    }
                     if (state.release != null) {
                         SettingsNavigationRow(
                             label = stringResource(R.string.updates_install_update),
@@ -415,6 +426,7 @@ private fun UpdateState.statusText(): String = detail ?: when (status) {
     UpdateStatus.WAITING_FOR_PLAYBACK -> stringResource(R.string.updates_waiting)
     UpdateStatus.NEEDS_CONFIRMATION -> stringResource(R.string.updates_confirmation)
     UpdateStatus.NEEDS_INSTALL_PERMISSION -> stringResource(R.string.updates_permission)
+    UpdateStatus.NEEDS_STORAGE -> stringResource(UpdatesR.string.updates_needs_storage)
     UpdateStatus.INSTALLED -> stringResource(R.string.updates_installed)
     UpdateStatus.ERROR -> stringResource(R.string.updates_error)
 }

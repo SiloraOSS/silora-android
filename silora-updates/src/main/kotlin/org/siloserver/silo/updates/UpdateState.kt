@@ -48,7 +48,7 @@ data class UpdateSettings(
 
 enum class UpdateStatus {
     IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, INSTALLING,
-    WAITING_FOR_PLAYBACK, NEEDS_CONFIRMATION, NEEDS_INSTALL_PERMISSION, INSTALLED, ERROR,
+    WAITING_FOR_PLAYBACK, NEEDS_CONFIRMATION, NEEDS_INSTALL_PERMISSION, NEEDS_STORAGE, INSTALLED, ERROR,
 }
 
 enum class UpdatePrompt { UPDATE_AVAILABLE, STANDALONE_UPDATER, WHAT_CHANGED }
@@ -136,6 +136,15 @@ internal class UpdateStore(context: Context) {
     }
 
     fun checkedAt(): Long = prefs.getLong("checked", 0)
+
+    fun storageBlocked(version: Long, usableBytes: Long): Boolean =
+        prefs.getLong("storage-block-version", 0) == version &&
+            usableBytes <= prefs.getLong("storage-block-usable-bytes", -1)
+
+    fun blockForStorage(version: Long, usableBytes: Long) {
+        prefs.edit().putLong("storage-block-version", version)
+            .putLong("storage-block-usable-bytes", usableBytes).apply()
+    }
 
     fun standaloneUpdaterNoticeDismissed(): Boolean = prefs.getBoolean("standalone-updater-notice-dismissed", false)
 

@@ -69,11 +69,13 @@ internal class SiloraReleaseSource(private val isTv: Boolean) {
         return SiloraRelease(tag, name, versionFor(info.getLong("version_code_base"), isTv), url(assetName), size, digest)
     }
 
-    suspend fun download(release: SiloraRelease, target: File) {
-        if (target.isFile && target.length() == release.bytes &&
-            target.inputStream().use { digest(it, release.bytes) }.equals(release.digest, ignoreCase = true)
-        ) return
+    suspend fun download(release: SiloraRelease, target: File, requireSpace: (File, Long) -> Unit) {
         val partial = File(target.parentFile, "${target.name}.part")
+        partial.delete()
+        if (canReuse(release, target)) return
+
+        target.delete()
+        requireSpace(checkNotNull(target.parentFile), release.bytes)
         try {
             request(release.downloadUrl) { connection ->
                 connection.inputStream.use { input ->
@@ -87,6 +89,18 @@ internal class SiloraReleaseSource(private val isTv: Boolean) {
             check(partial.renameTo(target)) { "Could not save the verified Silora APK." }
         } finally {
             partial.delete()
+        }
+    }
+
+    private suspend fun canReuse(release: SiloraRelease, target: File): Boolean {
+        if (!target.isFile || target.length() != release.bytes) return false
+        return try {
+            target.inputStream().use { digest(it, release.bytes) }.equals(release.digest, ignoreCase = true)
+        } catch (_: IOException) {
+            false
+        } catch (_: IllegalArgumentException) {
+            // Cache pressure can also truncate a file while we are checking its length.
+            false
         }
     }
 

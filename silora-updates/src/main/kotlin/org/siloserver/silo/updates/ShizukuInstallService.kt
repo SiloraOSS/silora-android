@@ -49,7 +49,7 @@ class ShizukuInstallService : IShizukuInstaller.Stub() {
                 Log.w("ShizukuInstall", message.take(700))
                 when {
                     "INSTALL_FAILED_UPDATE_INCOMPATIBLE" in message || "INSTALL_FAILED_CONFLICTING_PROVIDER" in message -> PackageInstaller.STATUS_FAILURE_CONFLICT
-                    "INSTALL_FAILED_INSUFFICIENT_STORAGE" in message -> PackageInstaller.STATUS_FAILURE_STORAGE
+                    isStorageFailureMessage(message) -> PackageInstaller.STATUS_FAILURE_STORAGE
                     "INSTALL_FAILED_NO_MATCHING_ABIS" in message || "INSTALL_FAILED_OLDER_SDK" in message -> PackageInstaller.STATUS_FAILURE_INCOMPATIBLE
                     else -> PackageInstaller.STATUS_FAILURE
                 }

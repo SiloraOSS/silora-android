@@ -54,6 +54,8 @@ class SiloraUpdates private constructor(private val context: Context) {
         checkedAt = store.checkedAt(),
         status = when {
             store.recordedInstall() == initialCode -> UpdateStatus.INSTALLED
+            store.release()?.takeIf { it.versionCode > initialCode }?.let(::isBlockedForStorage) == true ->
+                UpdateStatus.NEEDS_STORAGE
             store.release()?.versionCode == store.confirmationVersion() -> UpdateStatus.NEEDS_CONFIRMATION
             else -> UpdateStatus.IDLE
         },
@@ -143,7 +145,7 @@ class SiloraUpdates private constructor(private val context: Context) {
         val release = current.release
         val prompt = when {
             current.whatChanged != null -> UpdatePrompt.WHAT_CHANGED
-            release != null && offerPolicy.visible(
+            release != null && current.status != UpdateStatus.NEEDS_STORAGE && offerPolicy.visible(
                 release.versionCode, current.settings.interval.hours, System.currentTimeMillis(),
             ) -> UpdatePrompt.UPDATE_AVAILABLE
             current.standaloneUpdaterNoticePending -> UpdatePrompt.STANDALONE_UPDATER
@@ -301,6 +303,7 @@ class SiloraUpdates private constructor(private val context: Context) {
             store.recordCheck(latest, now)
             val result = when {
                 latest == null -> UpdateStatus.UP_TO_DATE
+                isBlockedForStorage(latest) -> UpdateStatus.NEEDS_STORAGE
                 store.confirmationVersion() == latest.versionCode && state.value.settings.method == InstallMethod.STANDARD ->
                     UpdateStatus.NEEDS_CONFIRMATION
                 else -> UpdateStatus.AVAILABLE
@@ -312,6 +315,15 @@ class SiloraUpdates private constructor(private val context: Context) {
             else status(if (state.value.release == null) UpdateStatus.IDLE else UpdateStatus.AVAILABLE)
             false
         }
+    }
+
+    private fun isBlockedForStorage(release: SiloraRelease): Boolean =
+        store.storageBlocked(release.versionCode, updateRetryFreeBytes(context.cacheDir))
+
+    private fun storageFailure(version: Long) {
+        apk.delete()
+        store.blockForStorage(version, updateRetryFreeBytes(context.cacheDir))
+        status(UpdateStatus.NEEDS_STORAGE)
     }
 
     private suspend fun backgroundInstallBlock(method: InstallMethod): UpdateStatus? {
@@ -330,6 +342,10 @@ class SiloraUpdates private constructor(private val context: Context) {
         val current = state.value
         val release = current.release ?: return false
         if (store.attempt() != null || release.versionCode <= installedCode(context)) return false
+        if (background && isBlockedForStorage(release)) {
+            status(UpdateStatus.NEEDS_STORAGE)
+            return false
+        }
         if (background && (
                 store.laterVersion() == release.versionCode && System.currentTimeMillis() < store.laterUntil() ||
                     current.settings.method == InstallMethod.STANDARD && store.confirmationVersion() == release.versionCode
@@ -353,7 +369,7 @@ class SiloraUpdates private constructor(private val context: Context) {
                 return true
             }
             status(UpdateStatus.DOWNLOADING)
-            source.download(release, apk)
+            source.download(release, apk) { directory, bytes -> requireUpdateDownloadSpace(context, directory, bytes) }
             installer.verify(apk, release)
             if (background) {
                 backgroundInstallBlock(current.settings.method)?.let { blocked ->
@@ -396,6 +412,10 @@ class SiloraUpdates private constructor(private val context: Context) {
         } catch (error: Exception) {
             if (reconcile()) return false
             finishAttempt()
+            if (error is IOException && error.isInsufficientUpdateStorage()) {
+                storageFailure(release.versionCode)
+                return false
+            }
             status(UpdateStatus.ERROR, error.message)
             return background && error is IOException
         }
@@ -510,6 +530,10 @@ class SiloraUpdates private constructor(private val context: Context) {
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> completeInstall(attempt, attempt.version)
+            PackageInstaller.STATUS_FAILURE_STORAGE -> {
+                finishAttempt()
+                storageFailure(attempt.version)
+            }
             else -> {
                 finishAttempt()
                 status(UpdateStatus.ERROR, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
