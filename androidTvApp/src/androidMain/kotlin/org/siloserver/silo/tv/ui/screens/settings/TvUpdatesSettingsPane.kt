@@ -281,7 +281,8 @@ internal fun TvUpdateDialogs(updates: SiloraUpdates, ready: Boolean, launch: Int
             actions = listOf(
                 TvDialogAction(stringResource(R.string.updates_later), later),
                 TvDialogAction(stringResource(R.string.updates_install_now), onClick = {
-                    later()
+                    updates.dismissUpdateOffer()
+                    prompt = null
                     requestInstall(context, updates)
                 }, style = TvDialogActionStyle.Primary),
             ),

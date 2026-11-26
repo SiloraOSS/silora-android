@@ -129,12 +129,16 @@ class SiloraUpdates private constructor(private val context: Context) {
 
     fun requestShizukuPermission(): String? = shizuku.requestPermission()
 
-    fun later() {
+    fun later() = dismissUpdateOffer(postponeAutomaticInstall = true)
+
+    fun dismissUpdateOffer(postponeAutomaticInstall: Boolean = false) {
         val current = state.value
         val release = current.release ?: return
         val now = System.currentTimeMillis()
         offerPolicy.later(release.versionCode, now)
-        store.later(release.versionCode, now + TimeUnit.HOURS.toMillis(current.settings.interval.hours.toLong()))
+        if (postponeAutomaticInstall) {
+            store.later(release.versionCode, now + TimeUnit.HOURS.toMillis(current.settings.interval.hours.toLong()))
+        }
     }
 
     suspend fun foregroundPrompt(showing: UpdatePrompt?): UpdatePrompt? {
