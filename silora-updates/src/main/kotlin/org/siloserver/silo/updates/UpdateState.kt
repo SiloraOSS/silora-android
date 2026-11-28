@@ -30,6 +30,7 @@ enum class UpdateCheckInterval(val hours: Int) {
 }
 
 private const val DEFAULT_CHECK_HOUR = 3
+private const val DEFAULT_WAIT_UNTIL_PLAYBACK_STOPS = true
 private const val PENDING_INSTALL_NOTIFICATION = "pending-install-notification"
 private const val SNOOZED_VERSION = "later-version"
 private const val SNOOZE_UNTIL = "later-until"
@@ -41,6 +42,7 @@ data class UpdateSettings(
     val checkHour: Int = DEFAULT_CHECK_HOUR,
     val notifyOnAutomaticInstall: Boolean = false,
     val showWhatChanged: Boolean = true,
+    val waitUntilPlaybackStops: Boolean = DEFAULT_WAIT_UNTIL_PLAYBACK_STOPS,
 ) {
     internal val dailyCheckHour: Int? get() = checkHour.takeIf { interval == UpdateCheckInterval.CUSTOM }
 
@@ -117,6 +119,7 @@ internal class UpdateStore(context: Context) {
         checkHour = prefs.getInt("check-hour", DEFAULT_CHECK_HOUR).coerceIn(0, 23),
         notifyOnAutomaticInstall = prefs.getBoolean("notify-on-automatic-install", false),
         showWhatChanged = prefs.getBoolean("show-what-changed", true),
+        waitUntilPlaybackStops = prefs.getBoolean("wait-until-playback-stops", DEFAULT_WAIT_UNTIL_PLAYBACK_STOPS),
     ).normalized()
 
     fun save(settings: UpdateSettings) {
@@ -129,6 +132,7 @@ internal class UpdateStore(context: Context) {
             .putBoolean("shizuku", settings.method == InstallMethod.SHIZUKU)
             .putBoolean("notify-on-automatic-install", settings.notifyOnAutomaticInstall)
             .putBoolean("show-what-changed", settings.showWhatChanged)
+            .putBoolean("wait-until-playback-stops", settings.waitUntilPlaybackStops)
             .also { if (!settings.notifyOnAutomaticInstall) it.remove(PENDING_INSTALL_NOTIFICATION) }
             .apply()
     }

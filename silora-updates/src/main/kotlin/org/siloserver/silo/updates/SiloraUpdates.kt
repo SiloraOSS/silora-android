@@ -109,11 +109,22 @@ class SiloraUpdates private constructor(private val context: Context) {
         if (old == next) return
         store.save(next)
         if (!next.showWhatChanged) store.markWhatChangedHandled(initialCode)
-        _state.update { it.copy(settings = next, whatChanged = it.whatChanged.takeIf { next.showWhatChanged }) }
+        _state.update {
+            it.copy(
+                settings = next,
+                whatChanged = it.whatChanged.takeIf { next.showWhatChanged },
+                status = it.status.withPlaybackPreference(next),
+            )
+        }
         if (old.interval != next.interval || old.dailyCheckHour != next.dailyCheckHour) {
             UpdateSchedule.configure(context, next, restart = true)
         }
         if (old.method != next.method) shizuku.refresh()
+    }
+
+    @Synchronized
+    fun setWaitUntilPlaybackStops(enabled: Boolean) {
+        setSettings(state.value.settings.copy(waitUntilPlaybackStops = enabled))
     }
 
     @Synchronized
@@ -360,16 +371,8 @@ class SiloraUpdates private constructor(private val context: Context) {
         status(UpdateStatus.NEEDS_STORAGE)
     }
 
-    private suspend fun backgroundInstallBlock(method: InstallMethod): UpdateStatus? {
-        val idle = idleForPrompt()
-        val settings = state.value.settings
-        return when {
-            !settings.automatic || !settings.interval.enabled || settings.method != method -> UpdateStatus.AVAILABLE
-            method == InstallMethod.STANDARD && !canUseStandard() -> UpdateStatus.NEEDS_INSTALL_PERMISSION
-            !idle -> UpdateStatus.WAITING_FOR_PLAYBACK
-            else -> null
-        }
-    }
+    private suspend fun backgroundInstallBlock(method: InstallMethod): UpdateStatus? =
+        playback.automaticInstallBlock(method, { state.value.settings }, ::canUseStandard)
 
     /** Returns true if a scheduled worker should retry before its next regular run. */
     private suspend fun install(background: Boolean): Boolean {
@@ -387,7 +390,7 @@ class SiloraUpdates private constructor(private val context: Context) {
         ) return false
         val allowedToCommit = AtomicBoolean(false)
         try {
-            if (current.settings.method == InstallMethod.STANDARD && !canUseStandard()) {
+            if (!background && current.settings.method == InstallMethod.STANDARD && !canUseStandard()) {
                 status(UpdateStatus.NEEDS_INSTALL_PERMISSION)
                 return false
             }
@@ -398,9 +401,11 @@ class SiloraUpdates private constructor(private val context: Context) {
                     return background && state == ShizukuState.NOT_RUNNING
                 }
             }
-            if (background && !idleForPrompt()) {
-                status(UpdateStatus.WAITING_FOR_PLAYBACK)
-                return true
+            if (background) {
+                backgroundInstallBlock(current.settings.method)?.let { blocked ->
+                    status(blocked)
+                    return blocked == UpdateStatus.WAITING_FOR_PLAYBACK
+                }
             }
             status(UpdateStatus.DOWNLOADING)
             source.download(release, apk) { directory, bytes -> requireUpdateDownloadSpace(context, directory, bytes) }
@@ -583,8 +588,12 @@ class SiloraUpdates private constructor(private val context: Context) {
     }
 
     private fun status(status: UpdateStatus, detail: String? = null) {
-        _state.update { it.copy(status = status, detail = detail) }
+        _state.update { it.copy(status = status.withPlaybackPreference(it.settings), detail = detail) }
     }
+
+    private fun UpdateStatus.withPlaybackPreference(settings: UpdateSettings): UpdateStatus =
+        if (this == UpdateStatus.WAITING_FOR_PLAYBACK && !settings.waitUntilPlaybackStops) UpdateStatus.AVAILABLE
+        else this
 
     companion object {
         private const val STANDALONE_UPDATER_PACKAGE = "org.silora.updater"

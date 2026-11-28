@@ -20,6 +20,23 @@ fun interface SiloraPlaybackReader {
     suspend fun read(): SiloraPlaybackStatus
 }
 
+internal suspend fun SiloraPlaybackReader.automaticInstallBlock(
+    method: InstallMethod,
+    readSettings: () -> UpdateSettings,
+    canUseStandard: () -> Boolean,
+): UpdateStatus? {
+    val initial = readSettings()
+    val playbackBlocked = initial.waitUntilPlaybackStops && read() != SiloraPlaybackStatus.IDLE
+    // The user can change update preferences while the media session is connecting.
+    val current = if (initial.waitUntilPlaybackStops) readSettings() else initial
+    return when {
+        !current.automatic || !current.interval.enabled || current.method != method -> UpdateStatus.AVAILABLE
+        method == InstallMethod.STANDARD && !canUseStandard() -> UpdateStatus.NEEDS_INSTALL_PERMISSION
+        current.waitUntilPlaybackStops && playbackBlocked -> UpdateStatus.WAITING_FOR_PLAYBACK
+        else -> null
+    }
+}
+
 /** Read the actual player state, including buffering with the intent to play. */
 @androidx.annotation.OptIn(UnstableApi::class)
 class SiloraMediaSession(context: Context) : SiloraPlaybackReader {

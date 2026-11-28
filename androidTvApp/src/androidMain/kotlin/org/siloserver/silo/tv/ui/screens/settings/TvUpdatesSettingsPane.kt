@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
@@ -171,6 +172,21 @@ internal fun TvUpdatesSettingsPane(firstFocusRequester: FocusRequester) {
                         !updates.canUseStandard()
                 },
             )
+        }
+        item(key = "waitUntilPlaybackStops") {
+            val automatic = state.settings.automatic
+            Column {
+                SettingsToggleRow(
+                    label = stringResource(UpdatesR.string.updates_wait_until_playback_stops),
+                    checked = state.settings.waitUntilPlaybackStops,
+                    enabled = automatic,
+                    modifier = Modifier
+                        .alpha(if (automatic) 1f else 0.42f)
+                        .focusProperties { canFocus = automatic },
+                    onCheckedChange = updates::setWaitUntilPlaybackStops,
+                )
+                SettingsFooterText(text = stringResource(UpdatesR.string.updates_wait_until_playback_stops_description))
+            }
         }
         item(key = "notifyAfterAutomaticInstall") {
             val automatic = state.settings.automatic

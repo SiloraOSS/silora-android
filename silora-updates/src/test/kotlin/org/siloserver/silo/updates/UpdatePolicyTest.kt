@@ -1,8 +1,10 @@
 package org.siloserver.silo.updates
 
 import androidx.media3.common.Player
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
@@ -105,6 +107,61 @@ class UpdatePolicyTest {
         assertEquals(SiloraPlaybackStatus.PLAYING, SiloraMediaSession.status(Player.STATE_BUFFERING, true))
         assertEquals(SiloraPlaybackStatus.IDLE, SiloraMediaSession.status(Player.STATE_READY, false))
         assertEquals(SiloraPlaybackStatus.IDLE, SiloraMediaSession.status(Player.STATE_ENDED, false))
+    }
+
+    @Test
+    fun automaticInstallsWaitByDefaultAndKeepTheOptOutWhenAutomaticInstallsAreDisabled() {
+        assertTrue(UpdateSettings().waitUntilPlaybackStops)
+        val optedOut = UpdateSettings(automatic = true, waitUntilPlaybackStops = false)
+
+        assertFalse(optedOut.copy(automatic = false).waitUntilPlaybackStops)
+        assertFalse(optedOut.copy(interval = UpdateCheckInterval.OFF).normalized().waitUntilPlaybackStops)
+    }
+
+    @Test
+    fun bothAutomaticInstallersHonorPlaybackProtection() = runBlocking<Unit> {
+        for (method in InstallMethod.entries) {
+            val settings = UpdateSettings(automatic = true, method = method)
+            for (status in SiloraPlaybackStatus.entries) {
+                val playback = SiloraPlaybackReader { status }
+                val expected = if (status == SiloraPlaybackStatus.IDLE) null else UpdateStatus.WAITING_FOR_PLAYBACK
+                assertEquals(expected, playback.automaticInstallBlock(method, { settings }, { true }))
+            }
+
+            val optedOut = settings.copy(waitUntilPlaybackStops = false)
+            val playback = SiloraPlaybackReader { error("Playback should not be read after opting out") }
+            assertNull(playback.automaticInstallBlock(method, { optedOut }, { true }))
+        }
+    }
+
+    @Test
+    fun playbackOptOutStillRequiresAutomaticInstallationAndStandardPermission() = runBlocking<Unit> {
+        val settings = UpdateSettings(automatic = true, waitUntilPlaybackStops = false)
+        val playback = SiloraPlaybackReader { error("Playback should not be read after opting out") }
+
+        assertEquals(
+            UpdateStatus.NEEDS_INSTALL_PERMISSION,
+            playback.automaticInstallBlock(InstallMethod.STANDARD, { settings }, { false }),
+        )
+        assertEquals(
+            UpdateStatus.AVAILABLE,
+            playback.automaticInstallBlock(InstallMethod.STANDARD, { settings.copy(automatic = false) }, { true }),
+        )
+        assertEquals(
+            UpdateStatus.AVAILABLE,
+            playback.automaticInstallBlock(InstallMethod.SHIZUKU, { settings }, { true }),
+        )
+    }
+
+    @Test
+    fun turningOffPlaybackProtectionWhileCheckingTheSessionLiftsTheBlock() = runBlocking<Unit> {
+        var settings = UpdateSettings(automatic = true)
+        val playback = SiloraPlaybackReader {
+            settings = settings.copy(waitUntilPlaybackStops = false)
+            SiloraPlaybackStatus.PLAYING
+        }
+
+        assertNull(playback.automaticInstallBlock(InstallMethod.STANDARD, { settings }, { true }))
     }
 
     @Test

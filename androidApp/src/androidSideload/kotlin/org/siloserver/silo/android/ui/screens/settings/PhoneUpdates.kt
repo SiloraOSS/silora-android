@@ -89,15 +89,15 @@ internal object PhoneUpdates {
                         )
                     }
                     SettingsNavigationRow(
-                        label = stringResource(R.string.updates_status),
-                        description = if (manualActionPending && !state.busy) stringResource(UpdatesR.string.updates_action_queued)
-                            else state.statusText(),
-                    )
-                    SettingsNavigationRow(
                         label = stringResource(R.string.updates_check_now),
                         onClick = { updates.checkNow() },
                         showChevron = false,
                         enabled = !state.busy && !manualActionPending,
+                    )
+                    SettingsNavigationRow(
+                        label = stringResource(R.string.updates_status),
+                        description = if (manualActionPending && !state.busy) stringResource(UpdatesR.string.updates_action_queued)
+                            else state.statusText(),
                     )
                     if (state.status == UpdateStatus.NEEDS_STORAGE) {
                         SettingsNavigationRow(
@@ -133,9 +133,38 @@ internal object PhoneUpdates {
                             onClick = { picker = UpdatePicker.Hour },
                         )
                     }
+                    SettingsNavigationRow(
+                        label = stringResource(R.string.updates_install_method),
+                        value = methodLabel(state.settings.method),
+                        onClick = { picker = UpdatePicker.Method },
+                    )
+                    when (state.settings.method) {
+                        InstallMethod.STANDARD -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            SettingsNavigationRow(
+                                label = stringResource(R.string.updates_install_permission_settings),
+                                onClick = {
+                                    if (!openInstallPermissionSettings(context)) {
+                                        Toast.makeText(context, UpdatesR.string.updates_install_permission_help, Toast.LENGTH_LONG).show()
+                                    }
+                                },
+                            )
+                        }
+                        InstallMethod.SHIZUKU -> {
+                            SettingsNavigationRow(
+                                label = stringResource(R.string.updates_shizuku),
+                                description = shizuku.help,
+                            )
+                            if (!shizuku.ready) {
+                                SettingsNavigationRow(
+                                    label = stringResource(R.string.updates_authorize_shizuku),
+                                    onClick = { authorizeShizuku(context, updates) },
+                                    showChevron = false,
+                                )
+                            }
+                        }
+                    }
                     SettingsSwitchRow(
                         label = stringResource(R.string.updates_automatic),
-                        description = stringResource(R.string.updates_automatic_description),
                         checked = state.settings.automatic && state.settings.interval.enabled,
                         enabled = state.settings.interval.enabled,
                         onCheckedChange = { automatic ->
@@ -144,6 +173,13 @@ internal object PhoneUpdates {
                             showInstallPermission = automatic && settings.method == InstallMethod.STANDARD &&
                                 !updates.canUseStandard()
                         },
+                    )
+                    SettingsSwitchRow(
+                        label = stringResource(UpdatesR.string.updates_wait_until_playback_stops),
+                        description = stringResource(UpdatesR.string.updates_wait_until_playback_stops_description),
+                        checked = state.settings.waitUntilPlaybackStops,
+                        enabled = state.settings.automatic,
+                        onCheckedChange = updates::setWaitUntilPlaybackStops,
                     )
                     SettingsSwitchRow(
                         label = stringResource(UpdatesR.string.updates_notify_on_automatic_install),
@@ -159,29 +195,11 @@ internal object PhoneUpdates {
                             }
                         },
                     )
-                    SettingsNavigationRow(
-                        label = stringResource(R.string.updates_install_method),
-                        value = methodLabel(state.settings.method),
-                        onClick = { picker = UpdatePicker.Method },
-                    )
                     SettingsSwitchRow(
                         label = stringResource(UpdatesR.string.updates_show_what_changed),
                         checked = state.settings.showWhatChanged,
                         onCheckedChange = updates::setShowWhatChanged,
                     )
-                    if (state.settings.method == InstallMethod.SHIZUKU) {
-                        SettingsNavigationRow(
-                            label = stringResource(R.string.updates_shizuku),
-                            description = shizuku.help,
-                        )
-                        if (!shizuku.ready) {
-                            SettingsNavigationRow(
-                                label = stringResource(R.string.updates_authorize_shizuku),
-                                onClick = { authorizeShizuku(context, updates) },
-                                showChevron = false,
-                            )
-                        }
-                    }
                 }
             }
         }

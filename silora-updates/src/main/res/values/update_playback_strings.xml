@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="updates_wait_until_playback_stops">Wait until playback stops</string>
+    <string name="updates_wait_until_playback_stops_description">Turning this off may interrupt playback during an automatic update.</string>
+</resources>
